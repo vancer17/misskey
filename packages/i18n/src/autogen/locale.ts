@@ -13387,5 +13387,9 @@ export interface Locale extends ILocale {
          * 通知（未読{count}件）
          */
         "notificationsWithCount": ParameterizedString<"count">;
+        /**
+         * 新しい投稿（{count}件）
+         */
+        "newNotesWithCount": ParameterizedString<"count">;
     };
 }

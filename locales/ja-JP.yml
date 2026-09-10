@@ -3586,3 +3586,4 @@ _qr:
 _twitterUi:
   primaryNavigation: "主要ナビゲーション"
   notificationsWithCount: "通知（未読{count}件）"
+  newNotesWithCount: "新しい投稿（{count}件）"
