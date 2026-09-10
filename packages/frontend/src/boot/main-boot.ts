@@ -47,6 +47,9 @@ export async function mainBoot() {
 			case 'zen':
 				rootComponent = await import('@/ui/zen.vue').then(x => x.default);
 				break;
+			case 'twitter':
+				rootComponent = await import('@/ui/twitter.vue').then(x => x.default);
+				break;
 			case 'deck':
 				rootComponent = await import('@/ui/deck.vue').then(x => x.default);
 				break;

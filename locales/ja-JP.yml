@@ -3582,3 +3582,7 @@ _qr:
   scanFile: "端末の画像をスキャン"
   raw: "テキスト"
   mfm: "MFM"
+
+_twitterUi:
+  primaryNavigation: "主要ナビゲーション"
+  notificationsWithCount: "通知（未読{count}件）"
