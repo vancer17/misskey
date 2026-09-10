@@ -4,16 +4,25 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="src" :actions="headerActions" :tabs="$i ? headerTabs : headerTabsWhenNotLogin" :swipable="true" :displayMyAvatar="true" :canOmitTitle="true">
-	<div class="_spacer" style="--MI_SPACER-w: 800px;">
-		<MkTip v-if="isBasicTimeline(src)" :k="`tl.${src}`" style="margin-bottom: var(--MI-margin);">
+<component :is="timelineComponent" v-model:tab="src" v-bind="timelineComponentProps">
+	<div
+		:class="isTwitterUi ? $style.twitterBody : ['_spacer', $style.body]"
+		:style="isTwitterUi ? undefined : { '--MI_SPACER-w': '800px' }"
+	>
+		<MkTip v-if="!isTwitterUi && isBasicTimeline(src)" :k="`tl.${src}`" style="margin-bottom: var(--MI-margin);">
 			{{ i18n.ts._timelineDescription[src] }}
 		</MkTip>
-		<MkPostForm v-if="prefer.r.showFixedPostForm.value" :class="$style.postForm" class="_panel" fixed style="margin-bottom: var(--MI-margin);"/>
+		<MkPostForm
+			v-if="prefer.r.showFixedPostForm.value"
+			:class="[$style.postForm, { [$style.twitterPostForm]: isTwitterUi }]"
+			class="_panel"
+			fixed
+			:style="isTwitterUi ? undefined : { marginBottom: 'var(--MI-margin)' }"
+		/>
 		<MkStreamingNotesTimeline
 			ref="tlComponent"
 			:key="src + withRenotes + withReplies + onlyFiles + withSensitive"
-			:class="$style.tl"
+			:class="isTwitterUi ? $style.twitterTl : $style.tl"
 			:src="(src.split(':')[0] as (BasicTimelineType | 'list'))"
 			:list="src.split(':')[1]"
 			:withRenotes="withRenotes"
@@ -21,13 +30,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:withSensitive="withSensitive"
 			:onlyFiles="onlyFiles"
 			:sound="true"
+			:variant="isTwitterUi ? 'twitter' : 'misskey'"
 		/>
 	</div>
-</PageWithHeader>
+</component>
 </template>
 
 <script lang="ts" setup>
-import { computed, watch, provide, useTemplateRef, ref, onMounted, onActivated } from 'vue';
+import { computed, watch, provide, useTemplateRef, ref, onMounted, onActivated, inject } from 'vue';
+import PageWithHeader from '@/components/global/PageWithHeader.vue';
 import type { Tab } from '@/components/global/MkPageHeader.tabs.vue';
 import type { MenuItem } from '@/types/menu.js';
 import type { BasicTimelineType } from '@/timelines.js';
@@ -45,8 +56,13 @@ import { deepMerge } from '@/utility/merge.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { availableBasicTimelines, hasWithReplies, isAvailableBasicTimeline, isBasicTimeline, basicTimelineIconClass } from '@/timelines.js';
 import { prefer } from '@/preferences.js';
+import TwitterTimelineShell from '@/ui/twitter/TimelineShell.vue';
+import { DI } from '@/di.js';
 
 const tlComponent = useTemplateRef('tlComponent');
+const uiStyle = inject(DI.uiStyle, ref('default'));
+const isTwitterUi = computed(() => uiStyle.value === 'twitter');
+const timelineComponent = computed(() => isTwitterUi.value ? TwitterTimelineShell : PageWithHeader);
 
 type TimelinePageSrc = BasicTimelineType | `list:${string}`;
 
@@ -298,6 +314,26 @@ const headerTabsWhenNotLogin = computed(() => [...availableBasicTimelines().map(
 	iconOnly: true,
 }))] as Tab[]);
 
+const timelineComponentProps = computed(() => {
+	const defaultTabs = ($i ? headerTabs.value : headerTabsWhenNotLogin.value) as Tab[];
+	const twitterTabs = defaultTabs.filter(tab => tab.onClick == null);
+
+	return isTwitterUi.value
+		? {
+			actions: headerActions.value,
+			tabs: twitterTabs,
+			swipable: true,
+			displayMyAvatar: true,
+		}
+		: {
+			actions: headerActions.value,
+			tabs: defaultTabs,
+			swipable: true,
+			displayMyAvatar: true,
+			canOmitTitle: true,
+		};
+});
+
 definePage(() => ({
 	title: i18n.ts.timeline,
 	icon: isBasicTimeline(src.value) ? basicTimelineIconClass(src.value) : 'ti ti-home',
@@ -332,5 +368,21 @@ definePage(() => ({
 	background: var(--MI_THEME-bg);
 	border-radius: var(--MI-radius);
 	overflow: clip;
+}
+
+.twitterBody,
+.twitterTl {
+	min-height: 100%;
+	background: var(--twitter-bg);
+}
+
+.twitterTl {
+	overflow: visible;
+}
+
+.twitterPostForm {
+	margin: 0;
+	border-radius: 0;
+	border-bottom: solid 0.5px var(--twitter-border);
 }
 </style>
