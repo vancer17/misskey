@@ -5,32 +5,56 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <component :is="prefer.s.enablePullToRefresh ? MkPullToRefresh : 'div'" :refresher="() => reloadTimeline()">
-	<MkLoading v-if="paginator.fetching.value"/>
+	<MkLoading v-if="paginator.fetching.value" :class="{ [$style.twitterLoading]: isTwitter }"/>
 
-	<MkError v-else-if="paginator.error.value" @retry="paginator.init()"/>
+	<MkError
+		v-else-if="paginator.error.value && !isTwitter"
+		@retry="paginator.init()"
+	/>
+	<TwitterTimelineState
+		v-else-if="paginator.error.value"
+		type="error"
+		@retry="paginator.init()"
+	/>
 
-	<div v-else-if="paginator.items.value.length === 0" key="_empty_">
-		<slot name="empty"><MkResult type="empty" :text="i18n.ts.noNotes"/></slot>
+	<div v-else-if="paginator.items.value.length === 0" key="_empty_" :class="{ [$style.twitterEmpty]: isTwitter }">
+		<slot name="empty">
+			<TwitterTimelineState v-if="isTwitter"/>
+			<MkResult v-else type="empty" :text="i18n.ts.noNotes"/>
+		</slot>
 	</div>
 
 	<div v-else ref="rootEl">
-		<div v-if="paginator.queuedAheadItemsCount.value > 0" :class="$style.new">
+		<div
+			v-if="paginator.queuedAheadItemsCount.value > 0"
+			:class="[$style.new, { [$style.twitterNew]: isTwitter }]"
+			:role="isTwitter ? 'status' : undefined"
+			:aria-live="isTwitter ? 'polite' : undefined"
+		>
 			<div :class="$style.newBg1"></div>
 			<div :class="$style.newBg2"></div>
-			<button class="_button" :class="$style.newButton" @click="releaseQueue()"><i class="ti ti-circle-arrow-up"></i> {{ i18n.ts.newNote }}</button>
+			<TwitterNewPostsButton
+				v-if="isTwitter"
+				:count="paginator.queuedAheadItemsCount.value"
+				@click="releaseQueue()"
+			/>
+			<button v-else class="_button" :class="$style.newButton" @click="releaseQueue()"><i class="ti ti-circle-arrow-up"></i> {{ i18n.ts.newNote }}</button>
 		</div>
 		<component
 			:is="prefer.s.animation ? TransitionGroup : 'div'"
-			:class="$style.notes"
-			:enterActiveClass="$style.transition_x_enterActive"
-			:leaveActiveClass="$style.transition_x_leaveActive"
-			:enterFromClass="$style.transition_x_enterFrom"
-			:leaveToClass="$style.transition_x_leaveTo"
-			:moveClass="$style.transition_x_move"
+			:class="[$style.notes, { [$style.twitterNotes]: isTwitter }]"
+			:enterActiveClass="isTwitter ? $style.twitterEnterActive : $style.transition_x_enterActive"
+			:leaveActiveClass="isTwitter ? $style.twitterLeaveActive : $style.transition_x_leaveActive"
+			:enterFromClass="isTwitter ? $style.twitterEnterFrom : $style.transition_x_enterFrom"
+			:leaveToClass="isTwitter ? $style.twitterLeaveTo : $style.transition_x_leaveTo"
+			:moveClass="isTwitter ? $style.twitterMove : $style.transition_x_move"
 			tag="div"
 		>
 			<template v-for="(note, i) in paginator.items.value" :key="note.id">
-				<div v-if="i > 0 && isSeparatorNeeded(paginator.items.value[i -1].createdAt, note.createdAt)" :data-scroll-anchor="note.id">
+				<div
+					v-if="!isTwitter && i > 0 && isSeparatorNeeded(paginator.items.value[i -1].createdAt, note.createdAt)"
+					:data-scroll-anchor="note.id"
+				>
 					<div :class="$style.date">
 						<span><i class="ti ti-chevron-up"></i> {{ getSeparatorInfo(paginator.items.value[i -1].createdAt, note.createdAt)?.prevText }}</span>
 						<span style="height: 1em; width: 1px; background: var(--MI_THEME-divider);"></span>
@@ -39,15 +63,29 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkNote :class="$style.note" :note="note" :withHardMute="true"/>
 				</div>
 				<div v-else-if="note._shouldInsertAd_" :data-scroll-anchor="note.id">
-					<MkNote :class="$style.note" :note="note" :withHardMute="true"/>
+					<MkNote :class="[$style.note, { [$style.twitterNote]: isTwitter }]" :note="note" :withHardMute="true"/>
 					<div :class="$style.ad">
 						<MkAd :preferForms="['horizontal', 'horizontal-big']"/>
 					</div>
 				</div>
-				<MkNote v-else :class="$style.note" :note="note" :withHardMute="true" :data-scroll-anchor="note.id"/>
+				<MkNote
+					v-else
+					:class="[$style.note, { [$style.twitterNote]: isTwitter }]"
+					:note="note"
+					:withHardMute="true"
+					:data-scroll-anchor="note.id"
+				/>
 			</template>
 		</component>
-		<button v-show="paginator.canFetchOlder.value" key="_more_" v-appear="prefer.s.enableInfiniteScroll ? paginator.fetchOlder : null" :disabled="paginator.fetchingOlder.value" class="_button" :class="$style.more" @click="paginator.fetchOlder">
+		<button
+			v-show="paginator.canFetchOlder.value"
+			key="_more_"
+			v-appear="prefer.s.enableInfiniteScroll ? paginator.fetchOlder : null"
+			:disabled="paginator.fetchingOlder.value"
+			class="_button"
+			:class="[$style.more, { [$style.twitterMore]: isTwitter }]"
+			@click="paginator.fetchOlder"
+		>
 			<div v-if="!paginator.fetchingOlder.value">{{ i18n.ts.loadMore }}</div>
 			<MkLoading v-else :inline="true"/>
 		</button>
@@ -73,6 +111,8 @@ import { prefer } from '@/preferences.js';
 import { store } from '@/store.js';
 import MkNote from '@/components/MkNote.vue';
 import MkButton from '@/components/MkButton.vue';
+import TwitterNewPostsButton from '@/ui/twitter/NewPostsButton.vue';
+import TwitterTimelineState from '@/ui/twitter/TimelineState.vue';
 import { i18n } from '@/i18n.js';
 import { DI } from '@/di.js';
 import { globalEvents, useGlobalEvent } from '@/events.js';
@@ -91,6 +131,7 @@ const props = withDefaults(defineProps<{
 	withReplies?: boolean;
 	withSensitive?: boolean;
 	onlyFiles?: boolean;
+	variant?: 'misskey' | 'twitter';
 }>(), {
 	withRenotes: true,
 	withReplies: false,
@@ -99,6 +140,8 @@ const props = withDefaults(defineProps<{
 	sound: false,
 	customSound: null,
 });
+
+const isTwitter = computed(() => props.variant === 'twitter');
 
 provide('inTimeline', true);
 provide('tl_withSensitive', computed(() => props.withSensitive));
@@ -573,5 +616,100 @@ defineExpose({
 	box-sizing: border-box;
 	padding: 16px;
 	background: var(--MI_THEME-panel);
+}
+
+.twitterLoading {
+	min-height: 60vh;
+	background: var(--twitter-bg);
+}
+
+.twitterEmpty {
+	background: var(--twitter-bg);
+}
+
+.twitterNotes {
+	background: var(--twitter-bg);
+}
+
+.twitterNote {
+	border-bottom: solid 0.5px var(--twitter-border);
+	background: var(--twitter-bg);
+	transition: background-color var(--twitter-duration-fast) ease;
+
+	&:hover {
+		background: color-mix(in srgb, var(--twitter-fg) 4%, transparent);
+	}
+}
+
+.twitterNew {
+	position: sticky;
+	top: var(--MI-stickyTop, 0px);
+	z-index: 2;
+	display: flex;
+	justify-content: center;
+	box-sizing: border-box;
+	width: 100%;
+	padding: 8px 0;
+	background: color-mix(in srgb, var(--twitter-bg) 88%, transparent);
+	-webkit-backdrop-filter: blur(10px);
+	backdrop-filter: blur(10px);
+	border-bottom: solid 0.5px var(--twitter-border);
+
+	.newBg1,
+	.newBg2 {
+		display: none;
+	}
+}
+
+.twitterEnterActive {
+	transition:
+		opacity var(--twitter-duration-fast) ease,
+		transform var(--twitter-duration-normal) var(--twitter-ease);
+
+	&.note,
+	.note {
+		content-visibility: visible !important;
+	}
+}
+
+.twitterEnterFrom {
+	opacity: 0;
+	transform: translateY(-8px);
+}
+
+.twitterLeaveActive {
+	transition:
+		opacity var(--twitter-duration-fast) ease,
+		transform var(--twitter-duration-fast) ease;
+}
+
+.twitterLeaveTo {
+	opacity: 0;
+	transform: translateY(4px);
+}
+
+.twitterMove {
+	transition: transform var(--twitter-duration-normal) var(--twitter-ease);
+}
+
+.twitterMore {
+	min-height: 52px;
+	background: var(--twitter-bg);
+	color: var(--twitter-accent);
+	font-weight: 700;
+	border-bottom: solid 0.5px var(--twitter-border);
+	transition: background-color var(--twitter-duration-fast) ease;
+
+	&:hover {
+		background: color-mix(in srgb, var(--twitter-fg) 5%, transparent);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.twitterEnterActive,
+	.twitterLeaveActive,
+	.twitterMove {
+		transition: none;
+	}
 }
 </style>
