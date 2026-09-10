@@ -8,6 +8,7 @@ import type { PageMetadata } from '@/page.js';
 import type { Router } from '@/router.js';
 
 export const DI = {
+	uiStyle: Symbol() as InjectionKey<ComputedRef<string>>,
 	routerCurrentDepth: Symbol() as InjectionKey<number>,
 	router: Symbol() as InjectionKey<Router>,
 	mock: Symbol() as InjectionKey<boolean>,

@@ -85,6 +85,7 @@ const sidebarIconOnly = computed(() => showSidebar.value && !showRightRail.value
 const isRoot = computed(() => mainRouter.currentRoute.value.name === 'index');
 const pageMetadata = ref<null | PageMetadata>(null);
 
+provide(DI.uiStyle, computed(() => 'twitter'));
 provide(DI.router, mainRouter);
 provideMetadataReceiver((metadataGetter) => {
 	const info = metadataGetter();
