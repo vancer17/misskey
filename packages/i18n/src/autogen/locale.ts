@@ -13378,4 +13378,14 @@ export interface Locale extends ILocale {
          */
         "mfm": string;
     };
+    "_twitterUi": {
+        /**
+         * 主要ナビゲーション
+         */
+        "primaryNavigation": string;
+        /**
+         * 通知（未読{count}件）
+         */
+        "notificationsWithCount": ParameterizedString<"count">;
+    };
 }
