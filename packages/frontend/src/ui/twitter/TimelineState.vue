@@ -6,8 +6,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <div :class="$style.root" role="status">
 	<i v-if="type === 'error'" :class="[$style.icon, 'ti ti-alert-triangle']" aria-hidden="true"></i>
-	<h2 :class="$style.title">{{ type === 'error' ? i18n.ts.somethingHappened : i18n.ts.noNotes }}</h2>
-	<p v-if="type === 'error'" :class="$style.description">{{ i18n.ts.error }}</p>
+	<h2 :class="$style.title">{{ type === 'error' ? i18n.ts.somethingHappened : emptyTitle }}</h2>
+	<p v-if="type === 'error'" :class="$style.description">{{ errorDescription }}</p>
 	<button
 		v-if="type === 'error'"
 		class="_button"
@@ -25,8 +25,12 @@ import { i18n } from '@/i18n.js';
 
 withDefaults(defineProps<{
 	type?: 'empty' | 'error';
+	emptyTitle?: string;
+	errorDescription?: string;
 }>(), {
 	type: 'empty',
+	emptyTitle: i18n.ts.noNotes,
+	errorDescription: i18n.ts.error,
 });
 
 const emit = defineEmits<{
