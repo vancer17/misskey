@@ -24,6 +24,7 @@ interface RouteDefBase {
 	name?: string;
 	hash?: string;
 	children?: RouteDef[];
+	viewKey?: string;
 }
 
 interface RouteDefWithComponent extends RouteDefBase {

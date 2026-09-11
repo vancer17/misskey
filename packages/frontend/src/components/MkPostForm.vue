@@ -114,7 +114,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { watch, nextTick, onMounted, defineAsyncComponent, provide, shallowRef, ref, computed, useTemplateRef, onUnmounted, onBeforeUnmount } from 'vue';
+import { watch, nextTick, onMounted, defineAsyncComponent, inject, provide, shallowRef, ref, computed, useTemplateRef, onUnmounted, onBeforeUnmount } from 'vue';
 import * as mfm from 'mfm-js';
 import * as Misskey from 'misskey-js';
 import insertTextAtCursor from 'insert-text-at-cursor';
@@ -158,6 +158,7 @@ import { checkDragDataType, getDragData } from '@/drag-and-drop.js';
 import { useUploader } from '@/composables/use-uploader.js';
 import { startTour } from '@/utility/tour.js';
 import { closeTip } from '@/tips.js';
+import { openTwitterSchedulePostDialog } from '@/ui/twitter/schedule-post-dialog.js';
 
 const $i = ensureSignin();
 
@@ -174,6 +175,7 @@ const props = withDefaults(defineProps<PostFormProps & {
 });
 
 provide(DI.mock, props.mock);
+const uiStyle = inject(DI.uiStyle, ref('default'));
 
 const emit = defineEmits<{
 	(ev: 'posted'): void;
@@ -1352,13 +1354,17 @@ function showPerUploadItemMenuViaContextmenu(item: UploaderItem, ev: PointerEven
 }
 
 async function schedule() {
-	const { canceled, result } = await os.inputDatetime({
-		title: i18n.ts.schedulePost,
-	});
-	if (canceled) return;
-	if (result.getTime() <= Date.now()) return;
+	const { canceled, result } = uiStyle.value === 'twitter'
+		? await openTwitterSchedulePostDialog(scheduledAt.value)
+		: await os.inputDatetime({
+			title: i18n.ts.schedulePost,
+		});
+	if (canceled || result == null) return;
 
-	scheduledAt.value = result.getTime();
+	const time = result instanceof Date ? result.getTime() : result;
+	if (time <= Date.now()) return;
+
+	scheduledAt.value = time;
 }
 
 function cancelSchedule() {
