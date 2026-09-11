@@ -13,32 +13,40 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:to="userPage(props.user, tab.key)"
 			:aria-current="activeTab === tab.key ? 'page' : undefined"
 		>
-			{{ tab.title }}
+			<span :class="$style.tabTitle">{{ tab.title }}</span>
 		</MkA>
 	</nav>
 
-	<div v-if="activeTab === 'notes' && user.pinnedNotes.length > 0" :class="$style.pinned">
-		<TwitterNote
-			v-for="note in user.pinnedNotes"
-			:key="note.id"
-			:note="note"
-			:pinned="true"
-			:withHardMute="true"
-		/>
-	</div>
-
-	<MkNotesTimeline
-		:key="user.id + ':' + activeTab"
-		:class="$style.timeline"
-		:paginator="activeTab === 'featured' ? featuredPaginator : notesPaginator"
-		:noGap="true"
-		:pullToRefresh="false"
-		:variant="'twitter'"
+	<div
+		v-for="tab in tabs"
+		v-show="activeTab === tab.key"
+		:key="tab.key"
+		:class="$style.timelinePane"
+		:data-testid="`twitter-user-timeline-${tab.key}`"
 	>
-		<template #empty>
-			<TwitterTimelineState/>
-		</template>
-	</MkNotesTimeline>
+		<div v-if="tab.key === 'notes' && user.pinnedNotes.length > 0" :class="$style.pinned">
+			<TwitterNote
+				v-for="note in user.pinnedNotes"
+				:key="note.id"
+				:note="note"
+				:pinned="true"
+				:withHardMute="true"
+			/>
+		</div>
+
+		<MkNotesTimeline
+			:key="user.id + ':' + tab.key"
+			:class="$style.timeline"
+			:paginator="paginators[tab.key]"
+			:noGap="true"
+			:pullToRefresh="false"
+			:variant="'twitter'"
+		>
+			<template #empty>
+				<TwitterTimelineState/>
+			</template>
+		</MkNotesTimeline>
+	</div>
 </div>
 </template>
 
@@ -91,23 +99,42 @@ const activeTab = computed<TimelineTab>(() => {
 	}
 });
 
-const featuredPaginator = markRaw(new Paginator('users/featured-notes', {
-	limit: 20,
-	params: {
-		userId: props.user.id,
-	},
-}));
-
-const notesPaginator = markRaw(new Paginator('users/notes', {
-	limit: 20,
-	computedParams: computed(() => ({
-		userId: props.user.id,
-		withRenotes: activeTab.value === 'notes',
-		withReplies: activeTab.value === 'replies' || activeTab.value === 'files',
-		withChannelNotes: activeTab.value === 'notes' || activeTab.value === 'files',
-		withFiles: activeTab.value === 'files',
+const paginators = {
+	notes: markRaw(new Paginator('users/notes', {
+		limit: 20,
+		params: {
+			userId: props.user.id,
+			withRenotes: true,
+			withReplies: false,
+			withChannelNotes: true,
+		},
 	})),
-}));
+	replies: markRaw(new Paginator('users/notes', {
+		limit: 20,
+		params: {
+			userId: props.user.id,
+			withRenotes: false,
+			withReplies: true,
+			withChannelNotes: false,
+		},
+	})),
+	files: markRaw(new Paginator('users/notes', {
+		limit: 20,
+		params: {
+			userId: props.user.id,
+			withRenotes: false,
+			withReplies: true,
+			withChannelNotes: true,
+			withFiles: true,
+		},
+	})),
+	featured: markRaw(new Paginator('users/featured-notes', {
+		limit: 20,
+		params: {
+			userId: props.user.id,
+		},
+	})),
+};
 
 </script>
 
@@ -117,6 +144,7 @@ const notesPaginator = markRaw(new Paginator('users/notes', {
 	top: 53px;
 	z-index: 9;
 	display: flex;
+	height: 48px;
 	background: color-mix(in srgb, var(--twitter-bg) 90%, transparent);
 	-webkit-backdrop-filter: blur(12px);
 	backdrop-filter: blur(12px);
@@ -125,13 +153,17 @@ const notesPaginator = markRaw(new Paginator('users/notes', {
 
 .tab {
 	position: relative;
-	flex: 1 0 auto;
-	min-width: 72px;
-	height: 50px;
-	padding: 0 12px;
+	display: flex;
+	flex: 1 1 0;
+	align-items: center;
+	justify-content: center;
+	min-width: 0;
+	height: 100%;
+	padding: 0 10px;
 	color: var(--twitter-secondary-fg);
 	font-size: 14px;
 	font-weight: 700;
+	line-height: 1;
 	transition:
 		background-color var(--twitter-duration-fast) ease,
 		color var(--twitter-duration-fast) ease;
@@ -172,8 +204,19 @@ const notesPaginator = markRaw(new Paginator('users/notes', {
 	}
 }
 
+.tabTitle {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .pinned {
 	border-bottom: solid 0.5px var(--twitter-border);
+}
+
+.timelinePane {
+	min-height: 50vh;
 }
 
 .timeline {
@@ -181,8 +224,13 @@ const notesPaginator = markRaw(new Paginator('users/notes', {
 }
 
 @media (max-width: 500px) {
+	.tabs {
+		height: 46px;
+	}
+
 	.tab {
-		min-width: 64px;
+		padding: 0 8px;
+		font-size: 13px;
 	}
 }
 
