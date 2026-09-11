@@ -1,0 +1,3 @@
+[submodule "external/app/nitter"]
+	path = external/app/nitter
+url = https://github.com/zedeus/nitter.git

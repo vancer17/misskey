@@ -1,40 +1,54 @@
-# このconfigは、 dockerでMisskey本体を起動せず、 redisとpostgresql などだけを起動します
+name: misskey-local-deps
 
 services:
-  redis:
-    restart: always
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - ./redis:/data
-    healthcheck:
-      test: "redis-cli ping"
-      interval: 5s
-      retries: 20
-
   db:
-    restart: always
     image: postgres:18-alpine
-    ports:
-      - "5432:5432"
+    restart: unless-stopped
     env_file:
       - .config/docker.env
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
-      - ./db:/var/lib/postgresql
+      - postgres_data:/var/lib/postgresql
     healthcheck:
-      test: "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
+      timeout: 5s
       retries: 20
 
-#  meilisearch:
-#    restart: always
-#    image: getmeili/meilisearch:v1.3.4
-#    environment:
-#      - MEILI_NO_ANALYTICS=true
-#      - MEILI_ENV=production
-#    env_file:
-#      - .config/meilisearch.env
-#    volumes:
-#      - ./meili_data:/meili_data
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
+  meilisearch:
+    image: getmeili/meilisearch:v1.3.4
+    profiles:
+      - search
+    restart: unless-stopped
+    environment:
+      MEILI_NO_ANALYTICS: true
+      MEILI_ENV: development
+    ports:
+      - "${MEILISEARCH_HOST_PORT:-7700}:7700"
+    volumes:
+      - meilisearch_data:/meili_data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres_data:
+  redis_data:
+  meilisearch_data:
