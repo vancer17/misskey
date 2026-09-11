@@ -1,0 +1,20 @@
+url: http://localhost:3000/
+
+setupPassword: local-development
+
+port: 3000
+
+db:
+  host: localhost
+  port: 5432
+  db: misskey
+  user: misskey
+  pass: misskey
+
+dbReplications: false
+
+redis:
+  host: localhost
+  port: 6379
+
+id: 'aidx'
