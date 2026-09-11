@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <button
 	class="_button"
-	:class="[$style.root, { [$style.wait]: wait, [$style.active]: isFollowing || hasPendingFollowRequestFromYou, [$style.full]: full, [$style.large]: large }]"
+		:class="[$style.root, { [$style.wait]: wait, [$style.active]: isFollowing || hasPendingFollowRequestFromYou, [$style.full]: full, [$style.large]: large, [$style.twitter]: variant === 'twitter' }]"
 	:disabled="wait"
 	@click="onClick"
 >
@@ -52,9 +52,11 @@ const props = withDefaults(defineProps<{
 	user: Misskey.entities.UserDetailed,
 	full?: boolean,
 	large?: boolean,
+	variant?: 'misskey' | 'twitter',
 }>(), {
 	full: false,
 	large: false,
+	variant: 'misskey',
 });
 
 const emit = defineEmits<{
@@ -246,5 +248,36 @@ onBeforeUnmount(() => {
 
 .text {
 	margin-right: 6px;
+}
+
+.twitter {
+	border-color: transparent;
+	background: var(--twitter-accent);
+	color: var(--MI_THEME-fgOnAccent);
+
+	&.full {
+		padding: 0 16px;
+	}
+
+	&:hover:not(.active) {
+		background: var(--twitter-accent-hover);
+	}
+
+	&.active {
+		border-color: color-mix(in srgb, var(--twitter-fg) 30%, transparent);
+		background: transparent;
+		color: var(--twitter-fg);
+
+		&:hover {
+			background: color-mix(in srgb, var(--twitter-danger) 12%, transparent);
+			border-color: color-mix(in srgb, var(--twitter-danger) 40%, transparent);
+			color: var(--twitter-danger);
+		}
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--twitter-accent);
+		outline-offset: 2px;
+	}
 }
 </style>

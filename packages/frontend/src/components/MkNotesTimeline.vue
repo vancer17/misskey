@@ -5,7 +5,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <MkPagination :paginator="paginator" :direction="direction" :autoLoad="autoLoad" :pullToRefresh="pullToRefresh" :withControl="withControl" :forceDisableInfiniteScroll="forceDisableInfiniteScroll">
-	<template #empty><MkResult type="empty" :text="i18n.ts.noNotes"/></template>
+	<template #empty>
+		<slot name="empty">
+			<MkResult type="empty" :text="i18n.ts.noNotes"/>
+		</slot>
+	</template>
 
 	<template #default="{ items: notes }">
 		<div :class="[$style.root, { [$style.noGap]: noGap, [$style.twitterRoot]: isTwitter, '_gaps': !noGap && !isTwitter }]">
@@ -71,6 +75,10 @@ const props = withDefaults(defineProps<MkPaginationOptions & {
 });
 
 const isTwitter = computed(() => props.variant === 'twitter');
+
+defineSlots<{
+	empty: () => void;
+}>();
 
 useGlobalEvent('noteDeleted', (noteId) => {
 	props.paginator.removeItem(noteId);
