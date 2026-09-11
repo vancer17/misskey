@@ -52,4 +52,35 @@ describe('TwitterUserTimeline', () => {
 		]);
 		assert.strictEqual(links[0].getAttribute('aria-current'), 'page');
 	});
+
+	test('should keep profile timeline panes mounted while switching tabs', async () => {
+		const timeline = render(TwitterUserTimeline, {
+			props: {
+				user,
+				page: 'notes',
+			},
+			global: {
+				components,
+				directives,
+				stubs: {
+					MkNotesTimeline: true,
+					TwitterNote: true,
+				},
+			},
+		});
+
+		const getPane = (tab: string) => timeline.container.querySelector<HTMLElement>(`[data-testid="twitter-user-timeline-${tab}"]`);
+		assert.strictEqual(timeline.container.querySelectorAll('[data-testid^="twitter-user-timeline-"]').length, 4);
+		assert.notEqual(getPane('notes')?.style.display, 'none');
+		assert.strictEqual(getPane('replies')?.style.display, 'none');
+
+		await timeline.rerender({
+			user,
+			page: 'replies',
+		});
+
+		assert.strictEqual(timeline.container.querySelectorAll('[data-testid^="twitter-user-timeline-"]').length, 4);
+		assert.strictEqual(getPane('notes')?.style.display, 'none');
+		assert.notEqual(getPane('replies')?.style.display, 'none');
+	});
 });
