@@ -3588,3 +3588,8 @@ _twitterUi:
   primaryNavigation: "主要ナビゲーション"
   notificationsWithCount: "通知（未読{count}件）"
   newNotesWithCount: "新しい投稿（{count}件）"
+  scheduleDate: "日付"
+  scheduleTime: "時刻"
+  previousMonth: "前の月"
+  nextMonth: "次の月"
+  scheduleTimeIsInThePast: "現在より未来の日時を指定してください"
