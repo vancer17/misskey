@@ -8,10 +8,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<template #empty><MkResult type="empty" :text="i18n.ts.noNotes"/></template>
 
 	<template #default="{ items: notes }">
-		<div :class="[$style.root, { [$style.noGap]: noGap, '_gaps': !noGap }]">
+		<div :class="[$style.root, { [$style.noGap]: noGap, [$style.twitterRoot]: isTwitter, '_gaps': !noGap && !isTwitter }]">
 			<template v-for="(note, i) in notes" :key="note.id">
 				<div
-					v-if="i > 0 && isSeparatorNeeded(paginator.items.value[i - 1].createdAt, note.createdAt)"
+					v-if="!isTwitter && i > 0 && isSeparatorNeeded(paginator.items.value[i - 1].createdAt, note.createdAt)"
 					:data-scroll-anchor="note.id"
 					:class="{ '_gaps': !noGap }"
 				>
@@ -26,11 +26,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 				</div>
 				<div v-else-if="note._shouldInsertAd_" :class="{ '_gaps': !noGap }" :data-scroll-anchor="note.id">
-					<MkNote :class="$style.note" :note="note" :withHardMute="true"/>
-					<div :class="$style.ad">
+					<TwitterNote v-if="isTwitter" :note="note" :withHardMute="true"/>
+					<MkNote v-else :class="$style.note" :note="note" :withHardMute="true"/>
+					<div :class="[$style.ad, { [$style.twitterAd]: isTwitter }]">
 						<MkAd :preferForms="['horizontal', 'horizontal-big']"/>
 					</div>
 				</div>
+				<TwitterNote
+					v-else-if="isTwitter"
+					:note="note"
+					:withHardMute="true"
+					:data-scroll-anchor="note.id"
+				/>
 				<MkNote v-else :class="$style.note" :note="note" :withHardMute="true" :data-scroll-anchor="note.id"/>
 			</template>
 		</div>
@@ -39,11 +46,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup generic="T extends IPaginator<Misskey.entities.Note>">
+import { computed } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { MkPaginationOptions } from '@/components/MkPagination.vue';
 import type { IPaginator } from '@/utility/paginator.js';
 import MkNote from '@/components/MkNote.vue';
 import MkPagination from '@/components/MkPagination.vue';
+import TwitterNote from '@/ui/twitter/Note.vue';
 import { i18n } from '@/i18n.js';
 import { useGlobalEvent } from '@/events.js';
 import { isSeparatorNeeded, getSeparatorInfo } from '@/utility/timeline-date-separate.js';
@@ -51,13 +60,17 @@ import { isSeparatorNeeded, getSeparatorInfo } from '@/utility/timeline-date-sep
 const props = withDefaults(defineProps<MkPaginationOptions & {
 	paginator: T;
 	noGap?: boolean;
+	variant?: 'misskey' | 'twitter';
 }>(), {
 	autoLoad: true,
 	direction: 'down',
 	pullToRefresh: true,
 	withControl: true,
 	forceDisableInfiniteScroll: false,
+	variant: 'misskey',
 });
+
+const isTwitter = computed(() => props.variant === 'twitter');
 
 useGlobalEvent('noteDeleted', (noteId) => {
 	props.paginator.removeItem(noteId);
@@ -99,6 +112,15 @@ defineExpose({
 			border-radius: var(--MI-radius);
 		}
 	}
+}
+
+.twitterRoot {
+	background: var(--twitter-bg);
+}
+
+.twitterAd {
+	padding: 8px;
+	border-bottom: solid 0.5px var(--twitter-border);
 }
 
 .date {
