@@ -13,9 +13,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 			{{ i18n.ts._timelineDescription[src] }}
 		</MkTip>
 		<MkPostForm
-			v-if="prefer.r.showFixedPostForm.value"
-			:class="[$style.postForm, { [$style.twitterPostForm]: isTwitterUi }]"
-			class="_panel"
+			v-if="$i != null && (isTwitterUi || prefer.r.showFixedPostForm.value)"
+			:class="[
+				isTwitterUi ? undefined : '_panel',
+				$style.postForm,
+				{ [$style.twitterPostForm]: isTwitterUi },
+			]"
 			fixed
 			:style="isTwitterUi ? undefined : { marginBottom: 'var(--MI-margin)' }"
 		/>
