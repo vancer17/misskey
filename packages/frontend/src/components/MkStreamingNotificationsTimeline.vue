@@ -5,35 +5,78 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <component :is="prefer.s.enablePullToRefresh ? MkPullToRefresh : 'div'" :refresher="() => reload()">
-	<MkLoading v-if="paginator.fetching.value"/>
+	<TwitterNotificationSkeleton v-if="isTwitter && paginator.fetching.value"/>
+	<MkLoading v-else-if="paginator.fetching.value"/>
 
-	<MkError v-else-if="paginator.error.value" @retry="paginator.init()"/>
+	<MkError
+		v-else-if="paginator.error.value && !isTwitter"
+		@retry="paginator.init()"
+	/>
+	<TwitterTimelineState
+		v-else-if="paginator.error.value"
+		type="error"
+		@retry="paginator.init()"
+	/>
 
 	<div v-else-if="paginator.items.value.length === 0" key="_empty_">
-		<slot name="empty"><MkResult type="empty" :text="i18n.ts.noNotifications"/></slot>
+		<slot name="empty">
+			<TwitterTimelineState
+				v-if="isTwitter"
+				:emptyTitle="i18n.ts.noNotifications"
+			/>
+			<MkResult v-else type="empty" :text="i18n.ts.noNotifications"/>
+		</slot>
 	</div>
 
 	<div v-else ref="rootEl">
+		<div
+			v-if="isTwitter && paginator.queuedAheadItemsCount.value > 0"
+			:class="$style.twitterNew"
+			role="status"
+			aria-live="polite"
+		>
+			<TwitterNewNotificationsButton
+				:count="paginator.queuedAheadItemsCount.value"
+				@click="releaseQueue()"
+			/>
+		</div>
 		<component
-			:is="prefer.s.animation ? TransitionGroup : 'div'" :class="[$style.notifications]"
-			:enterActiveClass="$style.transition_x_enterActive"
-			:leaveActiveClass="$style.transition_x_leaveActive"
-			:enterFromClass="$style.transition_x_enterFrom"
-			:leaveToClass="$style.transition_x_leaveTo"
-			:moveClass="$style.transition_x_move"
+			:is="prefer.s.animation ? TransitionGroup : 'div'"
+			:class="isTwitter ? $style.twitterNotifications : $style.notifications"
+			:enterActiveClass="isTwitter ? $style.twitterEnterActive : $style.transition_x_enterActive"
+			:leaveActiveClass="isTwitter ? $style.twitterLeaveActive : $style.transition_x_leaveActive"
+			:enterFromClass="isTwitter ? $style.twitterEnterFrom : $style.transition_x_enterFrom"
+			:leaveToClass="isTwitter ? $style.twitterLeaveTo : $style.transition_x_leaveTo"
+			:moveClass="isTwitter ? $style.twitterMove : $style.transition_x_move"
 			tag="div"
 		>
 			<div v-for="(notification, i) in paginator.items.value" :key="notification.id" :data-scroll-anchor="notification.id" :class="$style.item">
-				<div v-if="i > 0 && isSeparatorNeeded(paginator.items.value[i -1].createdAt, notification.createdAt)" :class="$style.date">
+				<div v-if="!isTwitter && i > 0 && isSeparatorNeeded(paginator.items.value[i -1].createdAt, notification.createdAt)" :class="$style.date">
 					<span><i class="ti ti-chevron-up"></i> {{ getSeparatorInfo(paginator.items.value[i -1].createdAt, notification.createdAt)?.prevText }}</span>
 					<span style="height: 1em; width: 1px; background: var(--MI_THEME-divider);"></span>
 					<span>{{ getSeparatorInfo(paginator.items.value[i -1].createdAt, notification.createdAt)?.nextText }} <i class="ti ti-chevron-down"></i></span>
 				</div>
-				<MkNote v-if="['reply', 'quote', 'mention'].includes(notification.type) && 'note' in notification" :class="$style.content" :note="notification.note" :withHardMute="true"/>
+				<TwitterNotificationRow
+					v-if="isTwitter"
+					:class="$style.content"
+					:notification="notification"
+					:unread="isUnread(notification)"
+					:full="true"
+					@click="clearUnread(notification.id)"
+				/>
+				<MkNote v-else-if="['reply', 'quote', 'mention'].includes(notification.type) && 'note' in notification" :class="$style.content" :note="notification.note" :withHardMute="true"/>
 				<XNotification v-else :class="$style.content" :notification="notification" :withTime="true" :full="true"/>
 			</div>
 		</component>
-		<button v-show="paginator.canFetchOlder.value" key="_more_" v-appear="prefer.s.enableInfiniteScroll ? paginator.fetchOlder : null" :disabled="paginator.fetchingOlder.value" class="_button" :class="$style.more" @click="paginator.fetchOlder">
+		<button
+			v-show="paginator.canFetchOlder.value"
+			key="_more_"
+			v-appear="prefer.s.enableInfiniteScroll ? paginator.fetchOlder : null"
+			:disabled="paginator.fetchingOlder.value"
+			class="_button"
+			:class="[$style.more, { [$style.twitterMore]: isTwitter }]"
+			@click="paginator.fetchOlder"
+		>
 			<div v-if="!paginator.fetchingOlder.value">{{ i18n.ts.loadMore }}</div>
 			<MkLoading v-else/>
 		</button>
@@ -42,7 +85,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { onUnmounted, onMounted, computed, useTemplateRef, TransitionGroup, markRaw, watch } from 'vue';
+import { onUnmounted, onMounted, computed, ref, useTemplateRef, TransitionGroup, markRaw, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import { notificationTypes } from 'misskey-js';
 import { useInterval } from '@@/js/use-interval.js';
@@ -55,14 +98,28 @@ import { i18n } from '@/i18n.js';
 import MkPullToRefresh from '@/components/MkPullToRefresh.vue';
 import { prefer } from '@/preferences.js';
 import { store } from '@/store.js';
+import TwitterNewNotificationsButton from '@/ui/twitter/NewNotificationsButton.vue';
+import TwitterNotificationRow from '@/ui/twitter/NotificationRow.vue';
+import TwitterNotificationSkeleton from '@/ui/twitter/NotificationSkeleton.vue';
+import TwitterTimelineState from '@/ui/twitter/TimelineState.vue';
 import { isSeparatorNeeded, getSeparatorInfo } from '@/utility/timeline-date-separate.js';
 import { Paginator } from '@/utility/paginator.js';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	excludeTypes?: typeof notificationTypes[number][] | null;
-}>();
+	variant?: 'misskey' | 'twitter';
+	initialUnreadCount?: number;
+}>(), {
+	excludeTypes: null,
+	variant: 'misskey',
+	initialUnreadCount: 0,
+});
+
+const isTwitter = computed(() => props.variant === 'twitter');
 
 const rootEl = useTemplateRef('rootEl');
+const unreadNotificationIds = ref(new Set<string>());
+let initialUnreadMarkersApplied = false;
 
 const paginator = prefer.s.useGroupedNotifications ? markRaw(new Paginator('i/notifications-grouped', {
 	limit: 20,
@@ -137,6 +194,16 @@ watch(visibility, () => {
 	}
 });
 
+watch(() => [paginator.fetching.value, paginator.items.value.length] as const, ([fetching]) => {
+	if (fetching || initialUnreadMarkersApplied || props.initialUnreadCount <= 0) return;
+	initialUnreadMarkersApplied = true;
+
+	const ids = paginator.items.value
+		.slice(0, Math.min(props.initialUnreadCount, paginator.items.value.length))
+		.map((notification) => notification.id);
+	unreadNotificationIds.value = new Set(ids);
+});
+
 function onNotification(notification: Misskey.entities.Notification) {
 	const isMuted = props.excludeTypes ? props.excludeTypes.includes(notification.type as typeof notificationTypes[number]) : false;
 	if (isMuted || window.document.visibilityState === 'visible') {
@@ -146,12 +213,32 @@ function onNotification(notification: Misskey.entities.Notification) {
 	}
 
 	if (!isMuted) {
+		addUnread(notification.id);
 		if (isTop() && !isPausingUpdate) {
 			paginator.prepend(notification);
 		} else {
 			paginator.enqueue(notification);
 		}
 	}
+}
+
+function isUnread(notification: Misskey.entities.Notification) {
+	return unreadNotificationIds.value.has(notification.id);
+}
+
+function addUnread(notificationId: string) {
+	unreadNotificationIds.value = new Set([...unreadNotificationIds.value, notificationId]);
+}
+
+function clearUnread(notificationId: string) {
+	if (!unreadNotificationIds.value.has(notificationId)) return;
+	const nextIds = new Set(unreadNotificationIds.value);
+	nextIds.delete(notificationId);
+	unreadNotificationIds.value = nextIds;
+}
+
+function clearUnreadMarkers() {
+	unreadNotificationIds.value = new Set();
 }
 
 function reload() {
@@ -185,6 +272,7 @@ onUnmounted(() => {
 
 defineExpose({
 	reload,
+	clearUnreadMarkers,
 });
 </script>
 
@@ -250,5 +338,67 @@ defineExpose({
 	padding: 16px;
 	background: var(--MI_THEME-panel);
 	border-top: solid 0.5px var(--MI_THEME-divider);
+}
+
+.twitterNew {
+	position: relative;
+	z-index: 1;
+	display: flex;
+	justify-content: center;
+	padding: 8px 0;
+	background: var(--twitter-bg);
+	border-bottom: solid 0.5px var(--twitter-border);
+}
+
+.twitterNotifications {
+	container-type: inline-size;
+	background: var(--twitter-bg);
+}
+
+.twitterEnterActive {
+	transition:
+		opacity var(--twitter-duration-fast) ease,
+		transform var(--twitter-duration-normal) var(--twitter-ease);
+}
+
+.twitterEnterFrom {
+	opacity: 0;
+	transform: translateY(-8px);
+}
+
+.twitterLeaveActive {
+	transition:
+		opacity var(--twitter-duration-fast) ease,
+		transform var(--twitter-duration-fast) ease;
+}
+
+.twitterLeaveTo {
+	opacity: 0;
+	transform: translateY(4px);
+}
+
+.twitterMove {
+	transition: transform var(--twitter-duration-normal) var(--twitter-ease);
+}
+
+.twitterMore {
+	min-height: 52px;
+	background: var(--twitter-bg);
+	border-top: none;
+	color: var(--twitter-accent);
+	font-weight: 700;
+	transition: background-color var(--twitter-duration-fast) ease;
+
+	&:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--twitter-fg) 5%, transparent);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.twitterEnterActive,
+	.twitterLeaveActive,
+	.twitterMove {
+		transition: none;
+	}
 }
 </style>

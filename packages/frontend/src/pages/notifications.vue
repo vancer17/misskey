@@ -4,33 +4,65 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="tab" :actions="headerActions" :tabs="headerTabs" :swipable="true">
-	<div class="_spacer" style="--MI_SPACER-w: 800px;">
+<component
+	:is="pageComponent"
+	v-model:tab="tab"
+	:actions="headerActions"
+	:tabs="headerTabs"
+	:swipable="true"
+>
+	<div
+		:class="isTwitterUi ? $style.twitterBody : ['_spacer', $style.body]"
+		:style="isTwitterUi ? undefined : { '--MI_SPACER-w': '800px' }"
+	>
 		<div v-if="tab === 'all'">
-			<MkStreamingNotificationsTimeline :class="$style.notifications" :excludeTypes="excludeTypes"/>
+			<MkStreamingNotificationsTimeline
+				ref="notificationsTimeline"
+				:class="isTwitterUi ? $style.twitterNotifications : $style.notifications"
+				:excludeTypes="excludeTypes"
+				:variant="isTwitterUi ? 'twitter' : 'misskey'"
+				:initialUnreadCount="initialUnreadCount"
+			/>
 		</div>
 		<div v-else-if="tab === 'mentions'">
-			<MkNotesTimeline :paginator="mentionsPaginator"/>
+			<MkNotesTimeline
+				:class="{ [$style.twitterNotifications]: isTwitterUi }"
+				:paginator="mentionsPaginator"
+				:variant="isTwitterUi ? 'twitter' : 'misskey'"
+			/>
 		</div>
 		<div v-else-if="tab === 'directNotes'">
-			<MkNotesTimeline :paginator="directNotesPaginator"/>
+			<MkNotesTimeline
+				:class="{ [$style.twitterNotifications]: isTwitterUi }"
+				:paginator="directNotesPaginator"
+				:variant="isTwitterUi ? 'twitter' : 'misskey'"
+			/>
 		</div>
 	</div>
-</PageWithHeader>
+</component>
 </template>
 
 <script lang="ts" setup>
-import { computed, markRaw, ref } from 'vue';
+import { computed, inject, markRaw, ref, useTemplateRef } from 'vue';
 import { notificationTypes } from 'misskey-js';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import MkStreamingNotificationsTimeline from '@/components/MkStreamingNotificationsTimeline.vue';
+import PageWithHeader from '@/components/global/PageWithHeader.vue';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
+import { $i } from '@/i.js';
+import { DI } from '@/di.js';
 import { definePage } from '@/page.js';
+import TwitterNotificationsShell from '@/ui/twitter/NotificationsShell.vue';
 import { Paginator } from '@/utility/paginator.js';
 
 const tab = ref('all');
+const uiStyle = inject(DI.uiStyle, ref('default'));
+const isTwitterUi = computed(() => uiStyle.value === 'twitter');
+const pageComponent = computed(() => isTwitterUi.value ? TwitterNotificationsShell : PageWithHeader);
+const initialUnreadCount = $i?.unreadNotificationsCount ?? 0;
+const notificationsTimeline = useTemplateRef('notificationsTimeline');
 const includeTypes = ref<string[] | null>(null);
 const excludeTypes = computed(() => includeTypes.value ? notificationTypes.filter(t => !includeTypes.value!.includes(t)) : null);
 
@@ -63,6 +95,11 @@ function setFilter(ev: PointerEvent) {
 	os.popupMenu(items, ev.currentTarget ?? ev.target);
 }
 
+async function markAllAsRead() {
+	await os.apiWithDialog('notifications/mark-all-as-read', {});
+	notificationsTimeline.value?.clearUnreadMarkers();
+}
+
 const headerActions = computed<PageHeaderItem[]>(() => ([tab.value === 'all' ? {
 	text: i18n.ts.filter,
 	icon: 'ti ti-filter',
@@ -72,7 +109,7 @@ const headerActions = computed<PageHeaderItem[]>(() => ([tab.value === 'all' ? {
 	text: i18n.ts.markAllAsRead,
 	icon: 'ti ti-check',
 	handler: () => {
-		os.apiWithDialog('notifications/mark-all-as-read', {});
+		void markAllAsRead();
 	},
 } : undefined] as (PageHeaderItem | undefined)[]).filter(x => x !== undefined));
 
@@ -97,8 +134,22 @@ definePage(() => ({
 </script>
 
 <style module lang="scss">
+.body {
+	min-width: 0;
+}
+
 .notifications {
 	border-radius: var(--MI-radius);
+	overflow: clip;
+}
+
+.twitterBody {
+	min-height: 100%;
+	background: var(--twitter-bg);
+}
+
+.twitterNotifications {
+	border-radius: 0;
 	overflow: clip;
 }
 </style>
