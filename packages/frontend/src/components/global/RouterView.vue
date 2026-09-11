@@ -48,7 +48,7 @@ const current = router.current;
 const currentPageComponent = shallowRef('component' in current.route ? current.route.component : MkLoadingPage);
 const currentPageProps = ref(current.props);
 let currentRoutePath = current.route.path;
-const key = ref(router.getCurrentFullPath());
+const key = ref(getPageViewKey(current.route, router.getCurrentFullPath()));
 
 router.useListener('change', ({ resolved }) => {
 	if (resolved == null || 'redirect' in resolved.route) return;
@@ -56,9 +56,13 @@ router.useListener('change', ({ resolved }) => {
 
 	currentPageComponent.value = resolved.route.component;
 	currentPageProps.value = resolved.props;
-	key.value = router.getCurrentFullPath();
+	key.value = getPageViewKey(resolved.route, router.getCurrentFullPath());
 	currentRoutePath = resolved.route.path;
 });
+
+function getPageViewKey(route: typeof current.route, fullPath: string): string {
+	return route.viewKey ?? fullPath;
+}
 </script>
 
 <style lang="scss" module>

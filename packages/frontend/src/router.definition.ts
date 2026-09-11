@@ -40,6 +40,7 @@ export const ROUTE_DEF = [{
 }, {
 	name: 'user',
 	path: '/@:acct/:page?',
+	viewKey: 'user',
 	component: page(() => import('@/pages/user/index.vue')),
 }, {
 	name: 'note',

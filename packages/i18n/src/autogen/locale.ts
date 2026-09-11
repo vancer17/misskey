@@ -13395,5 +13395,25 @@ export interface Locale extends ILocale {
          * 新しい投稿（{count}件）
          */
         "newNotesWithCount": ParameterizedString<"count">;
+        /**
+         * 日付
+         */
+        "scheduleDate": string;
+        /**
+         * 時刻
+         */
+        "scheduleTime": string;
+        /**
+         * 前の月
+         */
+        "previousMonth": string;
+        /**
+         * 次の月
+         */
+        "nextMonth": string;
+        /**
+         * 現在より未来の日時を指定してください
+         */
+        "scheduleTimeIsInThePast": string;
     };
 }
