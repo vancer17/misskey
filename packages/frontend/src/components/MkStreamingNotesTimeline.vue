@@ -63,14 +63,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkNote :class="$style.note" :note="note" :withHardMute="true"/>
 				</div>
 				<div v-else-if="note._shouldInsertAd_" :data-scroll-anchor="note.id">
-					<MkNote :class="[$style.note, { [$style.twitterNote]: isTwitter }]" :note="note" :withHardMute="true"/>
+					<TwitterNote v-if="isTwitter" :note="note" :withHardMute="true"/>
+					<MkNote v-else :class="$style.note" :note="note" :withHardMute="true"/>
 					<div :class="$style.ad">
 						<MkAd :preferForms="['horizontal', 'horizontal-big']"/>
 					</div>
 				</div>
+				<TwitterNote
+					v-else-if="isTwitter"
+					:note="note"
+					:withHardMute="true"
+					:data-scroll-anchor="note.id"
+				/>
 				<MkNote
 					v-else
-					:class="[$style.note, { [$style.twitterNote]: isTwitter }]"
+					:class="$style.note"
 					:note="note"
 					:withHardMute="true"
 					:data-scroll-anchor="note.id"
@@ -111,6 +118,7 @@ import { prefer } from '@/preferences.js';
 import { store } from '@/store.js';
 import MkNote from '@/components/MkNote.vue';
 import MkButton from '@/components/MkButton.vue';
+import TwitterNote from '@/ui/twitter/Note.vue';
 import TwitterNewPostsButton from '@/ui/twitter/NewPostsButton.vue';
 import TwitterTimelineState from '@/ui/twitter/TimelineState.vue';
 import { i18n } from '@/i18n.js';
@@ -629,16 +637,6 @@ defineExpose({
 
 .twitterNotes {
 	background: var(--twitter-bg);
-}
-
-.twitterNote {
-	border-bottom: solid 0.5px var(--twitter-border);
-	background: var(--twitter-bg);
-	transition: background-color var(--twitter-duration-fast) ease;
-
-	&:hover {
-		background: color-mix(in srgb, var(--twitter-fg) 4%, transparent);
-	}
 }
 
 .twitterNew {

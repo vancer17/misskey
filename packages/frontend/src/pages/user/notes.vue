@@ -20,24 +20,28 @@ SPDX-License-Identifier: AGPL-3.0-only
 				>
 				</MkTab>
 			</template>
-			<MkNotesTimeline v-if="tab === 'featured'" :noGap="true" :paginator="featuredPaginator" :class="$style.tl"/>
-			<MkNotesTimeline v-else :noGap="true" :paginator="notesPaginator" :class="$style.tl"/>
+			<MkNotesTimeline v-if="tab === 'featured'" :noGap="true" :paginator="featuredPaginator" :variant="timelineVariant" :class="$style.tl"/>
+			<MkNotesTimeline v-else :noGap="true" :paginator="notesPaginator" :variant="timelineVariant" :class="$style.tl"/>
 		</MkStickyContainer>
 	</div>
 </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, markRaw } from 'vue';
+import { inject, ref, computed, markRaw } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkTab from '@/components/MkTab.vue';
+import { DI } from '@/di.js';
 import { i18n } from '@/i18n.js';
 import { Paginator } from '@/utility/paginator.js';
 
 const props = defineProps<{
 	user: Misskey.entities.UserDetailed;
 }>();
+
+const uiStyle = inject(DI.uiStyle, ref('default'));
+const timelineVariant = computed(() => uiStyle.value === 'twitter' ? 'twitter' : 'misskey');
 
 const tab = ref<'featured' | 'notes' | 'all' | 'files'>('all');
 
