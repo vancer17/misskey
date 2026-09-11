@@ -4,7 +4,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div v-show="props.modelValue.length != 0" :class="$style.root">
+<div
+	v-show="props.modelValue.length != 0"
+	:class="[
+		$style.root,
+		{
+			[$style.twitterRoot]: props.variant === 'twitter',
+			[$style.twitterSingle]: props.variant === 'twitter' && props.modelValue.length === 1,
+		},
+	]"
+>
 	<MkDraggable
 		:modelValue="props.modelValue"
 		:class="$style.files"
@@ -58,6 +67,7 @@ import { isPreviewable, getType } from '@/utility/lightbox.js';
 const props = defineProps<{
 	modelValue: Misskey.entities.DriveFile[];
 	detachMediaFn?: (id: string) => void;
+	variant?: 'default' | 'twitter';
 }>();
 
 const mock = inject(DI.mock, false);
@@ -279,6 +289,63 @@ function showFileMenu(file: Misskey.entities.DriveFile, ev: PointerEvent | Keybo
 
 	&.exceeded {
 		color: var(--MI_THEME-error);
+	}
+}
+
+.twitterRoot {
+	padding: 12px 0 0;
+
+	.files {
+		display: grid;
+		flex-wrap: nowrap;
+		gap: 8px;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.file {
+		box-sizing: border-box;
+		width: 100%;
+		height: auto;
+		aspect-ratio: 16 / 10;
+		border-radius: var(--twitter-radius-medium, 8px);
+		cursor: grab;
+
+		&:active {
+			cursor: grabbing;
+		}
+	}
+
+	.thumbnail {
+		position: absolute;
+		inset: 0;
+	}
+
+	.sensitive {
+		width: 100%;
+		height: 100%;
+		background: color-mix(in srgb, var(--MI_THEME-bg) 78%, transparent);
+		color: var(--twitter-fg, var(--MI_THEME-fg));
+	}
+
+	.remain {
+		top: 20px;
+		right: 12px;
+		z-index: 2;
+		padding: 2px 8px;
+		border-radius: var(--twitter-radius-pill, 999px);
+		background: color-mix(in srgb, var(--MI_THEME-bg) 78%, transparent);
+		color: var(--twitter-fg, var(--MI_THEME-fg));
+	}
+}
+
+.twitterSingle {
+	.files {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.file {
+		max-height: 320px;
+		aspect-ratio: 16 / 10;
 	}
 }
 </style>
