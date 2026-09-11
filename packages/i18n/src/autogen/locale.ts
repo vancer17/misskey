@@ -281,6 +281,10 @@ export interface Locale extends ILocale {
      */
     "reply": string;
     /**
+     * Bot
+     */
+    "bot": string;
+    /**
      * もっと見る
      */
     "loadMore": string;
