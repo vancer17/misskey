@@ -112,16 +112,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<MkFoldableSection v-if="paginator">
 		<template #header>{{ i18n.ts.searchResult }}</template>
-		<MkNotesTimeline :key="`searchNotes:${key}`" :paginator="paginator"/>
+		<MkNotesTimeline :key="`searchNotes:${key}`" :paginator="paginator" :variant="timelineVariant"/>
 	</MkFoldableSection>
 </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, markRaw, ref, shallowRef, toRef } from 'vue';
+import { computed, inject, markRaw, ref, shallowRef, toRef } from 'vue';
 import { host as localHost } from '@@/js/config.js';
 import type * as Misskey from 'misskey-js';
 import { $i } from '@/i.js';
+import { DI } from '@/di.js';
 import { i18n } from '@/i18n.js';
 import { instance } from '@/instance.js';
 import * as os from '@/os.js';
@@ -148,6 +149,9 @@ const props = withDefaults(defineProps<{
 	username: undefined,
 	host: '',
 });
+
+const uiStyle = inject(DI.uiStyle, ref('default'));
+const timelineVariant = computed(() => uiStyle.value === 'twitter' ? 'twitter' : 'misskey');
 
 const router = useRouter();
 
