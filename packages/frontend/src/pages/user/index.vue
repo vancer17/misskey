@@ -4,7 +4,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="tab" :tabs="headerTabs" :actions="headerActions" :swipable="true">
+<TwitterHome
+	v-if="isTwitterUi"
+	:user="user"
+	:error="error"
+	:page="props.page"
+	@retry="fetchUser()"
+/>
+<PageWithHeader v-else v-model:tab="tab" :tabs="headerTabs" :actions="headerActions" :swipable="true">
 	<div v-if="user">
 		<XHome v-if="tab === 'home'" :user="user" @showMoreFiles="() => { tab = 'files'; }"/>
 		<XNotes v-else-if="tab === 'notes'" :user="user"/>
@@ -25,7 +32,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { defineAsyncComponent, computed, watch, ref } from 'vue';
+import { defineAsyncComponent, computed, inject, watch, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import { acct as getAcct } from '@/filters/user.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -33,6 +40,7 @@ import { definePage } from '@/page.js';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
 import { serverContext, assertServerContext } from '@/server-context.js';
+import { DI } from '@/di.js';
 
 const XHome = defineAsyncComponent(() => import('./home.vue'));
 const XNotes = defineAsyncComponent(() => import('./notes.vue'));
@@ -46,6 +54,7 @@ const XPages = defineAsyncComponent(() => import('./pages.vue'));
 const XFlashs = defineAsyncComponent(() => import('./flashs.vue'));
 const XGallery = defineAsyncComponent(() => import('./gallery.vue'));
 const XRaw = defineAsyncComponent(() => import('./raw.vue'));
+const TwitterHome = defineAsyncComponent(() => import('./TwitterHome.vue'));
 
 // contextは非ログイン状態の情報しかないためログイン時は利用できない
 const CTX_USER = !$i && assertServerContext(serverContext, 'user') ? serverContext.user : null;
@@ -58,6 +67,8 @@ const props = withDefaults(defineProps<{
 });
 
 const tab = ref(props.page);
+const uiStyle = inject(DI.uiStyle, ref('default'));
+const isTwitterUi = computed(() => uiStyle.value === 'twitter');
 
 const user = ref<null | Misskey.entities.UserDetailed>(CTX_USER);
 const error = ref<any>(null);
@@ -66,6 +77,8 @@ function fetchUser(): void {
 	if (props.acct == null) return;
 
 	const { username, host } = Misskey.acct.parse(props.acct);
+
+	error.value = null;
 
 	if (CTX_USER && CTX_USER.username === username && CTX_USER.host === host) {
 		user.value = CTX_USER;
