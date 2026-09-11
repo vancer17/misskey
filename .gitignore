@@ -34,7 +34,9 @@ coverage
 !/.config/example.yml
 !/.config/docker_example.yml
 !/.config/docker_example.env
+!/.config/local_example.yml
 !/.config/playwright-devcontainer.yml
+/tmp/
 docker-compose.yml
 ./compose.yml
 .devcontainer/compose.yml
