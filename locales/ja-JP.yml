@@ -3382,6 +3382,11 @@ _search:
   postFrom: "投稿日時from"
   postTo: "投稿日時to"
 
+_twitterSearch:
+  lookupUrl: "このURLを照会する"
+  showUser: "このユーザーを見る"
+  showHashtag: "このハッシュタグを見る"
+
 _serverSetupWizard:
   installCompleted: "Misskeyのインストールが完了しました！"
   firstCreateAccount: "まずは、管理者アカウントを作成しましょう。"

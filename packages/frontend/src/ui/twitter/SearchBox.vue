@@ -4,35 +4,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<form :class="$style.root" role="search" @submit.prevent="search">
-	<i :class="$style.icon" class="ti ti-search ti-fw" aria-hidden="true"></i>
-	<input
-		v-model="query"
-		:class="$style.input"
-		type="search"
-		name="q"
-		:placeholder="i18n.ts.search"
-		:aria-label="i18n.ts.search"
-	>
-	<button
-		v-if="query !== ''"
-		class="_button"
-		:class="$style.clear"
-		type="button"
-		:aria-label="i18n.ts.clear"
-		@click="clear"
-	>
-		<i class="ti ti-x" aria-hidden="true"></i>
-	</button>
-</form>
+<TwitterSearchField v-model="query" @submit="search"/>
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue';
-import { i18n } from '@/i18n.js';
+import { computed, ref, watch } from 'vue';
 import { mainRouter } from '@/router.js';
+import TwitterSearchField from './SearchField.vue';
 
 const query = ref('');
+
+const routeQuery = computed(() => mainRouter.currentRoute.value.query?.q);
+
+watch(routeQuery, (value) => {
+	query.value = typeof value === 'string' ? value : '';
+}, { immediate: true });
 
 function search() {
 	const trimmedQuery = query.value.trim();
@@ -44,66 +30,4 @@ function search() {
 		},
 	});
 }
-
-function clear() {
-	query.value = '';
-}
 </script>
-
-<style lang="scss" module>
-.root {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	height: 44px;
-	padding: 0 16px;
-	border-radius: var(--twitter-radius-pill);
-	background: var(--twitter-hover);
-	color: var(--twitter-secondary-fg);
-	transition: background-color var(--twitter-duration-fast) ease;
-
-	&:focus-within {
-		background: var(--twitter-bg);
-		box-shadow: 0 0 0 1px var(--twitter-accent);
-	}
-}
-
-.icon {
-	flex-shrink: 0;
-	font-size: 18px;
-}
-
-.input {
-	flex: 1;
-	min-width: 0;
-	border: none;
-	background: transparent;
-	color: var(--twitter-fg);
-	font-size: 15px;
-	outline: none;
-
-	&::placeholder {
-		color: var(--twitter-secondary-fg);
-	}
-
-	&::-webkit-search-cancel-button {
-		display: none;
-	}
-}
-
-.clear {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-shrink: 0;
-	width: 28px;
-	height: 28px;
-	border-radius: var(--twitter-radius-pill);
-	color: inherit;
-
-	&:hover,
-	&:focus-visible {
-		background: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
-	}
-}
-</style>
