@@ -4,10 +4,12 @@
  */
 
 import type { StoryObj } from '@storybook/vue3';
+import { computed, provide } from 'vue';
 import { HttpResponse, http } from 'msw';
 import search_ from './search.vue';
 import { userDetailed } from '@/../.storybook/fakes.js';
 import { commonHandlers } from '@/../.storybook/mocks.js';
+import { DI } from '@/di.js';
 
 const localUser = userDetailed('someuserid', 'miskist', null, 'Local Misskey User');
 
@@ -54,6 +56,21 @@ export const Default = {
 export const NoteSearchDisabled = {
 	...Default,
 	args: {},
+} satisfies StoryObj<typeof search_>;
+
+export const TwitterInitial = {
+	...Default,
+	render(args) {
+		return {
+			...Default.render(args),
+			setup() {
+				provide(DI.uiStyle, computed(() => 'twitter'));
+				return {
+					args,
+				};
+			},
+		};
+	},
 } satisfies StoryObj<typeof search_>;
 
 export const WithUsernameLocal = {
