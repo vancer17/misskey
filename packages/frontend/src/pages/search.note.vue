@@ -4,9 +4,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div class="_gaps">
-	<div class="_gaps">
+<div :class="[$style.root, { [$style.twitterRoot]: autoSearch }]">
+	<div :class="autoSearch ? undefined : '_gaps'">
 		<MkInput
+			v-if="!autoSearch"
 			v-model="searchQuery"
 			large
 			autofocus
@@ -15,7 +16,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		>
 			<template #prefix><i class="ti ti-search"></i></template>
 		</MkInput>
-		<MkFoldableSection expanded>
+		<MkFoldableSection :class="$style.filters" :expanded="autoSearch ? false : true">
 			<template #header>{{ i18n.ts.options }}</template>
 
 			<div class="_gaps_m">
@@ -95,7 +96,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 		</MkFoldableSection>
-		<div>
+		<div v-if="!autoSearch">
 			<MkButton
 				large
 				primary
@@ -110,15 +111,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 
-	<MkFoldableSection v-if="paginator">
+	<MkFoldableSection v-if="paginator != null && !autoSearch">
 		<template #header>{{ i18n.ts.searchResult }}</template>
 		<MkNotesTimeline :key="`searchNotes:${key}`" :paginator="paginator" :variant="timelineVariant"/>
 	</MkFoldableSection>
+
+	<div v-if="paginator != null && autoSearch" :class="$style.results">
+		<MkNotesTimeline :key="`searchNotes:${key}`" :paginator="paginator" :variant="timelineVariant"/>
+	</div>
 </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, inject, markRaw, ref, shallowRef, toRef } from 'vue';
+import { computed, inject, markRaw, ref, shallowRef, toRef, watch } from 'vue';
 import { host as localHost } from '@@/js/config.js';
 import type * as Misskey from 'misskey-js';
 import { $i } from '@/i.js';
@@ -143,11 +148,13 @@ const props = withDefaults(defineProps<{
 	userId?: string;
 	username?: string;
 	host?: string | null;
+	autoSearch?: boolean;
 }>(), {
 	query: '',
 	userId: undefined,
 	username: undefined,
 	host: '',
+	autoSearch: false,
 });
 
 const uiStyle = inject(DI.uiStyle, ref('default'));
@@ -164,6 +171,10 @@ const rangeStartAt = ref<string | null>(null);
 const rangeEndAt = ref<string | null>(null);
 
 const user = shallowRef<Misskey.entities.UserDetailed | null>(null);
+
+watch(() => props.query, (query) => {
+	if (props.autoSearch) searchQuery.value = query;
+}, { immediate: true });
 
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 const noteSearchableScope = instance.noteSearchableScope ?? 'local';
@@ -297,6 +308,8 @@ function removeUser() {
 }
 
 async function search() {
+	if (props.autoSearch) return;
+
 	if (searchParams.value == null) return;
 
 	//#region AP lookup
@@ -365,8 +378,37 @@ async function search() {
 
 	key.value++;
 }
+
+watch(searchParams, (params, oldParams) => {
+	if (!props.autoSearch) return;
+	if (params == null) {
+		paginator.value = null;
+		return;
+	}
+
+	if (JSON.stringify(params) === JSON.stringify(oldParams)) return;
+
+	paginator.value = markRaw(new Paginator('notes/search', {
+		limit: 10,
+		params: { ...params },
+	}));
+
+	key.value++;
+}, { immediate: true });
 </script>
 <style lang="scss" module>
+.twitterRoot {
+	background: var(--twitter-bg);
+}
+
+.filters {
+	border-bottom: solid 0.5px var(--twitter-border);
+}
+
+.results {
+	background: var(--twitter-bg);
+}
+
 .subOptionRoot {
 	background: var(--MI_THEME-panel);
 	border-radius: var(--MI-radius);
