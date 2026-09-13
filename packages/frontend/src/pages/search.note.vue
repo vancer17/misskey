@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="[$style.root, { [$style.twitterRoot]: autoSearch }]">
+<div :class="{ [$style.twitterRoot]: autoSearch }">
 	<div :class="autoSearch ? undefined : '_gaps'">
 		<MkInput
 			v-if="!autoSearch"
