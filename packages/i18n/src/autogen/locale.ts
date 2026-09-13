@@ -12646,6 +12646,20 @@ export interface Locale extends ILocale {
          */
         "postTo": string;
     };
+    "_twitterSearch": {
+        /**
+         * このURLを照会する
+         */
+        "lookupUrl": string;
+        /**
+         * このユーザーを見る
+         */
+        "showUser": string;
+        /**
+         * このハッシュタグを見る
+         */
+        "showHashtag": string;
+    };
     "_serverSetupWizard": {
         /**
          * Misskeyのインストールが完了しました！

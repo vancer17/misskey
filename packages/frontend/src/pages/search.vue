@@ -4,7 +4,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="tab" :actions="headerActions" :tabs="headerTabs" :swipable="true">
+<TwitterSearch
+	v-if="isTwitterUi"
+	v-bind="twitterProps"
+/>
+
+<PageWithHeader v-else v-model:tab="tab" :actions="headerActions" :tabs="headerTabs" :swipable="true">
 	<div v-if="tab === 'note'" class="_spacer" style="--MI_SPACER-w: 800px;">
 		<div v-if="notesSearchAvailable || ignoreNotesSearchAvailable">
 			<XNote v-bind="props"/>
@@ -26,12 +31,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, defineAsyncComponent, ref, toRef } from 'vue';
-import { $i } from '@/i.js';
+import { computed, defineAsyncComponent, inject, ref, toRef } from 'vue';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import { notesSearchAvailable, usersSearchAvailable } from '@/utility/check-permissions.js';
 import MkInfo from '@/components/MkInfo.vue';
+import { DI } from '@/di.js';
 
 const props = withDefaults(defineProps<{
 	query?: string,
@@ -54,8 +59,11 @@ const props = withDefaults(defineProps<{
 
 const XNote = defineAsyncComponent(() => import('./search.note.vue'));
 const XUser = defineAsyncComponent(() => import('./search.user.vue'));
+const TwitterSearch = defineAsyncComponent(() => import('./TwitterSearch.vue'));
 
 const tab = ref(toRef(props, 'type').value);
+const uiStyle = inject(DI.uiStyle, ref('default'));
+const isTwitterUi = computed(() => uiStyle.value === 'twitter');
 
 const headerActions = computed(() => []);
 
@@ -68,6 +76,17 @@ const headerTabs = computed(() => [{
 	title: i18n.ts.users,
 	icon: 'ti ti-users',
 }]);
+
+const twitterProps = computed(() => ({
+	query: props.query,
+	userId: props.userId,
+	username: props.username,
+	host: props.host,
+	type: props.type,
+	origin: props.origin,
+	canSearchNotes: notesSearchAvailable || props.ignoreNotesSearchAvailable,
+	canSearchUsers: usersSearchAvailable,
+}));
 
 definePage(() => ({
 	title: i18n.ts.search,

@@ -4,8 +4,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div class="_gaps">
-	<div class="_gaps">
+<div :class="[$style.root, { [$style.twitterRoot]: autoSearch }]">
+	<div v-if="!autoSearch" class="_gaps">
 		<MkInput v-model="searchQuery" :large="true" :autofocus="true" type="search" @enter.prevent="search">
 			<template #prefix><i class="ti ti-search"></i></template>
 		</MkInput>
@@ -23,16 +23,28 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkButton large primary gradate rounded @click="search">{{ i18n.ts.search }}</MkButton>
 	</div>
 
-	<MkFoldableSection v-if="paginator">
+	<MkFoldableSection v-if="paginator != null && !autoSearch">
 		<template #header>{{ i18n.ts.searchResult }}</template>
 		<MkUserList :key="`searchUsers:${key}`" :paginator="paginator"/>
 	</MkFoldableSection>
+
+	<div v-if="paginator != null && autoSearch" :class="$style.twitterResults">
+		<MkPagination :key="`searchUsers:${key}`" :paginator="paginator">
+			<template #empty>
+				<TwitterTimelineState :emptyTitle="i18n.ts.noUsers"/>
+			</template>
+			<template #default="{ items }">
+				<TwitterUserResult v-for="item in items" :key="item.id" :user="asDetailedUser(item)"/>
+			</template>
+		</MkPagination>
+	</div>
 </div>
 </template>
 
 <script lang="ts" setup>
-import { markRaw, ref, shallowRef, toRef } from 'vue';
+import { computed, markRaw, ref, shallowRef, toRef, watch } from 'vue';
 import type { Endpoints } from 'misskey-js';
+import * as Misskey from 'misskey-js';
 import MkUserList from '@/components/MkUserList.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkRadios from '@/components/MkRadios.vue';
@@ -41,6 +53,9 @@ import { i18n } from '@/i18n.js';
 import { instance } from '@/instance.js';
 import * as os from '@/os.js';
 import MkFoldableSection from '@/components/MkFoldableSection.vue';
+import MkPagination from '@/components/MkPagination.vue';
+import TwitterTimelineState from '@/ui/twitter/TimelineState.vue';
+import TwitterUserResult from '@/ui/twitter/UserResult.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { useRouter } from '@/router.js';
 import { Paginator } from '@/utility/paginator.js';
@@ -48,9 +63,11 @@ import { Paginator } from '@/utility/paginator.js';
 const props = withDefaults(defineProps<{
 	query?: string,
 	origin?: Endpoints['users/search']['req']['origin'],
+	autoSearch?: boolean,
 }>(), {
 	query: '',
 	origin: 'combined',
+	autoSearch: false,
 });
 
 const router = useRouter();
@@ -58,10 +75,34 @@ const router = useRouter();
 const key = ref(0);
 const paginator = shallowRef<Paginator<'users/search'> | null>(null);
 
+function asDetailedUser(user: Misskey.entities.User): Misskey.entities.UserDetailed {
+	return user as Misskey.entities.UserDetailed;
+}
+
 const searchQuery = ref(toRef(props, 'query').value);
 const searchOrigin = ref(toRef(props, 'origin').value);
 
+watch(() => props.query, (query) => {
+	if (props.autoSearch) searchQuery.value = query;
+}, { immediate: true });
+
+watch(() => props.origin, (origin) => {
+	if (props.autoSearch) searchOrigin.value = origin;
+}, { immediate: true });
+
+const searchParams = computed(() => {
+	const query = searchQuery.value.trim();
+	if (query === '') return null;
+
+	return {
+		query,
+		origin: instance.federation === 'none' ? 'local' as const : searchOrigin.value,
+	};
+});
+
 async function search() {
+	if (props.autoSearch) return;
+
 	const query = searchQuery.value.toString().trim();
 
 	// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
@@ -141,4 +182,29 @@ async function search() {
 
 	key.value++;
 }
+
+watch(searchParams, (params, oldParams) => {
+	if (!props.autoSearch) return;
+	if (params == null) {
+		paginator.value = null;
+		return;
+	}
+
+	if (JSON.stringify(params) === JSON.stringify(oldParams)) return;
+
+	paginator.value = markRaw(new Paginator('users/search', {
+		limit: 10,
+		offsetMode: true,
+		params: { ...params },
+	}));
+
+	key.value++;
+}, { immediate: true });
 </script>
+
+<style lang="scss" module>
+.twitterRoot,
+.twitterResults {
+	background: var(--twitter-bg);
+}
+</style>
