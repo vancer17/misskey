@@ -98,4 +98,12 @@ body[data-ui='twitter'] {
 	--twitter-skeleton-block: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
 	/* 骨架屏 shimmer 循环时长 */
 	--twitter-duration-skeleton: 1.2s;
+
+	/* ——— 移动布局（X-behavior 来源）——— */
+	/* 最小触控命中区（操作栏等紧凑控件的纵向命中尺寸） */
+	--twitter-touch-target: 44px;
+	/* 底部导航栏高度 */
+	--twitter-bottom-bar-height: 56px;
+	/* 发帖 FAB 尺寸 */
+	--twitter-fab-size: 56px;
 }

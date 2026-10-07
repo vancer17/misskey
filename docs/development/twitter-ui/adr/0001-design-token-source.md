@@ -21,6 +21,7 @@
 4. **断点单权威**：`domain/layout.ts` 的 `TWITTER_LAYOUT_BREAKPOINTS`（as const）为唯一来源；`useTwitterLayout` 据此驱动 matchMedia 与响应式状态，Shell 经 class 绑定切换布局，且不新增断点一致性测试（规范第 10 条：禁止复制后靠测试维持一致）。**新增样式禁止书写布局断点媒体查询**。~~历史 PR 遗留的 11 个 `@media (max-width: 500px)` 块为既有债务~~ → 已于 P-10 专项全部迁移为 `&.mobile` class 驱动（`useTwitterLayout` 同步单例化，全部组件共享一份 matchMedia 状态），`ui/` 范围内断点字面量已归零。
 5. **覆盖层 Token 组与三层改造策略（P-08）**：菜单 / 对话框 / tooltip / emoji 选择器在 nitter 中无对应物，本组 Token（背板遮罩、弹层投影、菜单行尺度、抽屉圆角、tooltip pill）全部为 X-behavior 来源。实现采用三层策略——业务逻辑层（`get-note-menu.ts` / `os.ts` 调度等）零改动；全局类外铬经 `overlay.scss` 在 `body[data-ui='twitter']` 作用域覆写 `._popup` / `._shadow` / `._modalBg`；组件内部结构由各 Mk 弹层组件经 `useIsTwitterUi()` 挂载 twitter 表现变体（仅视觉，不含业务分支）。
 6. **共享页面状态统一（P-09）**：终态类型（empty / notFound / error）与骨架屏形态变体（timeline / notifications / detail / profile）由 `domain/page-state.ts` 单点权威定义（规范第 10 条）。loading 采用与内容同构的骨架屏（X-behavior），与终态文案块分离为两个基础组件；404 语义经错误码判定（`NO_SUCH_NOTE` / `NO_SUCH_USER` 的 id）单向派生为 `notFound` 终态且不提供重试。原 `TimelineState.vue` 与 `NotificationSkeleton.vue` 被收敛删除，不保留兼容层（消费点全部为栈内文件，规则 13）。
+7. **移动布局专项（P-10）**：移动尺寸（触控命中区 / 底部栏高 / FAB 尺寸）入 Token；`useTwitterLayout` 单例化后全部组件共享一份 matchMedia 状态；11 处遗留断点媒体查询迁移为 `&.mobile` class 驱动。X 行为补强：重按当前 tab 回顶（Timeline / Notifications 经 `tabReselected` 事件上抛，业务回顶动作留在 Shell 层）、帖子操作栏纵向 44px 命中区（token 驱动、横向保守扩展避免相邻重叠）、横屏 safe-area 左右。sticky header 的毛玻璃效果经查已由既有实现常驻覆盖（82% 透底 + blur 12px，与 X 滚动态视觉等价），按规范第 7/9 条不引入滚动检测抽象。
 
 ## 有意偏离 nitter 的项
 

@@ -11,6 +11,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				v-model:tab="tabModel"
 				:tabs="tabs"
 				:actions="actions"
+				@tabReselected="scrollToTop"
 			/>
 		</template>
 
@@ -31,6 +32,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { useTemplateRef } from 'vue';
+import { prefersReducedMotion } from '@@/js/config.js';
+import { scrollInContainer } from '@@/js/scroll.js';
 import type { Tab } from '@/components/global/MkPageHeader.tabs.vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
 import MkSwiper from '@/components/MkSwiper.vue';
@@ -52,6 +55,20 @@ const tabModel = defineModel<string>('tab');
 const rootEl = useTemplateRef('rootEl');
 
 useScrollPositionKeeper(rootEl);
+
+/** 滚回通知列表顶部（X 行为：重按当前 tab 触发）。 */
+function scrollToTop(): void {
+	if (rootEl.value != null) {
+		scrollInContainer(rootEl.value, {
+			top: 0,
+			behavior: prefersReducedMotion ? 'auto' : 'smooth',
+		});
+	}
+}
+
+defineExpose({
+	scrollToTop,
+});
 </script>
 
 <style lang="scss" module>

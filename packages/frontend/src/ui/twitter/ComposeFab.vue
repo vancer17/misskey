@@ -28,14 +28,14 @@ function openPostForm() {
 <style lang="scss" module>
 .root {
 	position: fixed;
-	right: 16px;
+	right: calc(16px + env(safe-area-inset-right, 0px));
 	bottom: calc(72px + env(safe-area-inset-bottom, 0px));
 	z-index: 100;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 56px;
-	height: 56px;
+	width: var(--twitter-fab-size);
+	height: var(--twitter-fab-size);
 	border-radius: var(--twitter-radius-pill);
 	background: var(--twitter-accent);
 	color: var(--MI_THEME-fgOnAccent);

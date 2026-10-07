@@ -39,7 +39,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			class="_button"
 			type="button"
 			:aria-current="item.key === tabModel ? 'page' : undefined"
-			@click="tabModel = item.key"
+			@click="onTabClick(item.key)"
 		>
 			<span :class="$style.tabTitle">{{ item.title }}</span>
 		</button>
@@ -61,6 +61,19 @@ defineProps<{
 }>();
 
 const tabModel = defineModel<string>('tab');
+
+const emit = defineEmits<{
+	(ev: 'tabReselected'): void;
+}>();
+
+/** 切换通知 tab；重按当前 tab 时发出回顶事件（X 行为）。 */
+function onTabClick(tabKey: string): void {
+	if (tabKey === tabModel.value) {
+		emit('tabReselected');
+	}
+
+	tabModel.value = tabKey;
+}
 
 function goBack() {
 	window.history.back();
