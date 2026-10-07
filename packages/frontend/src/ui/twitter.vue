@@ -10,7 +10,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 		:class="$style.titlebar"
 	/>
 
-	<div :class="[$style.body, { [$style.withRightRail]: showRightRail && !pageMetadata?.needWideArea }]">
+		<div :class="[$style.body, {
+			[$style.mobile]: isMobile,
+			[$style.withRightRail]: showRightRail && !pageMetadata?.needWideArea,
+		}]">
 		<TwitterSidebar
 			v-if="showSidebar"
 			:class="$style.sidebar"
@@ -75,7 +78,7 @@ import { prefer } from '@/preferences.js';
 import { shouldSuggestRestoreBackup } from '@/preferences/utility.js';
 import { DI } from '@/di.js';
 import { shouldSuggestReload } from '@/utility/reload-suggest.js';
-import { useTwitterLayout } from './twitter/use-twitter-layout.js';
+import { useTwitterLayout } from './twitter/index.js';
 
 const XAnnouncements = defineAsyncComponent(() => import('./_common_/announcements.vue'));
 const XStatusBars = defineAsyncComponent(() => import('./_common_/statusbars.vue'));
@@ -127,35 +130,11 @@ function onContextmenu(ev: PointerEvent) {
 }
 </script>
 
+<style lang="scss">
+@use './twitter/tokens.scss';
+</style>
+
 <style lang="scss" module>
-:global(body[data-ui='twitter']) {
-	--twitter-bg: var(--MI_THEME-bg);
-	--twitter-panel: var(--MI_THEME-panel);
-	--twitter-hover: var(--MI_THEME-panelHighlight);
-	--twitter-fg: var(--MI_THEME-fg);
-	--twitter-secondary-fg: color-mix(in srgb, var(--MI_THEME-fg) 57%, transparent);
-	--twitter-border: var(--MI_THEME-divider);
-	--twitter-accent: var(--MI_THEME-accent);
-	--twitter-accent-hover: color-mix(in srgb, var(--MI_THEME-accent) 85%, var(--MI_THEME-fg));
-	--twitter-success: var(--MI_THEME-renote);
-	--twitter-danger: var(--MI_THEME-error);
-	--twitter-like: var(--MI_THEME-love);
-
-	--twitter-radius-small: 4px;
-	--twitter-radius-medium: 8px;
-	--twitter-radius-large: 16px;
-	--twitter-radius-pill: 999px;
-
-	--twitter-duration-fast: 120ms;
-	--twitter-duration-normal: 180ms;
-	--twitter-ease: cubic-bezier(0.4, 0, 0.2, 1);
-
-	--twitter-sidebar-width: 275px;
-	--twitter-sidebar-icon-width: 72px;
-	--twitter-main-width: 600px;
-	--twitter-right-rail-width: 350px;
-}
-
 .root {
 	display: flex;
 	flex-direction: column;
@@ -179,6 +158,16 @@ function onContextmenu(ev: PointerEvent) {
 	flex: 1;
 	min-height: 0;
 	background: var(--twitter-bg);
+
+	/* 移动断点不写媒体查询：由 useTwitterLayout 基于权威断点切换本 class（规范第 10 条） */
+	&.mobile {
+		grid-template-columns: minmax(0, 1fr);
+
+		.main {
+			border-right: none;
+			border-left: none;
+		}
+	}
 }
 
 .withRightRail {
@@ -227,17 +216,6 @@ function onContextmenu(ev: PointerEvent) {
 	min-width: 0;
 	min-height: 0;
 	border-right: solid 0.5px var(--twitter-border);
-}
-
-@media (max-width: 500px) {
-	.body {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.main {
-		border-right: none;
-		border-left: none;
-	}
 }
 
 @media (prefers-reduced-motion: reduce) {
