@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="$style.root">
+<div :class="[$style.root, { [$style.mobile]: isMobile }]">
 	<MkAvatar :class="$style.avatar" :user="note.user" :link="!mock" :preview="!mock"/>
 	<i :class="['ti ti-repeat', $style.icon]" aria-hidden="true"></i>
 	<I18n :src="i18n.ts.renotedBy" tag="span" :class="$style.text">
@@ -31,6 +31,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 import * as Misskey from 'misskey-js';
 import { i18n } from '@/i18n.js';
 import { userPage } from '@/filters/user.js';
+import { useTwitterLayout } from './composables/use-twitter-layout.js';
+
+const { isMobile } = useTwitterLayout();
 
 defineProps<{
 	note: Misskey.entities.Note;
@@ -50,7 +53,8 @@ defineProps<{
 	font-weight: 700;
 	line-height: 20px;
 
-	@media (max-width: 500px) {
+	/* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
+	&.mobile {
 		padding-right: 12px;
 		padding-left: calc(12px + 16px);
 	}

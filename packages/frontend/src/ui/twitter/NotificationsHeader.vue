@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<header :class="$style.root">
+<header :class="[$style.root, { [$style.mobile]: isMobile }]">
 	<div :class="$style.top">
 		<button
 			:class="$style.back"
@@ -51,6 +51,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 import type { Tab } from '@/components/global/MkPageHeader.tabs.vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import { i18n } from '@/i18n.js';
+import { useTwitterLayout } from './composables/use-twitter-layout.js';
+
+const { isMobile } = useTwitterLayout();
 
 defineProps<{
 	tabs: Tab[];
@@ -210,7 +213,8 @@ function goBack() {
 	}
 }
 
-@media (max-width: 500px) {
+/* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
+.root.mobile {
 	.top {
 		grid-template-columns: 40px minmax(0, 1fr) minmax(68px, auto);
 		height: 48px;

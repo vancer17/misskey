@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<header :class="$style.root">
+<header :class="[$style.root, { [$style.mobile]: isMobile }]">
 	<div :class="$style.left">
 		<MkA v-if="displayMyAvatar && $i != null" :class="$style.avatarLink" to="/" :aria-label="i18n.ts.timeline">
 			<MkAvatar :user="$i" :class="$style.avatar"/>
@@ -49,6 +49,9 @@ import type { Tab } from '@/components/global/MkPageHeader.tabs.vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
+import { useTwitterLayout } from './composables/use-twitter-layout.js';
+
+const { isMobile } = useTwitterLayout();
 
 withDefaults(defineProps<{
 	tabs: Tab[];
@@ -213,10 +216,9 @@ function onTabClick(tab: Tab, ev: PointerEvent) {
 	}
 }
 
-@media (max-width: 500px) {
-	.root {
-		grid-template-columns: minmax(40px, 0.6fr) minmax(0, 3fr) minmax(40px, 0.6fr);
-	}
+/* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
+.root.mobile {
+	grid-template-columns: minmax(40px, 0.6fr) minmax(0, 3fr) minmax(40px, 0.6fr);
 
 	.tab {
 		flex: 0 0 auto;

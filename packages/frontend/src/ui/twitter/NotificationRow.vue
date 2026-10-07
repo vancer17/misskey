@@ -7,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <component
 	:is="rootComponent"
 	:to="rootComponent === MkA ? target : undefined"
-	:class="[$style.root, { [$style.unread]: unread }]"
+	:class="[$style.root, { [$style.unread]: unread, [$style.mobile]: isMobile }]"
 	:data-notification-type="notification.type"
 >
 	<TwitterNotificationIcon :class="$style.icon" :notification="notification"/>
@@ -102,6 +102,9 @@ import { notePage } from '@/filters/note.js';
 import { userPage } from '@/filters/user.js';
 import TwitterNotificationIcon from './NotificationIcon.vue';
 import TwitterNotificationNotePreview from './NotificationNotePreview.vue';
+import { useTwitterLayout } from './composables/use-twitter-layout.js';
+
+const { isMobile } = useTwitterLayout();
 
 const props = withDefaults(defineProps<{
 	notification: Misskey.entities.Notification;
@@ -424,12 +427,11 @@ function rejectFollowRequest() {
 	flex: 1;
 }
 
-@media (max-width: 500px) {
-	.root {
-		grid-template-columns: 28px minmax(0, 1fr);
-		gap: 10px;
-		padding: 12px;
-	}
+/* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
+.root.mobile {
+	grid-template-columns: 28px minmax(0, 1fr);
+	gap: 10px;
+	padding: 12px;
 
 	.header {
 		gap: 4px;

@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div v-if="muted === false && !hideByPlugin && !isDeleted" :class="$style.root">
+<div v-if="muted === false && !hideByPlugin && !isDeleted" :class="[$style.root, { [$style.mobile]: isMobile }]">
 	<div v-if="conversationLoading" :class="$style.contextLoading"><MkLoading mini/></div>
 	<div v-else-if="conversationError" :class="$style.contextError">
 		<span>{{ i18n.ts.error }}</span>
@@ -359,6 +359,9 @@ import TwitterNoteRepostLabel from './NoteRepostLabel.vue';
 import TwitterThreadNote from './ThreadNote.vue';
 import TwitterPageState from './components/TwitterPageState.vue';
 import TwitterPageSkeleton from './components/TwitterPageSkeleton.vue';
+import { useTwitterLayout } from './composables/use-twitter-layout.js';
+
+const { isMobile } = useTwitterLayout();
 
 const props = withDefaults(defineProps<{
 	note: Misskey.entities.Note;
@@ -526,6 +529,31 @@ const keymap = {
 	min-width: 0;
 	background: var(--twitter-bg);
 	color: var(--twitter-fg);
+}
+
+/* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
+.root.mobile {
+	.article {
+		padding: 12px;
+	}
+
+	.header {
+		grid-template-columns: 40px minmax(0, 1fr) 32px;
+		gap: 10px;
+	}
+
+	.avatar {
+		width: 40px;
+		height: 40px;
+	}
+
+	.text {
+		font-size: 18px;
+	}
+
+	.people {
+		padding: 10px 12px;
+	}
 }
 
 .contextLoading {
@@ -854,30 +882,6 @@ const keymap = {
 .reactionTabActive {
 	border-color: var(--twitter-accent);
 	color: var(--twitter-accent);
-}
-
-@media (max-width: 500px) {
-	.article {
-		padding: 12px;
-	}
-
-	.header {
-		grid-template-columns: 40px minmax(0, 1fr) 32px;
-		gap: 10px;
-	}
-
-	.avatar {
-		width: 40px;
-		height: 40px;
-	}
-
-	.text {
-		font-size: 18px;
-	}
-
-	.people {
-		padding: 10px 12px;
-	}
 }
 
 @media (prefers-reduced-motion: reduce) {

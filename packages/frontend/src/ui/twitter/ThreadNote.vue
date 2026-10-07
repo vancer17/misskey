@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	v-if="muted === false && !hideByPlugin && !isDeleted"
 	ref="rootEl"
 	v-hotkey="keymap"
-	:class="$style.root"
+	:class="[$style.root, { [$style.mobile]: isMobile }]"
 	tabindex="0"
 >
 	<div :class="$style.avatarColumn">
@@ -131,6 +131,9 @@ import MkMediaList from '@/components/MkMediaList.vue';
 import TwitterNoteActions from './NoteActions.vue';
 import TwitterNoteHeader from './NoteHeader.vue';
 import TwitterNoteQuote from './NoteQuote.vue';
+import { useTwitterLayout } from './composables/use-twitter-layout.js';
+
+const { isMobile } = useTwitterLayout();
 
 const props = withDefaults(defineProps<{
 	note: Misskey.entities.Note;
@@ -379,12 +382,11 @@ const keymap = {
 	cursor: pointer;
 }
 
-@media (max-width: 500px) {
-	.root {
-		grid-template-columns: 36px minmax(0, 1fr);
-		gap: 8px;
-		padding: 10px 12px;
-	}
+/* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
+.root.mobile {
+	grid-template-columns: 36px minmax(0, 1fr);
+	gap: 8px;
+	padding: 10px 12px;
 
 	.avatar {
 		width: 36px;

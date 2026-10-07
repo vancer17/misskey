@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div ref="rootEl" class="_pageScrollable" :class="$style.root">
+<div ref="rootEl" class="_pageScrollable" :class="[$style.root, { [$style.mobile]: isMobile }]">
 	<MkStickyContainer>
 		<template #header>
 			<header :class="$style.header">
@@ -33,6 +33,9 @@ import { useTemplateRef } from 'vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
 import { useScrollPositionKeeper } from '@/composables/use-scroll-position-keeper.js';
 import { i18n } from '@/i18n.js';
+import { useTwitterLayout } from './composables/use-twitter-layout.js';
+
+const { isMobile } = useTwitterLayout();
 
 const rootEl = useTemplateRef('rootEl');
 
@@ -99,7 +102,8 @@ function goBack() {
 	background: var(--twitter-bg);
 }
 
-@media (max-width: 500px) {
+/* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
+.root.mobile {
 	.header {
 		grid-template-columns: 48px minmax(0, 1fr);
 	}
