@@ -7,7 +7,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <MkPagination :paginator="paginator" :direction="direction" :autoLoad="autoLoad" :pullToRefresh="pullToRefresh" :withControl="withControl" :forceDisableInfiniteScroll="forceDisableInfiniteScroll">
 	<template #empty>
 		<slot name="empty">
-			<MkResult type="empty" :text="i18n.ts.noNotes"/>
+			<TwitterPageState v-if="isTwitter" type="empty" :title="i18n.ts.noNotes"/>
+			<MkResult v-else type="empty" :text="i18n.ts.noNotes"/>
 		</slot>
 	</template>
 
@@ -57,6 +58,7 @@ import type { IPaginator } from '@/utility/paginator.js';
 import MkNote from '@/components/MkNote.vue';
 import MkPagination from '@/components/MkPagination.vue';
 import TwitterNote from '@/ui/twitter/Note.vue';
+import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
 import { i18n } from '@/i18n.js';
 import { useGlobalEvent } from '@/events.js';
 import { isSeparatorNeeded, getSeparatorInfo } from '@/utility/timeline-date-separate.js';

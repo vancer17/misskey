@@ -16,9 +16,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:leaveToClass="prefer.s.animation ? $style.transition_fade_leaveTo : ''"
 			:mode="prefer.s.animation ? 'out-in' : undefined"
 		>
-			<MkLoading v-if="paginator.fetching.value"/>
+			<TwitterPageSkeleton v-if="isTwitterUi && paginator.fetching.value" variant="timeline"/>
+			<MkLoading v-else-if="paginator.fetching.value"/>
 
-			<MkError v-else-if="paginator.error.value" @retry="paginator.init()"/>
+			<MkError v-else-if="paginator.error.value && !isTwitterUi" @retry="paginator.init()"/>
+			<TwitterPageState
+				v-else-if="paginator.error.value"
+				type="error"
+				@retry="paginator.init()"
+			/>
 
 			<div v-else-if="paginator.items.value.length === 0" key="_empty_">
 				<slot name="empty"><MkResult type="empty"/></slot>
@@ -72,7 +78,12 @@ import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
 import MkPullToRefresh from '@/components/MkPullToRefresh.vue';
 import MkPaginationControl from '@/components/MkPaginationControl.vue';
+import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
+import TwitterPageSkeleton from '@/ui/twitter/components/TwitterPageSkeleton.vue';
 import * as os from '@/os.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
+
+const isTwitterUi = useIsTwitterUi();
 
 const props = withDefaults(defineProps<MkPaginationOptions & {
 	paginator: T;

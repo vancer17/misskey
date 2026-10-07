@@ -155,8 +155,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<TwitterUserTimeline :user="user" :page="page"/>
 </div>
-<TwitterTimelineState v-else-if="error" type="error" @retry="emit('retry')"/>
-<MkLoading v-else :class="$style.loading"/>
+<TwitterPageState v-else-if="error" :type="errorStateType" @retry="emit('retry')"/>
+<TwitterPageSkeleton v-else variant="profile"/>
 </template>
 
 <script lang="ts" setup>
@@ -166,7 +166,9 @@ import MkFollowButton from '@/components/MkFollowButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkRemoteCaution from '@/components/MkRemoteCaution.vue';
 import MkAccountMoved from '@/components/MkAccountMoved.vue';
-import TwitterTimelineState from '@/ui/twitter/TimelineState.vue';
+import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
+import TwitterPageSkeleton from '@/ui/twitter/components/TwitterPageSkeleton.vue';
+import type { TwitterPageStateType } from '@/ui/twitter/domain/page-state.js';
 import TwitterUserTimeline from './TwitterUserTimeline.vue';
 import number from '@/filters/number.js';
 import { dateString } from '@/filters/date.js';
@@ -189,6 +191,20 @@ const props = defineProps<{
 const emit = defineEmits<{
 	(ev: 'retry'): void;
 }>();
+
+/**
+ * 判定取用户错误是否为"用户不存在"（404 语义）。
+ *
+ * @param err users/show 返回的错误对象
+ * @returns 用户不存在时返回 true（呈现 notFound 终态，不提供重试）
+ */
+function isNoSuchUserError(err: unknown): boolean {
+	const maybeApiError = err as { id?: unknown } | null | undefined;
+	return maybeApiError?.id === '4362f8dc-731f-4ad8-a694-be5a88922a24';
+}
+
+/** Twitter UI 终态派生：实体不存在 → notFound，其余错误 → error（可重试）。 */
+const errorStateType = computed<TwitterPageStateType>(() => isNoSuchUserError(props.error) ? 'notFound' : 'error');
 
 const router = useRouter();
 const bannerStyle = computed(() => {
@@ -512,13 +528,6 @@ function showMenu(ev: PointerEvent) {
 	flex-direction: column;
 	gap: 8px;
 	padding: 12px 16px 0;
-}
-
-.loading {
-	display: grid;
-	place-items: center;
-	min-height: 100%;
-	background: var(--twitter-bg);
 }
 
 @media (prefers-reduced-motion: reduce) {

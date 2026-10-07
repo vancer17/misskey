@@ -52,9 +52,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkNotesTimeline :withControl="false" :pullToRefresh="false" :paginator="showPrev === 'channel' ? prevChannelPaginator : prevUserPaginator" :noGap="true" :variant="isTwitterUi ? 'twitter' : 'misskey'"/>
 				</div>
 			</div>
-			<TwitterTimelineState v-else-if="isTwitterUi && error" type="error" @retry="fetchNote()"/>
+			<TwitterPageState v-else-if="isTwitterUi && error" :type="errorStateType" @retry="fetchNote()"/>
 			<MkError v-else-if="error" @retry="fetchNote()"/>
-			<div v-else-if="isTwitterUi" :class="$style.twitterLoading"><MkLoading/></div>
+			<TwitterPageSkeleton v-else-if="isTwitterUi" variant="detail"/>
 			<MkLoading v-else/>
 		</Transition>
 	</div>
@@ -77,7 +77,9 @@ import { dateString } from '@/filters/date.js';
 import MkClipPreview from '@/components/MkClipPreview.vue';
 import TwitterNoteDetail from '@/ui/twitter/NoteDetail.vue';
 import TwitterNoteDetailShell from '@/ui/twitter/NoteDetailShell.vue';
-import TwitterTimelineState from '@/ui/twitter/TimelineState.vue';
+import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
+import TwitterPageSkeleton from '@/ui/twitter/components/TwitterPageSkeleton.vue';
+import type { TwitterPageStateType } from '@/ui/twitter/domain/page-state.js';
 import { prefer } from '@/preferences.js';
 import { pleaseLogin } from '@/utility/please-login.js';
 import { getAppearNote } from '@/utility/get-appear-note.js';
@@ -105,6 +107,20 @@ const initialTab = computed<'reactions' | 'replies' | 'renotes' | undefined>(() 
 	return undefined;
 });
 const error = ref();
+
+/**
+ * 判定取帖错误是否为"帖子不存在"（404 语义）。
+ *
+ * @param err notes/show 返回的错误对象
+ * @returns 帖子不存在时返回 true（呈现 notFound 终态，不提供重试）
+ */
+function isNoSuchNoteError(err: unknown): boolean {
+	const maybeApiError = err as { id?: unknown } | null | undefined;
+	return maybeApiError?.id === '24fcbfc6-2e37-42b6-8388-c29b3861a08d';
+}
+
+/** Twitter UI 终态派生：实体不存在 → notFound，其余错误 → error（可重试）。 */
+const errorStateType = computed<TwitterPageStateType>(() => isNoSuchNoteError(error.value) ? 'notFound' : 'error');
 const uiStyle = inject(DI.uiStyle, ref('default'));
 const isTwitterUi = computed(() => uiStyle.value === 'twitter');
 const detailComponent = computed(() => isTwitterUi.value ? TwitterNoteDetailShell : PageWithHeader);
@@ -271,10 +287,4 @@ definePage(() => ({
 	}
 }
 
-.twitterLoading {
-	display: flex;
-	min-height: 60vh;
-	align-items: center;
-	justify-content: center;
-}
 </style>

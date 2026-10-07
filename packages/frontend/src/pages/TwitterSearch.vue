@@ -55,9 +55,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			role="tabpanel"
 			:aria-labelledby="`twitter-search-tab-${tab}`"
 		>
-			<TwitterTimelineState
+			<TwitterPageState
 				v-if="query === ''"
-				:emptyTitle="i18n.ts.search"
+				type="empty"
+				:title="i18n.ts.search"
 			/>
 
 			<template v-else>
@@ -134,7 +135,7 @@ import type { Endpoints } from 'misskey-js';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
 import { instance } from '@/instance.js';
 import TwitterSearchField from '@/ui/twitter/SearchField.vue';
-import TwitterTimelineState from '@/ui/twitter/TimelineState.vue';
+import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
 import { apLookup } from '@/utility/lookup.js';
 import { i18n } from '@/i18n.js';
 import { useRouter } from '@/router.js';

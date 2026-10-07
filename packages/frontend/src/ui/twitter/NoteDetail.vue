@@ -255,13 +255,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<div :class="$style.results">
 		<div v-if="tab === 'replies'">
-			<div v-if="repliesLoading" :class="$style.loading"><MkLoading/></div>
-			<TwitterTimelineState
+			<TwitterPageSkeleton v-if="repliesLoading" variant="timeline"/>
+			<TwitterPageState
 				v-else-if="repliesError"
 				type="error"
 				@retry="loadReplies"
 			/>
-			<TwitterTimelineState v-else-if="repliesLoaded && replies.length === 0"/>
+			<TwitterPageState v-else-if="repliesLoaded && replies.length === 0" type="empty" :title="i18n.ts.noNotes"/>
 			<TwitterThreadNote
 				v-for="(replyNote, index) in replies"
 				:key="replyNote.id"
@@ -357,7 +357,8 @@ import TwitterNoteActions from './NoteActions.vue';
 import TwitterNoteQuote from './NoteQuote.vue';
 import TwitterNoteRepostLabel from './NoteRepostLabel.vue';
 import TwitterThreadNote from './ThreadNote.vue';
-import TwitterTimelineState from './TimelineState.vue';
+import TwitterPageState from './components/TwitterPageState.vue';
+import TwitterPageSkeleton from './components/TwitterPageSkeleton.vue';
 
 const props = withDefaults(defineProps<{
 	note: Misskey.entities.Note;
@@ -815,12 +816,6 @@ const keymap = {
 
 .results {
 	min-width: 0;
-}
-
-.loading {
-	display: flex;
-	justify-content: center;
-	padding: 32px;
 }
 
 .people {

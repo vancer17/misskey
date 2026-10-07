@@ -5,14 +5,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <component :is="prefer.s.enablePullToRefresh ? MkPullToRefresh : 'div'" :refresher="() => reload()">
-	<TwitterNotificationSkeleton v-if="isTwitter && paginator.fetching.value"/>
+	<TwitterPageSkeleton v-if="isTwitter && paginator.fetching.value" variant="notifications"/>
 	<MkLoading v-else-if="paginator.fetching.value"/>
 
 	<MkError
 		v-else-if="paginator.error.value && !isTwitter"
 		@retry="paginator.init()"
 	/>
-	<TwitterTimelineState
+	<TwitterPageState
 		v-else-if="paginator.error.value"
 		type="error"
 		@retry="paginator.init()"
@@ -20,9 +20,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<div v-else-if="paginator.items.value.length === 0" key="_empty_">
 		<slot name="empty">
-			<TwitterTimelineState
+			<TwitterPageState
 				v-if="isTwitter"
-				:emptyTitle="i18n.ts.noNotifications"
+				type="empty"
+				:title="i18n.ts.noNotifications"
 			/>
 			<MkResult v-else type="empty" :text="i18n.ts.noNotifications"/>
 		</slot>
@@ -100,8 +101,8 @@ import { prefer } from '@/preferences.js';
 import { store } from '@/store.js';
 import TwitterNewNotificationsButton from '@/ui/twitter/NewNotificationsButton.vue';
 import TwitterNotificationRow from '@/ui/twitter/NotificationRow.vue';
-import TwitterNotificationSkeleton from '@/ui/twitter/NotificationSkeleton.vue';
-import TwitterTimelineState from '@/ui/twitter/TimelineState.vue';
+import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
+import TwitterPageSkeleton from '@/ui/twitter/components/TwitterPageSkeleton.vue';
 import { isSeparatorNeeded, getSeparatorInfo } from '@/utility/timeline-date-separate.js';
 import { Paginator } from '@/utility/paginator.js';
 
