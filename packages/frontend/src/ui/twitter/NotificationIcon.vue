@@ -93,8 +93,6 @@ const iconClass = computed(() => {
 
 <style lang="scss" module>
 .root {
-	--twitter-warning: var(--MI_THEME-warn);
-
 	display: flex;
 	align-items: center;
 	justify-content: center;

@@ -1,0 +1,80 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+/*
+ * 文件领域：Twitter UI 模块 · 设计 Token 契约（唯一定义点）
+ *
+ * 作用：
+ *   - 定义 Twitter UI 全部语义级设计变量（颜色 / 圆角 / 动效 / 布局宽度）。
+ *   - 组件样式只允许消费 var(--twitter-*)，禁止新增字面量色值或在组件内重复定义。
+ *   - 响应式断点不属于本文件：CSS 自定义属性无法参与媒体查询，
+ *     断点唯一权威定义见 domain/layout.ts（组件经 useTwitterLayout 状态切换布局）。
+ *
+ * 数据链角色：nitter 模板参数（源值）→ 本契约（语义 Token）→ 全部 Twitter UI 组件样式（消费端）。
+ *
+ * 来源说明（nitter 与本项目同为 AGPL-3.0，参数提取合法）：
+ *   - 明色色板：external/app/nitter/public/css/themes/twitter.css
+ *   - 暗色色板：external/app/nitter/public/css/themes/twitter_dark.css
+ *   - 布局度量：external/app/nitter/src/sass/{navbar,timeline,profile}/*.scss
+ *
+ * 明暗切换：依赖 theme.ts 写入 <html> 的 color-scheme，经 CSS light-dark() 解析；
+ * 因此本色板跟随用户在 Misskey 内选择的主题明暗，而非操作系统偏好。
+ *
+ * 决策记录：docs/development/twitter-ui/adr/0001-design-token-source.md
+ */
+
+body[data-ui='twitter'] {
+	/* ——— 颜色 · 表面与文字（nitter 明 / 暗精确色板） ——— */
+	/* 页面整体底色（nitter: bg_color） */
+	--twitter-bg: light-dark(#E6ECF0, #101821);
+	/* 面板与主列底色（nitter: bg_panel） */
+	--twitter-panel: light-dark(#FFFFFF, #15202B);
+	/* 悬停表面色（nitter: bg_hover） */
+	--twitter-hover: light-dark(#F5F8FA, #192734);
+	/* 主文字色（nitter: fg_color） */
+	--twitter-fg: light-dark(#0F0F0F, #FFFFFF);
+	/* 次要文字色（nitter: fg_faded；修正旧实现的 color-mix 估值为精确值） */
+	--twitter-secondary-fg: light-dark(#657786, #8899A6);
+	/* hairline 分隔线（nitter: border_grey） */
+	--twitter-border: light-dark(#E6ECF0, #38444D);
+
+	/* ——— 颜色 · 品牌与状态 ——— */
+	/* 品牌色采用策略 C：默认 nitter 蓝，上游（实例品牌等）设置
+	   --twitter-accent-override 后整体覆盖，且无需自行区分明暗 */
+	--twitter-accent: var(--twitter-accent-override, light-dark(#1DA1F2, #1B95E0));
+	/* 品牌色悬停态：由品牌色与主文字色合成，覆盖品牌色时自动跟随 */
+	--twitter-accent-hover: color-mix(in srgb, var(--twitter-accent) 85%, var(--twitter-fg));
+	/* 认证标识色：与品牌色同源（nitter: verified_blue → accent） */
+	--twitter-verified: var(--twitter-accent);
+	/* 语义动作色沿用 Misskey 主题变量：转发 / 错误 / 点赞 / 警告为跨 UI 一致的动作语义，
+	   不取 nitter 私有色值 */
+	--twitter-success: var(--MI_THEME-renote);
+	--twitter-danger: var(--MI_THEME-error);
+	--twitter-like: var(--MI_THEME-love);
+	--twitter-warning: var(--MI_THEME-warn);
+
+	/* ——— 圆角（有意偏离 nitter 的 0 圆角面板，取向现代 X，见 ADR-0001） ——— */
+	--twitter-radius-small: 4px;
+	--twitter-radius-medium: 8px;
+	--twitter-radius-large: 16px;
+	--twitter-radius-pill: 999px;
+
+	/* ——— 动效（nitter 无动效体系，本组为自定 motion spec，见 ADR-0001） ——— */
+	--twitter-duration-fast: 120ms;
+	--twitter-duration-normal: 180ms;
+	--twitter-duration-slow: 240ms;
+	--twitter-ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+	/* ——— 布局宽度（对齐 nitter timeline-container 600px 等度量） ——— */
+	/* 桌面侧栏宽度 */
+	--twitter-sidebar-width: 275px;
+	/* 窄视口图标态侧栏宽度 */
+	--twitter-sidebar-icon-width: 72px;
+	/* 主列宽度（nitter: timeline-container max-width） */
+	--twitter-main-width: 600px;
+	/* 右侧信息栏宽度 */
+	--twitter-right-rail-width: 350px;
+}
