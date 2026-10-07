@@ -31,7 +31,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div v-if="paginator != null && autoSearch" :class="$style.twitterResults">
 		<MkPagination :key="`searchUsers:${key}`" :paginator="paginator">
 			<template #empty>
-				<TwitterTimelineState :emptyTitle="i18n.ts.noUsers"/>
+				<TwitterPageState type="empty" :title="i18n.ts.noUsers"/>
 			</template>
 			<template #default="{ items }">
 				<TwitterUserResult v-for="item in items" :key="item.id" :user="asDetailedUser(item)"/>
@@ -54,7 +54,7 @@ import { instance } from '@/instance.js';
 import * as os from '@/os.js';
 import MkFoldableSection from '@/components/MkFoldableSection.vue';
 import MkPagination from '@/components/MkPagination.vue';
-import TwitterTimelineState from '@/ui/twitter/TimelineState.vue';
+import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
 import TwitterUserResult from '@/ui/twitter/UserResult.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { useRouter } from '@/router.js';

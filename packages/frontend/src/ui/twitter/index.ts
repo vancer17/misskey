@@ -17,3 +17,5 @@ export { useTwitterLayout } from './composables/use-twitter-layout.js';
 export type { TwitterLayoutState } from './composables/use-twitter-layout.js';
 export { useIsTwitterUi } from './composables/use-is-twitter-ui.js';
 export { TWITTER_LAYOUT_BREAKPOINTS } from './domain/index.js';
+export { TWITTER_PAGE_STATE_TYPES, TWITTER_PAGE_SKELETON_VARIANTS } from './domain/index.js';
+export type { TwitterPageStateType, TwitterPageSkeletonVariant } from './domain/index.js';

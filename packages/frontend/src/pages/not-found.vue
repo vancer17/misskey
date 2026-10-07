@@ -5,7 +5,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div style="align-content: center; height: 100cqh;">
-	<MkResult type="notFound" :text="i18n.ts.notFoundDescription"/>
+	<TwitterPageState v-if="isTwitterUi" type="notFound"/>
+	<MkResult v-else type="notFound" :text="i18n.ts.notFoundDescription"/>
 </div>
 </template>
 
@@ -14,6 +15,10 @@ import { computed } from 'vue';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import { pleaseLogin } from '@/utility/please-login.js';
+import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
+
+const isTwitterUi = useIsTwitterUi();
 
 const props = defineProps<{
 	showLoginPopup?: boolean;

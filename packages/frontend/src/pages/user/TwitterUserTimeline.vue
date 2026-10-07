@@ -43,7 +43,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:variant="'twitter'"
 		>
 			<template #empty>
-				<TwitterTimelineState/>
+				<TwitterPageState type="empty" :title="i18n.ts.noNotes"/>
 			</template>
 		</MkNotesTimeline>
 	</div>
@@ -55,7 +55,7 @@ import { computed, markRaw } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import TwitterNote from '@/ui/twitter/Note.vue';
-import TwitterTimelineState from '@/ui/twitter/TimelineState.vue';
+import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
 import { Paginator } from '@/utility/paginator.js';
 import { userPage } from '@/filters/user.js';
 import { i18n } from '@/i18n.js';

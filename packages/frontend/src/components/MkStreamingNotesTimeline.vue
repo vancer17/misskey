@@ -5,13 +5,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <component :is="prefer.s.enablePullToRefresh ? MkPullToRefresh : 'div'" :refresher="() => reloadTimeline()">
-	<MkLoading v-if="paginator.fetching.value" :class="{ [$style.twitterLoading]: isTwitter }"/>
+	<TwitterPageSkeleton v-if="isTwitter && paginator.fetching.value" variant="timeline"/>
+	<MkLoading v-else-if="paginator.fetching.value"/>
 
 	<MkError
 		v-else-if="paginator.error.value && !isTwitter"
 		@retry="paginator.init()"
 	/>
-	<TwitterTimelineState
+	<TwitterPageState
 		v-else-if="paginator.error.value"
 		type="error"
 		@retry="paginator.init()"
@@ -19,7 +20,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<div v-else-if="paginator.items.value.length === 0" key="_empty_" :class="{ [$style.twitterEmpty]: isTwitter }">
 		<slot name="empty">
-			<TwitterTimelineState v-if="isTwitter"/>
+			<TwitterPageState v-if="isTwitter" type="empty" :title="i18n.ts.noNotes"/>
 			<MkResult v-else type="empty" :text="i18n.ts.noNotes"/>
 		</slot>
 	</div>
@@ -120,7 +121,8 @@ import MkNote from '@/components/MkNote.vue';
 import MkButton from '@/components/MkButton.vue';
 import TwitterNote from '@/ui/twitter/Note.vue';
 import TwitterNewPostsButton from '@/ui/twitter/NewPostsButton.vue';
-import TwitterTimelineState from '@/ui/twitter/TimelineState.vue';
+import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
+import TwitterPageSkeleton from '@/ui/twitter/components/TwitterPageSkeleton.vue';
 import { i18n } from '@/i18n.js';
 import { DI } from '@/di.js';
 import { globalEvents, useGlobalEvent } from '@/events.js';
@@ -624,11 +626,6 @@ defineExpose({
 	box-sizing: border-box;
 	padding: 16px;
 	background: var(--MI_THEME-panel);
-}
-
-.twitterLoading {
-	min-height: 60vh;
-	background: var(--twitter-bg);
 }
 
 .twitterEmpty {

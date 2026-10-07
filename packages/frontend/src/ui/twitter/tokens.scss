@@ -92,4 +92,10 @@ body[data-ui='twitter'] {
 	/* Tooltip 深色 pill（X 明暗两模式均为深底白字） */
 	--twitter-tooltip-bg: rgba(0, 0, 0, 0.85);
 	--twitter-tooltip-fg: #FFFFFF;
+
+	/* ——— 共享页面状态（X-behavior 来源，见 ADR-0001）——— */
+	/* 骨架屏底块色（收敛原 NotificationSkeleton 的硬编码 color-mix） */
+	--twitter-skeleton-block: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
+	/* 骨架屏 shimmer 循环时长 */
+	--twitter-duration-skeleton: 1.2s;
 }
