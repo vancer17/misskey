@@ -12,6 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:tabs="tabs"
 				:actions="actions"
 				:displayMyAvatar="displayMyAvatar"
+				@tabReselected="scrollToTop"
 			/>
 		</template>
 

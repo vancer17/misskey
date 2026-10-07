@@ -98,6 +98,7 @@ const emit = defineEmits<{
 }
 
 .action {
+	position: relative;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -108,6 +109,16 @@ const emit = defineEmits<{
 	border-radius: var(--twitter-radius-pill);
 	color: var(--twitter-secondary-fg);
 	font-size: 13px;
+
+	/* 触控命中区：纵向扩展至最小触控目标（token 驱动），横向保守扩展避免相邻重叠 */
+	&::before {
+		content: "";
+		position: absolute;
+		top: calc((var(--twitter-touch-target) - 100%) / 2);
+		bottom: calc((var(--twitter-touch-target) - 100%) / 2);
+		right: -3px;
+		left: -3px;
+	}
 	transition:
 		background-color var(--twitter-duration-fast) ease,
 		color var(--twitter-duration-fast) ease,

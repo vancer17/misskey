@@ -73,7 +73,9 @@ onBeforeUnmount(() => {
 .root {
 	display: grid;
 	grid-template-columns: repeat(4, 1fr);
-	height: 56px;
+	height: var(--twitter-bottom-bar-height);
+	padding-right: env(safe-area-inset-right, 0px);
+	padding-left: env(safe-area-inset-left, 0px);
 	padding-bottom: env(safe-area-inset-bottom, 0px);
 	background: var(--twitter-bg);
 	border-top: solid 0.5px var(--twitter-border);

@@ -64,10 +64,18 @@ withDefaults(defineProps<{
 
 const tabModel = defineModel<string>('tab');
 
+const emit = defineEmits<{
+	(ev: 'tabReselected'): void;
+}>();
+
 function onTabClick(tab: Tab, ev: PointerEvent) {
 	if (tab.onClick != null) {
 		tab.onClick(ev);
 		return;
+	}
+
+	if (tab.key === tabModel.value) {
+		emit('tabReselected');
 	}
 
 	tabModel.value = tab.key;
