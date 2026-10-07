@@ -22,7 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkEmojiPicker
 		ref="picker"
 		class="_popup _shadow"
-		:class="{ [$style.drawer]: type === 'drawer' }"
+		:class="{ [$style.drawer]: type === 'drawer', [$style.twitter]: isTwitterUi }"
 		:showPinned="showPinned"
 		:pinnedEmojis="pinnedEmojis"
 		:asReactionPicker="asReactionPicker"
@@ -41,6 +41,7 @@ import { useTemplateRef } from 'vue';
 import MkModal from '@/components/MkModal.vue';
 import MkEmojiPicker from '@/components/MkEmojiPicker.vue';
 import { prefer } from '@/preferences.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = withDefaults(defineProps<{
 	manualShowing?: boolean | null;
@@ -66,6 +67,7 @@ const emit = defineEmits<{
 
 const modal = useTemplateRef('modal');
 const picker = useTemplateRef('picker');
+const isTwitterUi = useIsTwitterUi();
 
 function chosen(emoji: string) {
 	emit('done', emoji);
@@ -90,5 +92,13 @@ function opening() {
 	border-radius: 24px;
 	border-bottom-right-radius: 0;
 	border-bottom-left-radius: 0;
+}
+
+/* Twitter UI 表现变体：抽屉圆角改为 X sheet 尺度（容器底色/投影经 overlay.scss 全局类覆写；
+   !important 用于压过 body[data-ui] ._popup 的统一圆角，与基础 ._shadow 覆写惯例一致） */
+.twitter {
+	&.drawer {
+		border-radius: var(--twitter-sheet-radius) var(--twitter-sheet-radius) 0 0 !important;
+	}
 }
 </style>

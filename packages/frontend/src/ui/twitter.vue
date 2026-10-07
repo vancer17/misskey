@@ -132,6 +132,7 @@ function onContextmenu(ev: PointerEvent) {
 
 <style lang="scss">
 @use './twitter/tokens.scss';
+@use './twitter/overlay.scss';
 </style>
 
 <style lang="scss" module>

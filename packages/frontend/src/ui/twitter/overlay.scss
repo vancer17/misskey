@@ -1,0 +1,40 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+/*
+ * 文件领域：Twitter UI 模块 · 覆盖层外铬样式（Tier 1 全局类覆写）
+ *
+ * 作用：在 Twitter UI 上下文（body[data-ui='twitter']）内，对 Misskey 全局
+ * utility class 定义的弹层外铬（背景 / 圆角 / 投影 / 背板遮罩）统一改为
+ * Twitter 视觉语言，不修改任何 Mk* 基础组件的内部实现。
+ *
+ * 数据链角色：tokens.scss（语义 Token）→ 本文件（全局类桥接）→ 经 os.popup
+ * 派发的全部弹层（菜单 / 对话框 / emoji 选择器等）。
+ *
+ * 边界说明：组件内部结构（菜单行 / 对话框排版等）无法经全局类触达
+ * （CSS Modules 类名构建期哈希），由各 Mk 弹层组件内的 twitter 表现变体处理
+ * （经 useIsTwitterUi 判定，见 MkMenu.vue / MkDialog.vue 等）。
+ */
+
+body[data-ui='twitter'] {
+	/* 弹层容器：面板底色 + 16px 圆角（对应 _popup 原生消费 --MI_THEME-popup / --MI-radius） */
+	._popup {
+		background: var(--twitter-panel);
+		border-radius: var(--twitter-radius-large);
+	}
+
+	/* 弹层投影：基础定义为 !important，此处需同级覆写 */
+	._shadow {
+		box-shadow: var(--twitter-overlay-shadow) !important;
+	}
+
+	/* 模态背板：X 使用无毛玻璃的半透明遮罩 */
+	._modalBg {
+		background: var(--twitter-overlay-backdrop);
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
+}

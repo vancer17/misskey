@@ -77,4 +77,19 @@ body[data-ui='twitter'] {
 	--twitter-main-width: 600px;
 	/* 右侧信息栏宽度 */
 	--twitter-right-rail-width: 350px;
+
+	/* ——— 覆盖层（X-behavior 来源：nitter 为服务端渲染查看器，无菜单/对话框体系，见 ADR-0001）——— */
+	/* 模态背板遮罩（覆写全局 ._modalBg） */
+	--twitter-overlay-backdrop: light-dark(rgba(0, 0, 0, 0.45), rgba(91, 112, 131, 0.4));
+	/* 弹层投影（覆写全局 ._shadow；X 菜单为无边框 + 大柔和投影） */
+	--twitter-overlay-shadow: light-dark(0 0 15px rgba(101, 119, 134, 0.3), 0 0 15px rgba(0, 0, 0, 0.5));
+	/* 菜单最小宽度（X dropdown 起始宽度） */
+	--twitter-menu-min-width: 200px;
+	/* 菜单行高度（X dropdown 单行高度） */
+	--twitter-menu-item-height: 36px;
+	/* 移动底部抽屉顶部圆角（修正 Misskey 默认 24px；用于 asDrawer 形态） */
+	--twitter-sheet-radius: 16px;
+	/* Tooltip 深色 pill（X 明暗两模式均为深底白字） */
+	--twitter-tooltip-bg: rgba(0, 0, 0, 0.85);
+	--twitter-tooltip-fg: #FFFFFF;
 }

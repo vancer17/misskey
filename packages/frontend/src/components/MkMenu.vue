@@ -12,6 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		[$style.big]: big,
 		[$style.asDrawer]: asDrawer,
 		[$style.widthSpecified]: width != null,
+		[$style.twitter]: isTwitterUi,
 	}"
 	@focusin.passive.stop="() => {}"
 >
@@ -242,6 +243,7 @@ import { i18n } from '@/i18n.js';
 import { isTouchUsing } from '@/utility/touch.js';
 import { isFocusable } from '@/utility/focus.js';
 import { getNodeOrNull } from '@/utility/get-dom-node-or-null.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const childrenCache = new WeakMap<MenuParent, MenuItem[]>();
 </script>
@@ -265,6 +267,8 @@ const emit = defineEmits<{
 }>();
 
 const big = isTouchUsing;
+
+const isTwitterUi = useIsTwitterUi();
 
 const isNestingMenu = inject<boolean>('isNestingMenu', false);
 
@@ -619,6 +623,79 @@ function guardMouseMove(ev: MouseEvent) {
 
 			> .divider {
 				margin: 12px 0;
+			}
+		}
+	}
+
+	/* Twitter UI 表现变体：仅改变视觉语言（X-behavior 来源），不改变菜单交互逻辑 */
+	&.twitter {
+		/* 悬停/激活态改为 X 风格：浅灰底 + 常规文字色（Misskey 默认为品牌色高亮） */
+		--menuFg: var(--twitter-fg);
+		--menuHoverFg: var(--twitter-fg);
+		--menuHoverBg: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
+		--menuActiveFg: var(--twitter-fg);
+		--menuActiveBg: color-mix(in srgb, var(--twitter-fg) 14%, transparent);
+
+		> .menu {
+			min-width: var(--twitter-menu-min-width);
+			padding: 4px 0;
+
+			> .item {
+				min-height: var(--twitter-menu-item-height);
+				padding: 0 12px;
+				font-size: 15px;
+				line-height: 20px;
+
+				&::before {
+					width: calc(100% - 8px);
+					border-radius: 8px;
+				}
+
+				> .icon {
+					margin-right: 12px;
+					color: var(--twitter-secondary-fg);
+				}
+
+				&.danger {
+					/* X 危险项：红字 + 浅红悬停底（Misskey 默认为红底白字的整行填充） */
+					--menuFg: var(--twitter-danger);
+					--menuHoverFg: var(--twitter-danger);
+					--menuHoverBg: color-mix(in srgb, var(--twitter-danger) 10%, transparent);
+					--menuActiveFg: var(--MI_THEME-fgOnAccent);
+					--menuActiveBg: var(--twitter-danger);
+				}
+			}
+
+			> .divider {
+				margin: 4px 0;
+				border-top-color: var(--twitter-border);
+			}
+
+			> .label {
+				padding: 8px 16px 4px;
+				font-size: 13px;
+				color: var(--twitter-secondary-fg);
+			}
+		}
+
+		/* 移动端底部抽屉（复用 asDrawer 机制，仅调整几何参数为 X sheet 尺度） */
+		&.asDrawer > .menu {
+			border-radius: var(--twitter-sheet-radius) var(--twitter-sheet-radius) 0 0;
+
+			> .item {
+				min-height: 48px;
+				padding: 0 16px;
+				font-size: 16px;
+
+				&::before {
+					width: calc(100% - 32px);
+					border-radius: 12px;
+				}
+
+				> .icon {
+					width: 24px;
+					margin-right: 16px;
+				}
 			}
 		}
 	}
