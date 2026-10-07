@@ -7,14 +7,17 @@
  * 文件领域：Twitter UI · composables 层 · 布局响应式组合函数
  *
  * 作用：将 domain 权威断点常量转换为组件可消费的响应式布局状态
- * （是否移动端 / 是否显示侧栏 / 是否显示右栏），并管理 matchMedia
- * 监听的挂载与卸载生命周期。
+ * （是否移动端 / 是否显示侧栏 / 是否显示右栏）。
  *
  * 数据链角色：domain/layout.ts（权威常量）→ 本组合函数（状态派生）
- * → twitter.vue 等 Shell 组件（唯一消费点）；组件与样式不得另行复制断点。
+ * → Shell 与内容组件（多消费点）；组件与样式不得另行复制断点。
+ *
+ * 实现说明：布局状态为模块级单例——matchMedia 监听全程只建立一次，
+ * 全部组件共享同一响应式来源（避免每个消费组件重复挂载监听）；
+ * 惰性初始化保证未挂载消费组件的测试环境不触碰 window API。
  */
 
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { ref } from 'vue';
 import type { Ref } from 'vue';
 import type { DeviceKind } from '@/utility/device-kind.js';
 import { deviceKind } from '@/utility/device-kind.js';
@@ -43,19 +46,22 @@ function isMobileLayout(viewportWidth: number, kind: DeviceKind): boolean {
 	return kind === 'smartphone' || viewportWidth <= TWITTER_LAYOUT_BREAKPOINTS.mobile;
 }
 
+/** 模块级共享布局状态（惰性初始化，生命周期与模块一致）。 */
+let sharedLayoutState: TwitterLayoutState | null = null;
+
 /**
- * Twitter UI 布局状态组合函数：基于权威断点生成响应式布局状态。
+ * 创建共享布局状态：基于权威断点建立响应式 refs 与 matchMedia 监听（仅执行一次）。
  *
- * @returns 三项布局状态的只读集合
+ * @returns 三项布局状态的共享只读集合
  */
-export function useTwitterLayout(): TwitterLayoutState {
+function createSharedLayoutState(): TwitterLayoutState {
 	const isMobile = ref(isMobileLayout(window.innerWidth, deviceKind));
 	const showSidebar = ref(window.innerWidth > TWITTER_LAYOUT_BREAKPOINTS.mobile);
 	const showRightRail = ref(window.innerWidth >= TWITTER_LAYOUT_BREAKPOINTS.rightRail);
 
-	let mobileMediaQueryList: MediaQueryList | null = null;
-	let sidebarMediaQueryList: MediaQueryList | null = null;
-	let rightRailMediaQueryList: MediaQueryList | null = null;
+	const mobileMediaQueryList = window.matchMedia(`(max-width: ${TWITTER_LAYOUT_BREAKPOINTS.mobile}px)`);
+	const sidebarMediaQueryList = window.matchMedia(`(min-width: ${TWITTER_LAYOUT_BREAKPOINTS.mobile + 1}px)`);
+	const rightRailMediaQueryList = window.matchMedia(`(min-width: ${TWITTER_LAYOUT_BREAKPOINTS.rightRail}px)`);
 
 	/** 同步移动布局状态（matchMedia change 回调）。 */
 	function syncMobile(): void {
@@ -72,25 +78,23 @@ export function useTwitterLayout(): TwitterLayoutState {
 		showRightRail.value = window.innerWidth >= TWITTER_LAYOUT_BREAKPOINTS.rightRail;
 	}
 
-	onMounted(() => {
-		mobileMediaQueryList = window.matchMedia(`(max-width: ${TWITTER_LAYOUT_BREAKPOINTS.mobile}px)`);
-		sidebarMediaQueryList = window.matchMedia(`(min-width: ${TWITTER_LAYOUT_BREAKPOINTS.mobile + 1}px)`);
-		rightRailMediaQueryList = window.matchMedia(`(min-width: ${TWITTER_LAYOUT_BREAKPOINTS.rightRail}px)`);
-
-		mobileMediaQueryList.addEventListener('change', syncMobile);
-		sidebarMediaQueryList.addEventListener('change', syncSidebar);
-		rightRailMediaQueryList.addEventListener('change', syncRightRail);
-	});
-
-	onBeforeUnmount(() => {
-		mobileMediaQueryList?.removeEventListener('change', syncMobile);
-		sidebarMediaQueryList?.removeEventListener('change', syncSidebar);
-		rightRailMediaQueryList?.removeEventListener('change', syncRightRail);
-	});
+	mobileMediaQueryList.addEventListener('change', syncMobile);
+	sidebarMediaQueryList.addEventListener('change', syncSidebar);
+	rightRailMediaQueryList.addEventListener('change', syncRightRail);
 
 	return {
 		isMobile,
 		showSidebar,
 		showRightRail,
 	};
+}
+
+/**
+ * Twitter UI 布局状态组合函数：返回模块级共享的响应式布局状态。
+ *
+ * @returns 三项布局状态的共享只读集合（多组件消费同一实例）
+ */
+export function useTwitterLayout(): TwitterLayoutState {
+	sharedLayoutState ??= createSharedLayoutState();
+	return sharedLayoutState;
 }

@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<article :class="$style.root">
+<article :class="[$style.root, { [$style.mobile]: isMobile }]">
 	<MkA :class="$style.identity" :to="userPage(user)" :aria-label="acct(user)">
 		<MkAvatar :class="$style.avatar" :user="user" indicator/>
 		<span :class="$style.account">
@@ -38,6 +38,9 @@ import MkFollowButton from '@/components/MkFollowButton.vue';
 import { acct, userPage } from '@/filters/user.js';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
+import { useTwitterLayout } from './composables/use-twitter-layout.js';
+
+const { isMobile } = useTwitterLayout();
 
 defineProps<{
 	user: Misskey.entities.UserDetailed;
@@ -138,11 +141,10 @@ defineProps<{
 	grid-row: 1;
 }
 
-@media (max-width: 500px) {
-	.root {
-		grid-template-columns: minmax(0, 1fr);
-		padding: 12px;
-	}
+/* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
+.root.mobile {
+	grid-template-columns: minmax(0, 1fr);
+	padding: 12px;
 
 	.identity {
 		grid-template-columns: 40px minmax(0, 1fr);

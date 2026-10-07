@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	v-if="!isDeleted && !hardMuted && !hideByPlugin && muted === false"
 	ref="rootEl"
 	v-hotkey="keymap"
-	:class="[$style.root, { [$style.embedded]: embedded }]"
+		:class="[$style.root, { [$style.embedded]: embedded, [$style.mobile]: isMobile }]"
 	tabindex="0"
 >
 	<div v-if="pinned" :class="$style.context">
@@ -302,6 +302,7 @@ import TwitterNoteActions from './NoteActions.vue';
 import TwitterNoteHeader from './NoteHeader.vue';
 import TwitterNoteQuote from './NoteQuote.vue';
 import TwitterNoteRepostLabel from './NoteRepostLabel.vue';
+import { useTwitterLayout } from './composables/use-twitter-layout.js';
 
 const props = withDefaults(defineProps<{
 	note: Misskey.entities.Note;
@@ -317,6 +318,8 @@ const props = withDefaults(defineProps<{
 	embedded: false,
 	actionsVisible: true,
 });
+
+const { isMobile } = useTwitterLayout();
 
 const emit = defineEmits<{
 	(ev: 'reaction', emoji: string): void;
@@ -477,6 +480,24 @@ const keymap = {
 			background: color-mix(in srgb, var(--twitter-fg) 4%, transparent);
 		}
 	}
+
+	/* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
+	&.mobile {
+		.article {
+			grid-template-columns: 40px minmax(0, 1fr);
+			gap: 10px;
+			padding: 12px;
+		}
+
+		.avatar {
+			width: 40px;
+			height: 40px;
+		}
+
+		.muted {
+			padding: 14px 12px;
+		}
+	}
 }
 
 .embedded {
@@ -550,12 +571,6 @@ const keymap = {
 	grid-template-columns: 44px minmax(0, 1fr);
 	gap: 12px;
 	padding: 12px 16px;
-
-	@media (max-width: 500px) {
-		grid-template-columns: 40px minmax(0, 1fr);
-		gap: 10px;
-		padding: 12px;
-	}
 }
 
 .avatarColumn {
@@ -569,11 +584,6 @@ const keymap = {
 .avatar {
 	width: 44px;
 	height: 44px;
-
-	@media (max-width: 500px) {
-		width: 40px;
-		height: 40px;
-	}
 }
 
 .threadLine {
@@ -724,10 +734,6 @@ const keymap = {
 	border-bottom: solid 0.5px var(--twitter-border);
 	color: var(--twitter-secondary-fg);
 	cursor: pointer;
-
-	@media (max-width: 500px) {
-		padding: 14px 12px;
-	}
 }
 
 @media (prefers-reduced-motion: reduce) {
