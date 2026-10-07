@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <MkModal ref="modal" :preferType="'dialog'" :zPriority="'high'" @click="done(true)" @closed="emit('closed')" @esc="cancel()">
-	<div :class="$style.root">
+	<div :class="[$style.root, { [$style.twitter]: isTwitterUi }]">
 		<div v-if="icon" :class="$style.icon">
 			<i :class="icon"></i>
 		</div>
@@ -56,6 +56,7 @@ import type { MkSelectItem } from '@/components/MkSelect.vue';
 import type { OptionValue } from '@/types/option-value.js';
 import { useMkSelect } from '@/composables/use-mkselect.js';
 import { i18n } from '@/i18n.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 type Input = {
 	type?: 'text' | 'number' | 'password' | 'email' | 'url' | 'date' | 'time' | 'search' | 'datetime-local';
@@ -102,6 +103,7 @@ const emit = defineEmits<{
 }>();
 
 const modal = useTemplateRef('modal');
+const isTwitterUi = useIsTwitterUi();
 
 const inputValue = ref<string | number | null>(props.input?.default ?? null);
 
@@ -178,6 +180,29 @@ function onInputKeydown(evt: KeyboardEvent) {
 	text-align: center;
 	background: var(--MI_THEME-panel);
 	border-radius: 16px;
+
+	/* Twitter UI 表现变体：X 对话框排版（面板 / 大标题 / 紧凑内边距） */
+	&.twitter {
+		padding: 24px;
+		background: var(--twitter-panel);
+		color: var(--twitter-fg);
+		border-radius: var(--twitter-radius-large);
+
+		> .title {
+			margin: 0 0 12px 0;
+			font-size: 20px;
+		}
+
+		> .text {
+			margin: 4px 0 0 0;
+			font-size: 15px;
+		}
+
+		> .buttons {
+			margin-top: 24px;
+			gap: 12px;
+		}
+	}
 }
 
 .icon {

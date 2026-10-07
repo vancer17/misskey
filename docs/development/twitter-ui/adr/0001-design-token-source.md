@@ -19,6 +19,7 @@
    - 动作语义色（转发 / 错误 / 点赞 / 警告）沿用 `--MI_THEME-*`，保持 Misskey 跨 UI 动作一致性。
 3. **明暗切换机制**：`light-dark()` + `theme.ts` 写入 `<html>` 的 `color-scheme`。跟随 Misskey 应用内主题明暗而非操作系统偏好，不引入 JS 切换逻辑。
 4. **断点单权威**：`domain/layout.ts` 的 `TWITTER_LAYOUT_BREAKPOINTS`（as const）为唯一来源；`useTwitterLayout` 据此驱动 matchMedia 与响应式状态，Shell 经 class 绑定切换布局，且不新增断点一致性测试（规范第 10 条：禁止复制后靠测试维持一致）。**新增样式禁止书写布局断点媒体查询**；历史 PR 遗留在 Note / NotificationRow 等 11 个组件内的 `@media (max-width: 500px)` 块为既有债务，待各文件因业务修改时迁移（或另立专项 PR 统一迁移并做视觉回归验证），不在本 PR 强行批量替换。
+5. **覆盖层 Token 组与三层改造策略（P-08）**：菜单 / 对话框 / tooltip / emoji 选择器在 nitter 中无对应物，本组 Token（背板遮罩、弹层投影、菜单行尺度、抽屉圆角、tooltip pill）全部为 X-behavior 来源。实现采用三层策略——业务逻辑层（`get-note-menu.ts` / `os.ts` 调度等）零改动；全局类外铬经 `overlay.scss` 在 `body[data-ui='twitter']` 作用域覆写 `._popup` / `._shadow` / `._modalBg`；组件内部结构由各 Mk 弹层组件经 `useIsTwitterUi()` 挂载 twitter 表现变体（仅视觉，不含业务分支）。
 
 ## 有意偏离 nitter 的项
 
@@ -27,6 +28,7 @@
 | 面板圆角 | `border-radius: 0` | 4 / 8 / 16 / 999px 阶梯 | 取向现代 X 的视觉语言，产品定位为"类 Twitter"而非 nitter 复古风 |
 | 动效体系 | 无（服务端渲染查看器） | 120 / 180 / 240ms + 单一 ease 曲线 | nitter 无可抄动效；本组为自定 motion spec，待 X 行为录屏校准 |
 | 次要文字色 | `fg_faded` 精确值 | 修正为精确值 `#657786` / `#8899A6` | 原实现为 `color-mix(fg 57%)` 估值，本次修正为对齐 |
+| 覆盖层体系 | 无（无菜单 / 对话框 / tooltip） | X-behavior 来源 Token + 三层改造策略 | nitter 为只读查看器；覆盖层视觉只能取自 X 行为观察 |
 
 ## 暂缓项（防止悬空 Token，规范第 9 条）
 

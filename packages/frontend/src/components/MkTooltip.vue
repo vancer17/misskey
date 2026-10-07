@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	appear :css="prefer.s.animation"
 	@afterLeave="emit('closed')"
 >
-	<div v-show="showing" ref="el" :class="$style.root" class="_acrylic _shadow" :style="{ zIndex, maxWidth: maxWidth + 'px' }">
+	<div v-show="showing" ref="el" :class="[$style.root, { [$style.twitter]: isTwitterUi }]" class="_acrylic _shadow" :style="{ zIndex, maxWidth: maxWidth + 'px' }">
 		<slot>
 			<template v-if="text">
 				<Mfm v-if="asMfm" :text="text"/>
@@ -28,6 +28,7 @@ import { nextTick, onMounted, onUnmounted, useTemplateRef } from 'vue';
 import * as os from '@/os.js';
 import { calcPopupPosition } from '@/utility/popup-position.js';
 import { prefer } from '@/preferences.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = withDefaults(defineProps<{
 	showing: boolean;
@@ -54,6 +55,7 @@ if (!props.showing) emit('closed');
 
 const el = useTemplateRef('el');
 const zIndex = os.claimZIndex('high');
+const isTwitterUi = useIsTwitterUi();
 
 function setPosition() {
 	if (el.value == null) return;
@@ -114,5 +116,17 @@ onUnmounted(() => {
 	border: solid 0.5px var(--MI_THEME-divider);
 	pointer-events: none;
 	transform-origin: center center;
+
+	/* Twitter UI 表现变体：X 深色 pill，无毛玻璃与边框 */
+	&.twitter {
+		background: var(--twitter-tooltip-bg);
+		color: var(--twitter-tooltip-fg);
+		border: none;
+		border-radius: var(--twitter-radius-pill);
+		padding: 6px 12px;
+		font-size: 12px;
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
 }
 </style>
