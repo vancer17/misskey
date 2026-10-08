@@ -11,7 +11,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:enterFromClass="$style.transition_x_enterFrom"
 	:leaveToClass="$style.transition_x_leaveTo"
 	:moveClass="$style.transition_x_move"
-	tag="div" :class="$style.root"
+	tag="div" :class="[$style.root, { [$style.twitter]: isTwitterUi }]"
 >
 	<XReaction
 		v-for="[reaction, count] in _reactions"
@@ -39,6 +39,7 @@ import { $i } from '@/i.js';
 import { prefer } from '@/preferences.js';
 import { customEmojisMap } from '@/custom-emojis.js';
 import { DI } from '@/di.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = withDefaults(defineProps<{
 	noteId: Misskey.entities.Note['id'];
@@ -49,6 +50,8 @@ const props = withDefaults(defineProps<{
 }>(), {
 	maxNumber: Infinity,
 });
+
+const isTwitterUi = useIsTwitterUi();
 
 const mock = inject(DI.mock, false);
 
@@ -151,6 +154,11 @@ watch([() => props.reactions, () => props.maxNumber], ([newSource, maxNumber]) =
 
 	&:empty {
 		display: none;
+	}
+
+	/* Twitter UI 表现变体：X 反应行间距（nitter 无 reaction 体系，X-behavior 来源，见 ADR-0001） */
+	&.twitter {
+		gap: 8px;
 	}
 }
 </style>
