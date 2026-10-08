@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div v-if="note" :class="$style.root">
+<div v-if="note" :class="[$style.root, { [$style.twitter]: isTwitterUi }]">
 	<MkAvatar :class="[$style.avatar, prefer.s.useStickyIcons ? $style.useSticky : null]" :user="note.user" link preview/>
 	<div :class="$style.main">
 		<MkNoteHeader :class="$style.header" :note="note" :mini="true"/>
@@ -32,10 +32,13 @@ import MkSubNoteContent from '@/components/MkSubNoteContent.vue';
 import MkCwButton from '@/components/MkCwButton.vue';
 import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = defineProps<{
 	note: Misskey.entities.Note | null;
 }>();
+
+const isTwitterUi = useIsTwitterUi();
 
 const showContent = ref(false);
 </script>
@@ -117,5 +120,29 @@ const showContent = ref(false);
 	background-size: auto auto;
 	background-image: repeating-linear-gradient(135deg, transparent, transparent 10px, var(--color) 4px, var(--color) 14px);
 	border-radius: 8px;
+}
+
+/* Twitter UI 表现变体：X 目标帖内嵌（nitter quote.scss / .avatar.mini 地面真值：mini 头像 20px + margin-right 5px、14px 正文；容器卡铬由 MkPostForm twitterTargetNote 提供） */
+.twitter {
+	font-size: 14px;
+	line-height: 1.3;
+	color: var(--twitter-fg);
+
+	.avatar {
+		margin: 0 5px 0 0;
+		width: 20px;
+		height: 20px;
+		border-radius: var(--twitter-radius-pill);
+	}
+
+	.header {
+		color: var(--twitter-fg);
+	}
+
+	.deleted {
+		--color: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
+		color: var(--twitter-secondary-fg);
+		border-radius: var(--twitter-radius-small);
+	}
 }
 </style>
