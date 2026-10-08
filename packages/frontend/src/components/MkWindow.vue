@@ -13,7 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	@afterLeave="emit('closed')"
 >
 	<div v-if="showing" ref="rootEl" :class="[$style.root, { [$style.maximized]: maximized }]">
-		<div :class="$style.body" class="_shadow" @pointerdown="onBodyPointerDown" @keydown="onKeydown">
+		<div :class="[$style.body, { [$style.twitter]: isTwitterUi }]" class="_shadow" @pointerdown="onBodyPointerDown" @keydown="onKeydown">
 			<div :class="[$style.header, { [$style.mini]: mini }]" @contextmenu.prevent.stop="onContextmenu">
 				<span :class="$style.headerLeft">
 					<template v-if="!minimized">
@@ -59,6 +59,7 @@ import { elementContains } from '@/utility/element-contains.js';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 type WindowButton = {
 	title: string;
@@ -130,6 +131,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
 	(ev: 'closed'): void;
 }>();
+
+const isTwitterUi = useIsTwitterUi();
 
 const INITIAL_WINDOW_WIDTH_RATIO = 0.5;
 const INITIAL_WINDOW_HEIGHT_RATIO = 0.75;
@@ -547,6 +550,11 @@ defineExpose({
 	&.maximized {
 		> .body {
 			border-radius: 0;
+
+			/* Twitter UI 表现变体：最大化窗口铺满屏幕，保持无圆角 */
+			&.twitter {
+				border-radius: 0;
+			}
 		}
 	}
 }
@@ -559,6 +567,32 @@ defineExpose({
 	width: 100%;
 	height: 100%;
 	border-radius: var(--MI-radius);
+
+	/* Twitter UI 表现变体：X 窗口外铬（平面 panel + 大圆角；投影经 overlay.scss 的 ._shadow 覆写） */
+	&.twitter {
+		border-radius: var(--twitter-radius-large);
+		background: var(--twitter-panel);
+
+		.header {
+			background: var(--twitter-panel);
+			-webkit-backdrop-filter: none;
+			backdrop-filter: none;
+			color: var(--twitter-fg);
+			border-bottom: 1px solid var(--twitter-border);
+		}
+
+		.headerButton:hover {
+			background: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
+		}
+
+		.headerButton.highlighted {
+			color: var(--twitter-accent);
+		}
+
+		.content {
+			background: var(--twitter-panel);
+		}
+	}
 }
 
 .header {
