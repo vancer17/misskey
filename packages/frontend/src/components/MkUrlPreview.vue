@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <template v-if="player.url && playerEnabled">
 	<div
-		:class="$style.player"
+		:class="[$style.player, { [$style.twitter]: isTwitterUi }]"
 		:style="player.width ? `padding: ${(player.height || 0) / player.width * 100}% 0 0` : `padding: ${(player.height || 0)}px 0 0`"
 	>
 		<iframe
@@ -44,7 +44,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 </template>
 <div v-else>
-	<component :is="self ? 'MkA' : 'a'" :class="[$style.link, { [$style.compact]: compact }]" :[attr]="maybeRelativeUrl" rel="nofollow noopener" :target="target" :title="url">
+	<component :is="self ? 'MkA' : 'a'" :class="[$style.link, { [$style.compact]: compact, [$style.twitter]: isTwitterUi }]" :[attr]="maybeRelativeUrl" rel="nofollow noopener" :target="target" :title="url">
 		<div v-if="thumbnail && !sensitive" :class="$style.thumbnail" :style="prefer.s.dataSaver.urlPreviewThumbnail ? '' : { backgroundImage: `url('${thumbnail}')` }">
 		</div>
 		<article :class="$style.body">
@@ -95,6 +95,7 @@ import { transformPlayerUrl } from '@/utility/url-preview.js';
 import { store } from '@/store.js';
 import { prefer } from '@/preferences.js';
 import { maybeMakeRelative } from '@@/js/url.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = withDefaults(defineProps<{
 	url: string;
@@ -106,6 +107,8 @@ const props = withDefaults(defineProps<{
 	compact: false,
 	showActions: true,
 });
+
+const isTwitterUi = useIsTwitterUi();
 
 const MOBILE_THRESHOLD = 500;
 const isMobile = ref(deviceKind === 'smartphone' || window.innerWidth <= MOBILE_THRESHOLD);
@@ -204,6 +207,12 @@ onUnmounted(() => {
 .player {
 	position: relative;
 	width: 100%;
+
+	/* Twitter UI 表现变体：播放器容器与链接卡同圆角体系 */
+	&.twitter {
+		border-radius: var(--twitter-radius-large);
+		overflow: clip;
+	}
 }
 
 .disablePlayer {
@@ -259,6 +268,7 @@ onUnmounted(() => {
 			}
 		}
 	}
+
 }
 
 .thumbnail {
@@ -386,6 +396,55 @@ onUnmounted(() => {
 	.siteIcon {
 		width: 12px;
 		height: 12px;
+	}
+}
+
+/* Twitter UI 表现变体：X 链接卡（nitter card.scss 地面真值：hairline 实线边框 / 98px 方形缩略图 / 粗体标题 / 次要色目标地址，见 ADR-0001）。
+   置于容器查询之后，确保窄容器下 compact 的 56px 收缩分支（同优先级）不会与 98px 偏移产生错位。 */
+.link.twitter {
+	border: solid 1px var(--twitter-border);
+	border-radius: var(--twitter-radius-large);
+	background: var(--twitter-panel);
+	color: var(--twitter-fg);
+	box-shadow: none;
+
+	&:hover {
+		border-color: var(--twitter-secondary-fg);
+	}
+
+	> .thumbnail {
+		width: 98px;
+		background-color: var(--twitter-hover);
+
+		& + .body {
+			left: 98px;
+			width: calc(100% - 98px);
+		}
+	}
+
+	> .body {
+		padding: 8px;
+
+		> .header {
+			margin-bottom: 2px;
+
+			> .title {
+				font-size: 15px;
+				font-weight: 700;
+			}
+		}
+
+		> .text {
+			color: var(--twitter-secondary-fg);
+		}
+
+		> .footer {
+			margin-top: 2px;
+
+			> .siteName {
+				color: var(--twitter-secondary-fg);
+			}
+		}
 	}
 }
 </style>
