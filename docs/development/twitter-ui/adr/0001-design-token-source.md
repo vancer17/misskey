@@ -31,6 +31,7 @@
 | 动效体系 | 无（服务端渲染查看器） | 120 / 180 / 240ms + 单一 ease 曲线 | nitter 无可抄动效；本组为自定 motion spec，待 X 行为录屏校准 |
 | 次要文字色 | `fg_faded` 精确值 | 修正为精确值 `#657786` / `#8899A6` | 原实现为 `color-mix(fg 57%)` 估值，本次修正为对齐 |
 | 覆盖层体系 | 无（无菜单 / 对话框 / tooltip） | X-behavior 来源 Token + 三层改造策略 | nitter 为只读查看器；覆盖层视觉只能取自 X 行为观察 |
+| 实例来源条（MkInstanceTicker） | 无（单实例查看器） | 中性 chip：panel 底 + hairline 边 + 次要文字色 | nitter/X 均无对应物；按 X 视觉语言派生，功能保留（远程帖可见来源实例），R-2 实施 |
 
 ## 暂缓项（防止悬空 Token，规范第 9 条）
 

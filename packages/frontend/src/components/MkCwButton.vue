@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<MkButton rounded full small @click="toggle"><b>{{ modelValue ? i18n.ts._cw.hide : i18n.ts._cw.show }}</b><span v-if="!modelValue" :class="$style.label">{{ label }}</span></MkButton>
+<MkButton rounded full small @click="toggle"><b>{{ modelValue ? i18n.ts._cw.hide : i18n.ts._cw.show }}</b><span v-if="!modelValue" :class="[$style.label, { [$style.twitter]: isTwitterUi }]">{{ label }}</span></MkButton>
 </template>
 
 <script lang="ts" setup>
@@ -14,6 +14,7 @@ import type { PollEditorModelValue } from '@/components/MkPollEditor.vue';
 import { concat } from '@/utility/array.js';
 import { i18n } from '@/i18n.js';
 import MkButton from '@/components/MkButton.vue';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = defineProps<{
 	modelValue: boolean;
@@ -22,6 +23,8 @@ const props = defineProps<{
 	files?: Misskey.entities.DriveFile[];
 	poll?: Misskey.entities.Note['poll'] | PollEditorModelValue | null;
 }>();
+
+const isTwitterUi = useIsTwitterUi();
 
 const emit = defineEmits<{
 	(ev: 'update:modelValue', v: boolean): void;
@@ -51,6 +54,12 @@ function toggle() {
 
 	&::after {
 		content: ')';
+	}
+
+	/* Twitter UI 表现变体：计数标签弱化为次要色（按钮本体经 MkButton 的 twitter 变体继承） */
+	&.twitter {
+		color: var(--twitter-secondary-fg);
+		font-weight: 400;
 	}
 }
 </style>
