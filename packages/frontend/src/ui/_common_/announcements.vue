@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div v-if="$i" :class="$style.root">
+<div v-if="$i" :class="[$style.root, { [$style.twitter]: isTwitterUi }]">
 	<MkA
 		v-for="announcement in $i.unreadAnnouncements.filter(x => x.display === 'banner')"
 		:key="announcement.id"
@@ -25,12 +25,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { $i } from '@/i.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
+
+const isTwitterUi = useIsTwitterUi();
 </script>
 
 <style lang="scss" module>
 .root {
 	font-size: 15px;
 	background: var(--MI_THEME-panel);
+
+	/* Twitter UI 表现变体：X 顶部公告条表面（图标语义色沿用 --MI_THEME-* 动作色，见 ADR-0001） */
+	&.twitter {
+		background: var(--twitter-panel);
+		border-bottom: 1px solid var(--twitter-border);
+
+		> .item {
+			background: var(--twitter-accent);
+			color: var(--twitter-fg-on-accent);
+		}
+	}
 }
 
 .item {

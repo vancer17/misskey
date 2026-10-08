@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="$style.root">
+<div :class="[$style.root, { [$style.twitter]: isTwitterUi }]">
 	<span :class="$style.icon">
 		<i class="ti ti-info-circle"></i>
 	</span>
@@ -17,6 +17,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { i18n } from '@/i18n.js';
 import { shouldSuggestReload } from '@/utility/reload-suggest.js';
 import { unisonReload } from '@/utility/unison-reload.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
+
+const isTwitterUi = useIsTwitterUi();
 
 function reload() {
 	unisonReload();
@@ -40,6 +43,12 @@ function skip() {
 	contain: strict;
 	background: var(--MI_THEME-accent);
 	color: var(--MI_THEME-fgOnAccent);
+
+	/* Twitter UI 表现变体：X 品牌色系统条（blink 动效留待 R-4 统一校准） */
+	&.twitter {
+		background: var(--twitter-accent);
+		color: var(--twitter-fg-on-accent);
+	}
 }
 
 .icon {

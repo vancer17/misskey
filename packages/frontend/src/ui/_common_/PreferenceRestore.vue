@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="$style.root">
+<div :class="[$style.root, { [$style.twitter]: isTwitterUi }]">
 	<span :class="$style.icon">
 		<i class="ti ti-info-circle"></i>
 	</span>
@@ -17,6 +17,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
 import { hideRestoreBackupSuggestion, restoreFromCloudBackup } from '@/preferences/utility.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
+
+const isTwitterUi = useIsTwitterUi();
 
 function restore() {
 	restoreFromCloudBackup();
@@ -39,6 +42,17 @@ function skip() {
 	overflow: clip;
 	contain: strict;
 	background: var(--MI_THEME-panel);
+
+	/* Twitter UI 表现变体：X panel 系统条 */
+	&.twitter {
+		background: var(--twitter-panel);
+		color: var(--twitter-fg);
+		border-bottom: 1px solid var(--twitter-border);
+
+		> .body :global(._textButton) {
+			color: var(--twitter-accent);
+		}
+	}
 }
 
 .icon {
