@@ -117,11 +117,11 @@ async function openAccountMenu(ev: PointerEvent) {
 .root {
 	display: flex;
 	flex-direction: column;
-	gap: 12px;
+	gap: var(--twitter-space-3);
 	height: 100%;
 	min-height: 0;
 	box-sizing: border-box;
-	padding: 8px;
+	padding: var(--twitter-space-2);
 	overflow-y: auto;
 	overscroll-behavior: contain;
 }
@@ -131,7 +131,7 @@ async function openAccountMenu(ev: PointerEvent) {
 	flex-shrink: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: var(--twitter-space-2);
 }
 
 .items {
@@ -139,7 +139,7 @@ async function openAccountMenu(ev: PointerEvent) {
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: var(--twitter-space-1);
 }
 
 .logo {
@@ -167,12 +167,12 @@ async function openAccountMenu(ev: PointerEvent) {
 	position: relative;
 	display: flex;
 	align-items: center;
-	gap: 16px;
+	gap: var(--twitter-space-4);
 	min-height: 52px;
-	padding: 0 16px;
+	padding: 0 var(--twitter-space-4);
 	border-radius: var(--twitter-radius-pill);
 	color: var(--twitter-fg);
-	font-size: 20px;
+	font-size: var(--twitter-font-size-heading);
 	line-height: 1;
 	text-decoration: none;
 	transition:
@@ -192,7 +192,7 @@ async function openAccountMenu(ev: PointerEvent) {
 
 .itemIcon {
 	flex-shrink: 0;
-	font-size: 24px;
+	font-size: var(--twitter-font-size-display);
 }
 
 .itemText {
@@ -228,7 +228,7 @@ async function openAccountMenu(ev: PointerEvent) {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: 8px;
+	gap: var(--twitter-space-2);
 	min-height: 52px;
 	border-radius: var(--twitter-radius-pill);
 	background: var(--twitter-accent);

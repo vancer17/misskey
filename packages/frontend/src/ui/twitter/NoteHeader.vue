@@ -73,7 +73,7 @@ defineProps<{
 .root {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: var(--twitter-space-1);
 	min-width: 0;
 	margin-bottom: 2px;
 	line-height: 1.25;
@@ -82,7 +82,7 @@ defineProps<{
 .identity {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: var(--twitter-space-1);
 	min-width: 0;
 	flex-shrink: 1;
 }
@@ -103,7 +103,7 @@ defineProps<{
 
 .bot {
 	flex-shrink: 0;
-	padding: 0 4px;
+	padding: 0 var(--twitter-space-1);
 	border: solid 0.5px var(--twitter-border);
 	border-radius: var(--twitter-radius-small);
 	color: var(--twitter-secondary-fg);
@@ -125,10 +125,10 @@ defineProps<{
 .meta {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: var(--twitter-space-1);
 	min-width: 0;
 	color: var(--twitter-secondary-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	white-space: nowrap;
 }
 

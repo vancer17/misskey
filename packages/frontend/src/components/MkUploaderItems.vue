@@ -311,7 +311,7 @@ async function onThumbnailClick(item: UploaderItem, ev: PointerEvent) {
 	.itemInfo {
 		opacity: 1;
 		color: var(--twitter-secondary-fg);
-		font-size: 13px;
+		font-size: var(--twitter-font-size-meta);
 	}
 }
 </style>

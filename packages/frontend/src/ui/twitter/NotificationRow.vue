@@ -271,7 +271,7 @@ function rejectFollowRequest() {
 .root {
 	display: grid;
 	grid-template-columns: 32px minmax(0, 1fr);
-	gap: 12px;
+	gap: var(--twitter-space-3);
 	box-sizing: border-box;
 	padding: 14px 16px;
 	color: inherit;
@@ -313,7 +313,7 @@ function rejectFollowRequest() {
 	min-width: 0;
 	overflow: hidden;
 	color: var(--twitter-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	font-weight: 700;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -325,7 +325,7 @@ function rejectFollowRequest() {
 	min-width: 0;
 	overflow: hidden;
 	color: var(--twitter-secondary-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	font-weight: 400;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -360,21 +360,21 @@ function rejectFollowRequest() {
 .time {
 	flex-shrink: 0;
 	color: var(--twitter-secondary-fg);
-	font-size: 13px;
+	font-size: var(--twitter-font-size-meta);
 }
 
 .body {
 	margin-top: 2px;
 	min-width: 0;
 	color: var(--twitter-secondary-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	line-height: 1.35;
 	overflow-wrap: anywhere;
 }
 
 .users {
 	display: flex;
-	gap: 8px;
+	gap: var(--twitter-space-2);
 	align-items: center;
 	margin-top: 10px;
 }
@@ -412,13 +412,13 @@ function rejectFollowRequest() {
 
 .moreUsers {
 	color: var(--twitter-secondary-fg);
-	font-size: 12px;
+	font-size: var(--twitter-font-size-caption);
 	font-weight: 700;
 }
 
 .followRequestActions {
 	display: flex;
-	gap: 8px;
+	gap: var(--twitter-space-2);
 	max-width: 300px;
 	margin-top: 10px;
 }
@@ -431,16 +431,16 @@ function rejectFollowRequest() {
 .root.mobile {
 	grid-template-columns: 28px minmax(0, 1fr);
 	gap: 10px;
-	padding: 12px;
+	padding: var(--twitter-space-3);
 
 	.header {
-		gap: 4px;
+		gap: var(--twitter-space-1);
 	}
 
 	.actor,
 	.action,
 	.systemTitle {
-		font-size: 13px;
+		font-size: var(--twitter-font-size-meta);
 	}
 }
 
