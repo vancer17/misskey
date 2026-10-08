@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="{ [$style.done]: closed || isVoted }">
+<div :class="{ [$style.done]: closed || isVoted, [$style.twitter]: isTwitterUi }">
 	<ul :class="$style.choices">
 		<li v-for="(choice, i) in choices" :key="i" :class="$style.choice" @click="vote(i)">
 			<div :class="$style.bg" :style="{ 'width': `${showResult ? (choice.votes / total * 100) : 0}%` }"></div>
@@ -37,6 +37,7 @@ import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { useLowresTime } from '@/composables/use-lowres-time.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = defineProps<{
 	noteId: string;
@@ -47,6 +48,8 @@ const props = defineProps<{
 	emojiUrls?: Record<string, string>;
 	author?: Misskey.entities.UserLite;
 }>();
+
+const isTwitterUi = useIsTwitterUi();
 
 const now = useLowresTime();
 
@@ -152,6 +155,36 @@ const vote = async (id: number) => {
 .done {
 	.choice {
 		cursor: initial;
+	}
+}
+
+/* Twitter UI 表现变体：X 投票条（nitter poll.scss 地面真值：26px 行高 / 6px 间距 / 品牌实色进度，见 ADR-0001） */
+.twitter {
+	.choice {
+		margin: 6px 0;
+		min-height: 26px;
+		padding: 0;
+		display: flex;
+		align-items: center;
+		background: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
+		border-radius: var(--twitter-radius-small);
+
+		.bg {
+			background: color-mix(in srgb, var(--twitter-accent) 35%, transparent);
+			transition: width var(--twitter-duration-slow) var(--twitter-ease);
+		}
+
+		.fg {
+			padding: 3px 8px;
+			background: transparent;
+			border-radius: var(--twitter-radius-small);
+			font-size: 14px;
+		}
+	}
+
+	.info {
+		color: var(--twitter-secondary-fg);
+		font-size: 13px;
 	}
 }
 </style>

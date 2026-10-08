@@ -9,10 +9,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div v-if="count > 0" :class="$style.container">
 		<div
 			ref="gallery"
-			:class="[
-				$style.medias,
-				...(prefer.s.showMediaListByGridInWideArea ? [$style.gridInWideArea] : []),
-				count === 1 ? [$style.n1, {
+		:class="[
+			$style.medias,
+			...(prefer.s.showMediaListByGridInWideArea ? [$style.gridInWideArea] : []),
+			{ [$style.twitter]: isTwitterUi },
+			count === 1 ? [$style.n1, {
 					[$style.n116_9]: prefer.s.mediaListWithOneImageAppearance === '16_9',
 					[$style.n11_1]: prefer.s.mediaListWithOneImageAppearance === '1_1',
 					[$style.n12_3]: prefer.s.mediaListWithOneImageAppearance === '2_3',
@@ -65,12 +66,15 @@ import * as os from '@/os.js';
 import { prefer } from '@/preferences.js';
 import { isPreviewable, getType } from '@/utility/lightbox.js';
 import { genId } from '@/utility/id.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = defineProps<{
 	mediaList: Misskey.entities.DriveFile[];
 	user?: Misskey.entities.User | null; // DriveFileのuserはnullになることがある。その場合に使用する所有者情報
 	raw?: boolean;
 }>();
+
+const isTwitterUi = useIsTwitterUi();
 
 const gallery = useTemplateRef('gallery');
 const medias = computed(() => {
@@ -266,6 +270,20 @@ defineExpose({
 
 		> .media {
 			aspect-ratio: 16/9;
+		}
+	}
+
+	/* Twitter UI 表现变体：nitter media.scss 地面真值 —— 4px 间距 / 内层零圆角（外层容器统一裁切圆角），见 ADR-0001 */
+	&.twitter {
+		grid-gap: 4px;
+
+		> .media {
+			border-radius: 0;
+		}
+
+		&.n1 {
+			/* nitter: still-image max-height 379.5px */
+			max-height: clamp(64px, 50cqh, min(379.5px, 50vh));
 		}
 	}
 }
