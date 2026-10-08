@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:is="component"
 	ref="el"
 	class="_button"
-	:class="[$style.root, { [$style.inline]: inline, [$style.primary]: primary, [$style.gradate]: gradate, [$style.danger]: danger, [$style.rounded]: rounded, [$style.full]: full, [$style.small]: small, [$style.large]: large, [$style.transparent]: transparent, [$style.asLike]: asLike, [$style.iconOnly]: iconOnly, [$style.wait]: wait, [$style.active]: active }]"
+	:class="[$style.root, { [$style.inline]: inline, [$style.primary]: primary, [$style.gradate]: gradate, [$style.danger]: danger, [$style.rounded]: rounded, [$style.full]: full, [$style.small]: small, [$style.large]: large, [$style.transparent]: transparent, [$style.asLike]: asLike, [$style.iconOnly]: iconOnly, [$style.wait]: wait, [$style.active]: active, [$style.twitter]: isTwitterUi }]"
 	v-bind="cProps"
 	@click="emit('click', $event)"
 	@mousedown="onMousedown"
@@ -24,6 +24,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { nextTick, computed, onMounted, useTemplateRef } from 'vue';
 import MkA from '@/components/global/MkA.vue';
 import type { MkABehavior } from '@/components/global/MkA.vue';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = defineProps<{
 	type?: 'button' | 'submit' | 'reset' | 'a' | 'routerLink';
@@ -63,6 +64,8 @@ const emit = defineEmits<{
 
 const el = useTemplateRef('el');
 const ripples = useTemplateRef('ripples');
+
+const isTwitterUi = useIsTwitterUi();
 
 const component = computed(() => {
 	if (props.type === 'a') return 'a';
@@ -285,6 +288,77 @@ function onMousedown(evt: MouseEvent): void {
 		display: inline-block;
 		width: auto;
 		min-width: 100px;
+	}
+
+	/* Twitter UI 表现变体：X 按钮（pill 圆角 / 品牌主钮 / 灰阶悬停阶梯），仅改视觉；
+	   覆盖层无 nitter 对应物，参数为 X-behavior 来源（见 ADR-0001） */
+	&.twitter {
+		font-weight: 700;
+		border-radius: var(--twitter-radius-pill);
+		background: var(--twitter-hover);
+		color: var(--twitter-fg);
+		transition: background var(--twitter-duration-fast) var(--twitter-ease);
+
+		&:not(:disabled):hover {
+			background: color-mix(in srgb, var(--twitter-fg) 10%, transparent);
+		}
+
+		&:not(:disabled):active {
+			background: color-mix(in srgb, var(--twitter-fg) 14%, transparent);
+		}
+
+		&.transparent {
+			background: transparent;
+		}
+
+		&.primary {
+			color: var(--twitter-fg-on-accent) !important;
+			background: var(--twitter-accent);
+
+			&:not(:disabled):hover,
+			&:not(:disabled):active {
+				background: var(--twitter-accent-hover);
+			}
+		}
+
+		/* X 无渐变按钮：gradate 在 twitter 上下文映射为品牌实色 */
+		&.gradate {
+			color: var(--twitter-fg-on-accent) !important;
+			background: var(--twitter-accent);
+
+			&:not(:disabled):hover,
+			&:not(:disabled):active {
+				background: var(--twitter-accent-hover);
+			}
+		}
+
+		&.danger {
+			color: var(--twitter-danger);
+
+			&.primary {
+				color: var(--twitter-fg-on-accent) !important;
+				background: var(--twitter-danger);
+
+				&:not(:disabled):hover,
+				&:not(:disabled):active {
+					background: color-mix(in srgb, var(--twitter-danger) 85%, var(--twitter-fg));
+				}
+			}
+		}
+
+		&.asLike.primary {
+			color: var(--twitter-fg-on-accent) !important;
+			background: var(--twitter-like);
+
+			&:not(:disabled):hover,
+			&:not(:disabled):active {
+				background: color-mix(in srgb, var(--twitter-like) 85%, var(--twitter-fg));
+			}
+		}
+
+		&.active {
+			color: var(--twitter-accent) !important;
+		}
 	}
 
 	&.primary > .ripples > .ripple {

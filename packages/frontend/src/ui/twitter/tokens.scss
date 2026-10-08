@@ -49,6 +49,8 @@ body[data-ui='twitter'] {
 	--twitter-accent-hover: color-mix(in srgb, var(--twitter-accent) 85%, var(--twitter-fg));
 	/* 认证标识色：与品牌色同源（nitter: verified_blue → accent） */
 	--twitter-verified: var(--twitter-accent);
+	/* 品牌色底上的文字色（X 按钮明暗两模式均为蓝底白字，不随主题反转） */
+	--twitter-fg-on-accent: #FFFFFF;
 	/* 语义动作色沿用 Misskey 主题变量：转发 / 错误 / 点赞 / 警告为跨 UI 一致的动作语义，
 	   不取 nitter 私有色值 */
 	--twitter-success: var(--MI_THEME-renote);

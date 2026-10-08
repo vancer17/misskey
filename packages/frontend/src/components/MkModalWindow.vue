@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <MkModal ref="modal" v-slot="{ type }" :preferType="deviceKind === 'smartphone' ? 'drawer' : 'dialog'" @click="onBgClick" @closed="emit('closed')" @esc="emit('esc')">
-	<div ref="rootEl" :class="[$style.root, type === 'drawer' ? $style.asDrawer : null]" :style="{ width: type === 'drawer' ? '' : `${width}px`, height: type === 'drawer' ? '' : `min(${height}px, 100%)` }">
+	<div ref="rootEl" :class="[$style.root, type === 'drawer' ? $style.asDrawer : null, { [$style.twitter]: isTwitterUi }]" :style="{ width: type === 'drawer' ? '' : `${width}px`, height: type === 'drawer' ? '' : `min(${height}px, 100%)` }">
 		<div :class="$style.header">
 			<button v-if="withCloseButton" :class="$style.headerButton" class="_button" data-testid="modal-window-close" @click="emit('close')"><i class="ti ti-x"></i></button>
 			<span :class="$style.title">
@@ -31,6 +31,7 @@ import MkModal from '@/components/MkModal.vue';
 import MkButton from '@/components/MkButton.vue';
 import { i18n } from '@/i18n';
 import { deviceKind } from '@/utility/device-kind.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = withDefaults(defineProps<{
 	withOkButton?: boolean;
@@ -55,6 +56,8 @@ const emit = defineEmits<{
 }>();
 
 const modal = useTemplateRef('modal');
+
+const isTwitterUi = useIsTwitterUi();
 
 function close() {
 	modal.value?.close();
@@ -97,6 +100,38 @@ defineExpose({
 
 		.footer {
 			padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+		}
+	}
+
+	/* Twitter UI 表现变体：X 窗口外铬（平面 panel + 大圆角），仅改视觉不改窗口交互 */
+	&.twitter {
+		border-radius: var(--twitter-radius-large);
+
+		.header {
+			background: var(--twitter-panel);
+			-webkit-backdrop-filter: none;
+			backdrop-filter: none;
+		}
+
+		.title {
+			color: var(--twitter-fg);
+		}
+
+		.headerButton:hover {
+			background: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
+		}
+
+		.body {
+			background: var(--twitter-panel);
+		}
+
+		.footer {
+			background: var(--twitter-panel);
+			border-top-color: var(--twitter-border);
+		}
+
+		&.asDrawer {
+			border-radius: var(--twitter-sheet-radius) var(--twitter-sheet-radius) 0 0;
 		}
 	}
 }
