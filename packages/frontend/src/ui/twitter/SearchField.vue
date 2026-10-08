@@ -63,9 +63,9 @@ function clear() {
 .root {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: var(--twitter-space-2);
 	height: 44px;
-	padding: 0 16px;
+	padding: 0 var(--twitter-space-4);
 	border-radius: var(--twitter-radius-pill);
 	background: var(--twitter-hover);
 	color: var(--twitter-secondary-fg);
@@ -83,7 +83,7 @@ function clear() {
 
 .icon {
 	flex-shrink: 0;
-	font-size: 18px;
+	font-size: var(--twitter-font-size-title);
 }
 
 .input {
@@ -92,7 +92,7 @@ function clear() {
 	border: none;
 	background: transparent;
 	color: var(--twitter-fg);
-	font-size: 15px;
+	font-size: var(--twitter-font-size-content);
 	outline: none;
 
 	&::placeholder {

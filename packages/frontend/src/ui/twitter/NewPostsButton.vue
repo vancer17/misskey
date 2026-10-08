@@ -26,13 +26,13 @@ const emit = defineEmits<{
 .root {
 	display: inline-flex;
 	align-items: center;
-	gap: 8px;
+	gap: var(--twitter-space-2);
 	height: 36px;
-	padding: 0 16px;
+	padding: 0 var(--twitter-space-4);
 	border-radius: var(--twitter-radius-pill);
 	background: var(--twitter-accent);
 	color: var(--MI_THEME-fgOnAccent);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	font-weight: 700;
 	box-shadow: 0 4px 12px color-mix(in srgb, var(--twitter-accent) 35%, transparent);
 	transition:

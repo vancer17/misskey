@@ -84,8 +84,8 @@ const rows = computed<number>(() => props.variant === 'notifications' ? 6 : 4);
 .row {
 	display: grid;
 	grid-template-columns: 48px minmax(0, 1fr);
-	gap: 12px;
-	padding: 12px 16px;
+	gap: var(--twitter-space-3);
+	padding: var(--twitter-space-3) var(--twitter-space-4);
 	border-bottom: solid 0.5px var(--twitter-border);
 
 	&:last-child {
@@ -148,14 +148,14 @@ const rows = computed<number>(() => props.variant === 'notifications' ? 6 : 4);
 .detailHeader {
 	display: grid;
 	grid-template-columns: 48px minmax(0, 1fr);
-	gap: 12px;
-	padding: 16px 16px 0;
+	gap: var(--twitter-space-3);
+	padding: var(--twitter-space-4) var(--twitter-space-4) 0;
 }
 
 .detailBody {
 	display: grid;
 	gap: 10px;
-	padding: 16px;
+	padding: var(--twitter-space-4);
 }
 
 .detailActions {
@@ -189,13 +189,13 @@ const rows = computed<number>(() => props.variant === 'notifications' ? 6 : 4);
 .profileIdentity {
 	display: grid;
 	gap: 10px;
-	padding: 12px 16px;
+	padding: var(--twitter-space-3) var(--twitter-space-4);
 }
 
 .profileTabs {
 	display: flex;
-	gap: 32px;
-	padding: 12px 16px;
+	gap: var(--twitter-space-6);
+	padding: var(--twitter-space-3) var(--twitter-space-4);
 	border-top: solid 0.5px var(--twitter-border);
 
 	.tab {
