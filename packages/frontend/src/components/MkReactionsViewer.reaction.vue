@@ -331,11 +331,11 @@ if (!mock) {
 	&.twitter {
 		height: 28px;
 		padding: 0 10px;
-		font-size: 14px;
+		font-size: var(--twitter-font-size-body);
 		border-radius: var(--twitter-radius-pill);
 
 		> .count {
-			font-size: 13px;
+			font-size: var(--twitter-font-size-meta);
 			line-height: 28px;
 			color: var(--twitter-secondary-fg);
 		}
@@ -364,20 +364,20 @@ if (!mock) {
 
 		&.small {
 			height: 24px;
-			font-size: 13px;
+			font-size: var(--twitter-font-size-meta);
 
 			> .count {
-				font-size: 12px;
+				font-size: var(--twitter-font-size-caption);
 				line-height: 24px;
 			}
 		}
 
 		&.large {
 			height: 36px;
-			font-size: 18px;
+			font-size: var(--twitter-font-size-title);
 
 			> .count {
-				font-size: 14px;
+				font-size: var(--twitter-font-size-body);
 				line-height: 36px;
 			}
 		}

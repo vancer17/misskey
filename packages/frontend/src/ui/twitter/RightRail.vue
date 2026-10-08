@@ -25,11 +25,11 @@ const XWidgets = defineAsyncComponent(() => import('../_common_/widgets.vue'));
 	top: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
+	gap: var(--twitter-space-4);
 	height: 100%;
 	min-height: 0;
 	box-sizing: border-box;
-	padding: 0 16px;
+	padding: 0 var(--twitter-space-4);
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	background: var(--twitter-bg);
@@ -40,7 +40,7 @@ const XWidgets = defineAsyncComponent(() => import('../_common_/widgets.vue'));
 	top: 0;
 	z-index: 1;
 	flex-shrink: 0;
-	margin: 16px 0;
+	margin: var(--twitter-space-4) 0;
 	background: var(--twitter-hover);
 }
 

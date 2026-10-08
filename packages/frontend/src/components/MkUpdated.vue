@@ -71,7 +71,7 @@ onMounted(() => {
 		border-radius: var(--twitter-radius-large);
 
 		> .title {
-			font-size: 20px;
+			font-size: var(--twitter-font-size-heading);
 		}
 
 		> .version {

@@ -142,7 +142,7 @@ onMounted(() => {
 			font-size: 100%;
 
 			> .title {
-				font-size: 20px;
+				font-size: var(--twitter-font-size-heading);
 			}
 		}
 

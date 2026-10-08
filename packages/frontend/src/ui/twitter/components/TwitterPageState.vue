@@ -90,7 +90,7 @@ const iconClass = computed<string>(() => {
 	min-height: min(60vh, 480px);
 	align-content: center;
 	justify-items: center;
-	gap: 8px;
+	gap: var(--twitter-space-2);
 	padding: 48px 24px;
 	text-align: center;
 	background: var(--twitter-bg);
@@ -104,23 +104,23 @@ const iconClass = computed<string>(() => {
 .title {
 	margin: 0;
 	color: var(--twitter-fg);
-	font-size: 20px;
+	font-size: var(--twitter-font-size-heading);
 	font-weight: 800;
 }
 
 .description {
 	margin: 0;
 	color: var(--twitter-secondary-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 }
 
 .retry {
-	margin-top: 8px;
-	padding: 8px 16px;
+	margin-top: var(--twitter-space-2);
+	padding: var(--twitter-space-2) var(--twitter-space-4);
 	border-radius: var(--twitter-radius-pill);
 	background: var(--twitter-accent);
 	color: var(--MI_THEME-fgOnAccent);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	font-weight: 700;
 	transition: background-color var(--twitter-duration-fast) ease;
 

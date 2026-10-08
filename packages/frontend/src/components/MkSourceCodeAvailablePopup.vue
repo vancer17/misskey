@@ -88,7 +88,7 @@ function close() {
 
 		> .main {
 			> .title {
-				font-size: 15px;
+				font-size: var(--twitter-font-size-content);
 			}
 
 			> .text {
