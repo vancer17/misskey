@@ -4,7 +4,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader :actions="headerActions" :tabs="headerTabs">
+<TwitterTag
+	v-if="isTwitterUi"
+	:tag="tag"
+	:paginator="paginator"
+	:actions="twitterActions"
+/>
+<PageWithHeader v-else :actions="headerActions" :tabs="headerTabs">
 	<div class="_spacer" style="--MI_SPACER-w: 800px;">
 		<MkNotesTimeline :paginator="paginator"/>
 	</div>
@@ -19,7 +25,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, markRaw, ref } from 'vue';
+import { computed, defineAsyncComponent, inject, markRaw, ref } from 'vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkButton from '@/components/MkButton.vue';
@@ -30,6 +36,10 @@ import { store } from '@/store.js';
 import * as os from '@/os.js';
 import { genEmbedCode } from '@/utility/get-embed-code.js';
 import { Paginator } from '@/utility/paginator.js';
+import { DI } from '@/di.js';
+
+/** Twitter UI 页面变体（异步加载，default UI 不承担其分包成本）。 */
+const TwitterTag = defineAsyncComponent(() => import('./TwitterTag.vue'));
 
 const props = defineProps<{
 	tag: string;
@@ -51,18 +61,39 @@ async function post() {
 	paginator.reload();
 }
 
+/** 当前 UI 样式（由 Twitter Shell 注入；非 Twitter 场景回退 'default'）。 */
+const uiStyle = inject(DI.uiStyle, ref('default'));
+const isTwitterUi = computed(() => uiStyle.value === 'twitter');
+
+/** 打开 ⋯ 菜单（embed 等低频动作；legacy 头部与 Twitter 变体共用，避免复制菜单定义）。 */
+function openMoreMenu(ev: PointerEvent): void {
+	os.popupMenu([{
+		text: i18n.ts.embed,
+		icon: 'ti ti-code',
+		action: () => {
+			genEmbedCode('tags', props.tag);
+		},
+	}], ev.currentTarget ?? ev.target);
+}
+
+/** legacy 头部动作。 */
 const headerActions = computed<PageHeaderItem[]>(() => [{
 	icon: 'ti ti-dots',
 	text: i18n.ts.more,
-	handler: (ev) => {
-		os.popupMenu([{
-			text: i18n.ts.embed,
-			icon: 'ti ti-code',
-			action: () => {
-				genEmbedCode('tags', props.tag);
-			},
-		}], ev.currentTarget ?? ev.target);
+	handler: openMoreMenu,
+}]);
+
+/** Twitter 变体头部动作：发帖预填（替换 legacy 页脚按钮）+ ⋯ 菜单；业务 handler 留在页面层。 */
+const twitterActions = computed<PageHeaderItem[]>(() => [{
+	icon: 'ti ti-pencil',
+	text: i18n.ts.postToHashtag,
+	handler: () => {
+		void post();
 	},
+}, {
+	icon: 'ti ti-dots',
+	text: i18n.ts.more,
+	handler: openMoreMenu,
 }]);
 
 const headerTabs = computed(() => []);
