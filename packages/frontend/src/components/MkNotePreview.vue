@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="$style.root">
+<div :class="[$style.root, { [$style.twitter]: isTwitterUi }]">
 	<MkAvatar :class="$style.avatar" :user="user"/>
 	<div :class="$style.main">
 		<div :class="$style.header">
@@ -28,6 +28,7 @@ import { ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { PollEditorModelValue } from '@/components/MkPollEditor.vue';
 import MkCwButton from '@/components/MkCwButton.vue';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const showContent = ref(false);
 
@@ -39,6 +40,8 @@ const props = defineProps<{
 	cw: string | null;
 	user: Misskey.entities.User;
 }>();
+
+const isTwitterUi = useIsTwitterUi();
 </script>
 
 <style lang="scss" module>
@@ -94,6 +97,25 @@ const props = defineProps<{
 		margin: 0 12px 0 0 !important;
 		width: 48px !important;
 		height: 48px !important;
+	}
+}
+
+/* Twitter UI 表现变体：X 发帖预览（nitter tweet/_base.scss 地面真值：15px/1.3 正文与 48px 圆形头像；置于容器查询之后以固定头像阶梯） */
+.twitter {
+	font-size: 15px;
+	line-height: 1.3;
+	color: var(--twitter-fg);
+
+	.avatar {
+		margin: 0 12px 0 0 !important;
+		width: 48px !important;
+		height: 48px !important;
+		border-radius: var(--twitter-radius-pill) !important;
+	}
+
+	.header {
+		font-size: 15px;
+		color: var(--twitter-fg);
 	}
 }
 </style>
