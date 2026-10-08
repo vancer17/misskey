@@ -69,7 +69,8 @@ defineProps<{
 
 .identity {
 	display: grid;
-	grid-template-columns: 44px minmax(0, 1fr);
+	/* nitter 地面真值：用户行头像 _bigger 48×48（tweet/_base.scss .tweet-avatar） */
+	grid-template-columns: 48px minmax(0, 1fr);
 	gap: var(--twitter-space-3);
 	align-items: center;
 	min-width: 0;
@@ -78,8 +79,8 @@ defineProps<{
 }
 
 .avatar {
-	width: 44px;
-	height: 44px;
+	width: 48px;
+	height: 48px;
 }
 
 .account {
