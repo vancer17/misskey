@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <MkModal ref="modal" :zPriority="'middle'" :preferType="'dialog'" @closed="emit('closed')" @click="onBgClick">
-	<div ref="rootEl" :class="$style.root">
+	<div ref="rootEl" :class="[$style.root, { [$style.twitter]: isTwitterUi }]">
 		<div :class="$style.header">
 			<span :class="$style.icon">
 				<i v-if="announcement.icon === 'info'" class="ti ti-info-circle"></i>
@@ -39,6 +39,7 @@ import MkButton from '@/components/MkButton.vue';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
 import { updateCurrentAccountPartial } from '@/accounts.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = defineProps<{
 	announcement: Misskey.entities.Announcement;
@@ -51,6 +52,8 @@ const emit = defineEmits<{
 const rootEl = useTemplateRef('rootEl');
 const bottomEl = useTemplateRef('bottomEl');
 const modal = useTemplateRef('modal');
+
+const isTwitterUi = useIsTwitterUi();
 
 async function ok() {
 	if (props.announcement.needConfirmationToRead) {
@@ -128,6 +131,27 @@ onMounted(() => {
 	box-sizing: border-box;
 	background: var(--MI_THEME-panel);
 	border-radius: var(--MI-radius);
+
+	/* Twitter UI 表现变体：X 对话框面板（页脚毛玻璃改为实底 panel） */
+	&.twitter {
+		background: var(--twitter-panel);
+		color: var(--twitter-fg);
+		border-radius: var(--twitter-radius-large);
+
+		> .header {
+			font-size: 100%;
+
+			> .title {
+				font-size: 20px;
+			}
+		}
+
+		> .footer {
+			background: var(--twitter-panel);
+			-webkit-backdrop-filter: none;
+			backdrop-filter: none;
+		}
+	}
 }
 
 .header {
