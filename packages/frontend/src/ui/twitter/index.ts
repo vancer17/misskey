@@ -24,3 +24,4 @@ export { twitterUserErrorStateType } from './domain/index.js';
 export { default as TwitterPageState } from './components/TwitterPageState.vue';
 export { default as TwitterPageSkeleton } from './components/TwitterPageSkeleton.vue';
 export { default as TwitterUserResult } from './UserResult.vue';
+export { default as TwitterSettingsShell } from './SettingsShell.vue';
