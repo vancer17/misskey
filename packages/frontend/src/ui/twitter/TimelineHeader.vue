@@ -99,7 +99,7 @@ function onTabClick(tab: Tab, ev: PointerEvent) {
 	align-items: center;
 	justify-content: flex-start;
 	min-width: 0;
-	padding-left: 12px;
+	padding-left: var(--twitter-space-3);
 }
 
 .avatarLink {
@@ -132,9 +132,9 @@ function onTabClick(tab: Tab, ev: PointerEvent) {
 	gap: 6px;
 	min-width: 56px;
 	height: 100%;
-	padding: 0 12px;
+	padding: 0 var(--twitter-space-3);
 	color: var(--twitter-secondary-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	font-weight: 700;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -186,10 +186,10 @@ function onTabClick(tab: Tab, ev: PointerEvent) {
 
 .actions {
 	display: flex;
-	gap: 4px;
+	gap: var(--twitter-space-1);
 	justify-content: flex-end;
 	min-width: 0;
-	padding-right: 8px;
+	padding-right: var(--twitter-space-2);
 }
 
 .action {
@@ -215,7 +215,7 @@ function onTabClick(tab: Tab, ev: PointerEvent) {
 }
 
 .actionIcon {
-	font-size: 18px;
+	font-size: var(--twitter-font-size-title);
 }
 
 @media (prefers-reduced-motion: reduce) {

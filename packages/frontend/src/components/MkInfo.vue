@@ -61,7 +61,7 @@ function close() {
 /* Twitter UI 表现变体：X 信息条（nitter 为只读查看器无对应物，X-behavior 来源；13px 行高 1.3、accent/warning 轻底色，见 ADR-0001 覆盖层策略） */
 .twitter {
 	padding: 8px 12px;
-	font-size: 13px;
+	font-size: var(--twitter-font-size-meta);
 	line-height: 1.3;
 	background: color-mix(in srgb, var(--twitter-accent) 8%, transparent);
 	color: var(--twitter-fg);
