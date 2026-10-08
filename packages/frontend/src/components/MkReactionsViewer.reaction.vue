@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	ref="buttonEl"
 	v-ripple="canToggle"
 	class="_button"
-	:class="[$style.root, { [$style.reacted]: myReaction == reaction, [$style.canToggle]: canToggle, [$style.small]: prefer.s.reactionsDisplaySize === 'small', [$style.large]: prefer.s.reactionsDisplaySize === 'large' }]"
+	:class="[$style.root, { [$style.reacted]: myReaction == reaction, [$style.canToggle]: canToggle, [$style.small]: prefer.s.reactionsDisplaySize === 'small', [$style.large]: prefer.s.reactionsDisplaySize === 'large', [$style.twitter]: isTwitterUi }]"
 	@click="toggleReaction()"
 	@contextmenu.prevent.stop="menu"
 >
@@ -41,6 +41,7 @@ import { noteEvents } from '@/composables/use-note-capture.js';
 import { mute as muteEmoji, unmute as unmuteEmoji, checkMuted as isEmojiMuted } from '@/utility/emoji-mute.js';
 import { addToEmojiPalette } from '@/utility/emoji-palette.js';
 import { haptic } from '@/utility/haptic.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = defineProps<{
 	noteId: Misskey.entities.Note['id'];
@@ -58,6 +59,8 @@ const emit = defineEmits<{
 }>();
 
 const buttonEl = useTemplateRef('buttonEl');
+
+const isTwitterUi = useIsTwitterUi();
 
 const emojiName = computed(() => getEmojiNameFromReaction(props.reaction));
 
@@ -321,6 +324,62 @@ if (!mock) {
 
 		> .icon {
 			filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.5));
+		}
+	}
+
+	/* Twitter UI 表现变体：X 紧凑 reaction chip（nitter 无对应物，X-behavior 来源：pill 圆角 / 悬停灰阶 / 已选品牌浅底，见 ADR-0001） */
+	&.twitter {
+		height: 28px;
+		padding: 0 10px;
+		font-size: 14px;
+		border-radius: var(--twitter-radius-pill);
+
+		> .count {
+			font-size: 13px;
+			line-height: 28px;
+			color: var(--twitter-secondary-fg);
+		}
+
+		&.canToggle {
+			background: transparent;
+
+			&:hover {
+				background: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
+			}
+		}
+
+		&.reacted, &.reacted:hover {
+			background: color-mix(in srgb, var(--twitter-accent) 12%, transparent);
+			color: var(--twitter-accent);
+			box-shadow: none;
+
+			> .count {
+				color: var(--twitter-accent);
+			}
+
+			> .icon {
+				filter: none;
+			}
+		}
+
+		&.small {
+			height: 24px;
+			font-size: 13px;
+
+			> .count {
+				font-size: 12px;
+				line-height: 24px;
+			}
+		}
+
+		&.large {
+			height: 36px;
+			font-size: 18px;
+
+			> .count {
+				font-size: 14px;
+				line-height: 36px;
+			}
 		}
 	}
 }
