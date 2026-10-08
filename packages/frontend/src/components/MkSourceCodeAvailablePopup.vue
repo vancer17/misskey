@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div class="_panel _shadow" :class="$style.root">
+<div class="_panel _shadow" :class="[$style.root, { [$style.twitter]: isTwitterUi }]">
 	<div :class="$style.icon">
 		<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-open-source" width="40" height="40" viewBox="0 0 24 24" stroke-width="1" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
 			<path stroke="none" d="M0 0h24v24H0z" fill="none"/>
@@ -46,10 +46,13 @@ import { i18n } from '@/i18n.js';
 import { instance } from '@/instance.js';
 import { miLocalStorage } from '@/local-storage.js';
 import * as os from '@/os.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const emit = defineEmits<{
 	(ev: 'closed'): void;
 }>();
+
+const isTwitterUi = useIsTwitterUi();
 
 const zIndex = os.claimZIndex('low');
 
@@ -71,6 +74,32 @@ function close() {
 	width: calc(100% - (var(--MI-margin) * 2));
 	max-width: 500px;
 	display: flex;
+
+	/* Twitter UI 表现变体：X 底部通知卡（与 MkDonation 同构；投影经 overlay.scss 覆写） */
+	&.twitter {
+		background: var(--twitter-panel);
+		border: none;
+		border-radius: var(--twitter-radius-large);
+		color: var(--twitter-fg);
+
+		> .icon {
+			color: var(--twitter-accent);
+		}
+
+		> .main {
+			> .title {
+				font-size: 15px;
+			}
+
+			> .text {
+				color: var(--twitter-secondary-fg);
+			}
+		}
+
+		> .close:hover {
+			background: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
+		}
+	}
 }
 
 .icon {
