@@ -534,7 +534,7 @@ const keymap = {
 /* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
 .root.mobile {
 	.article {
-		padding: 12px;
+		padding: var(--twitter-space-3);
 	}
 
 	.header {
@@ -548,7 +548,7 @@ const keymap = {
 	}
 
 	.text {
-		font-size: 18px;
+		font-size: var(--twitter-font-size-title);
 	}
 
 	.people {
@@ -559,7 +559,7 @@ const keymap = {
 .contextLoading {
 	display: flex;
 	justify-content: center;
-	padding: 16px;
+	padding: var(--twitter-space-4);
 	border-bottom: solid 0.5px var(--twitter-border);
 }
 
@@ -567,14 +567,14 @@ const keymap = {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: 12px;
-	padding: 12px 16px;
+	gap: var(--twitter-space-3);
+	padding: var(--twitter-space-3) var(--twitter-space-4);
 	border-bottom: solid 0.5px var(--twitter-border);
 	color: var(--twitter-secondary-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 
 	button {
-		padding: 4px 12px;
+		padding: var(--twitter-space-1) var(--twitter-space-3);
 		border-radius: var(--twitter-radius-pill);
 		color: var(--twitter-accent);
 		font-weight: 700;
@@ -607,7 +607,7 @@ const keymap = {
 .muted {
 	display: block;
 	width: 100%;
-	padding: 16px;
+	padding: var(--twitter-space-4);
 	color: var(--twitter-secondary-fg);
 	border-bottom: solid 0.5px var(--twitter-border);
 	text-align: center;
@@ -620,7 +620,7 @@ const keymap = {
 .article {
 	position: relative;
 	min-width: 0;
-	padding: 16px;
+	padding: var(--twitter-space-4);
 	border-bottom: solid 0.5px var(--twitter-border);
 
 	&:focus-visible {
@@ -632,7 +632,7 @@ const keymap = {
 .header {
 	display: grid;
 	grid-template-columns: 48px minmax(0, 1fr) 36px;
-	gap: 12px;
+	gap: var(--twitter-space-3);
 	align-items: center;
 }
 
@@ -651,13 +651,13 @@ const keymap = {
 .nameRow {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: var(--twitter-space-1);
 }
 
 .name {
 	overflow: hidden;
 	color: var(--twitter-fg);
-	font-size: 15px;
+	font-size: var(--twitter-font-size-content);
 	font-weight: 800;
 	line-height: 1.25;
 	text-decoration: none;
@@ -671,7 +671,7 @@ const keymap = {
 
 .bot {
 	flex-shrink: 0;
-	padding: 0 4px;
+	padding: 0 var(--twitter-space-1);
 	border: solid 0.5px var(--twitter-border);
 	border-radius: var(--twitter-radius-small);
 	color: var(--twitter-secondary-fg);
@@ -692,7 +692,7 @@ const keymap = {
 .acct {
 	overflow: hidden;
 	color: var(--twitter-secondary-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -716,12 +716,12 @@ const keymap = {
 }
 
 .ticker {
-	margin-top: 8px;
+	margin-top: var(--twitter-space-2);
 }
 
 .content {
 	min-width: 0;
-	margin-top: 8px;
+	margin-top: var(--twitter-space-2);
 }
 
 .cw,
@@ -736,17 +736,17 @@ const keymap = {
 	display: flex;
 	align-items: baseline;
 	justify-content: space-between;
-	gap: 8px;
+	gap: var(--twitter-space-2);
 	margin: 0;
 }
 
 .replyContext {
 	display: flex;
 	align-items: center;
-	gap: 4px;
-	margin-bottom: 4px;
+	gap: var(--twitter-space-1);
+	margin-bottom: var(--twitter-space-1);
 	color: var(--twitter-secondary-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 
 	a {
 		color: var(--twitter-accent);
@@ -759,7 +759,7 @@ const keymap = {
 }
 
 .text {
-	font-size: 20px;
+	font-size: var(--twitter-font-size-heading);
 	line-height: 1.35;
 	white-space: pre-wrap;
 }
@@ -769,23 +769,23 @@ const keymap = {
 }
 
 .translation {
-	margin-top: 8px;
-	font-size: 15px;
+	margin-top: var(--twitter-space-2);
+	font-size: var(--twitter-font-size-content);
 }
 
 .media,
 .poll,
 .urlPreview {
-	margin-top: 12px;
+	margin-top: var(--twitter-space-3);
 }
 
 .channel {
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
+	gap: var(--twitter-space-1);
 	margin-top: 10px;
 	color: var(--twitter-accent);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	font-weight: 700;
 	text-decoration: none;
 
@@ -798,25 +798,25 @@ const keymap = {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
-	margin-top: 12px;
+	margin-top: var(--twitter-space-3);
 	color: var(--twitter-secondary-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 }
 
 .stats {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 20px;
-	padding: 12px 0;
+	padding: var(--twitter-space-3) 0;
 	border-bottom: solid 0.5px var(--twitter-border);
 }
 
 .stat {
 	display: inline-flex;
 	align-items: baseline;
-	gap: 4px;
+	gap: var(--twitter-space-1);
 	color: var(--twitter-secondary-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	transition: color var(--twitter-duration-fast) ease;
 
 	strong {
@@ -839,7 +839,7 @@ const keymap = {
 }
 
 .reactions {
-	margin-top: 8px;
+	margin-top: var(--twitter-space-2);
 }
 
 .results {
@@ -847,12 +847,12 @@ const keymap = {
 }
 
 .people {
-	padding: 12px 16px;
+	padding: var(--twitter-space-3) var(--twitter-space-4);
 }
 
 .person {
 	display: block;
-	margin-bottom: 8px;
+	margin-bottom: var(--twitter-space-2);
 	color: inherit;
 	text-decoration: none;
 }
@@ -860,19 +860,19 @@ const keymap = {
 .reactionTabs {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 8px;
+	gap: var(--twitter-space-2);
 	margin-bottom: 10px;
 }
 
 .reactionTab {
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
-	padding: 4px 8px;
+	gap: var(--twitter-space-1);
+	padding: var(--twitter-space-1) var(--twitter-space-2);
 	border: solid 0.5px var(--twitter-border);
 	border-radius: var(--twitter-radius-pill);
 	color: var(--twitter-secondary-fg);
-	font-size: 13px;
+	font-size: var(--twitter-font-size-meta);
 	transition:
 		background-color var(--twitter-duration-fast) ease,
 		border-color var(--twitter-duration-fast) ease,

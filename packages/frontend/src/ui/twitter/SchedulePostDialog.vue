@@ -293,12 +293,12 @@ function submit() {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 16px 16px 0;
+	padding: var(--twitter-space-4) var(--twitter-space-4) 0;
 }
 
 .title {
 	margin: 0;
-	font-size: 18px;
+	font-size: var(--twitter-font-size-title);
 	font-weight: 800;
 }
 
@@ -319,13 +319,13 @@ function submit() {
 .content {
 	display: grid;
 	gap: 20px;
-	padding: 0 16px;
+	padding: 0 var(--twitter-space-4);
 }
 
 .sectionTitle {
-	margin: 0 0 8px;
+	margin: 0 0 var(--twitter-space-2);
 	color: var(--twitter-secondary-fg);
-	font-size: 13px;
+	font-size: var(--twitter-font-size-meta);
 	font-weight: 700;
 }
 
@@ -333,12 +333,12 @@ function submit() {
 	display: grid;
 	grid-template-columns: 32px minmax(0, 1fr) 32px;
 	align-items: center;
-	margin-bottom: 8px;
+	margin-bottom: var(--twitter-space-2);
 }
 
 .monthTitle {
 	text-align: center;
-	font-size: 15px;
+	font-size: var(--twitter-font-size-content);
 	font-weight: 800;
 }
 
@@ -368,7 +368,7 @@ function submit() {
 	place-items: center;
 	height: 28px;
 	color: var(--twitter-secondary-fg);
-	font-size: 12px;
+	font-size: var(--twitter-font-size-caption);
 	font-weight: 700;
 }
 
@@ -380,7 +380,7 @@ function submit() {
 	max-height: 40px;
 	border-radius: var(--twitter-radius-pill);
 	color: var(--twitter-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	transition:
 		background-color var(--twitter-duration-fast) ease,
 		color var(--twitter-duration-fast) ease;
@@ -418,13 +418,13 @@ function submit() {
 	width: 72px;
 	height: 40px;
 	box-sizing: border-box;
-	padding: 0 12px;
+	padding: 0 var(--twitter-space-3);
 	border: solid 1px var(--twitter-border);
 	border-radius: var(--twitter-radius-medium);
 	background: var(--twitter-bg);
 	color: var(--twitter-fg);
 	font: inherit;
-	font-size: 16px;
+	font-size: var(--twitter-font-size-emphasis);
 	font-weight: 700;
 	text-align: center;
 	outline: none;
@@ -437,9 +437,9 @@ function submit() {
 
 .timezone,
 .error {
-	margin: 8px 0 0;
+	margin: var(--twitter-space-2) 0 0;
 	text-align: center;
-	font-size: 12px;
+	font-size: var(--twitter-font-size-caption);
 }
 
 .timezone {
@@ -453,16 +453,16 @@ function submit() {
 .footer {
 	display: flex;
 	justify-content: flex-end;
-	gap: 8px;
-	padding: 0 16px 16px;
+	gap: var(--twitter-space-2);
+	padding: 0 var(--twitter-space-4) var(--twitter-space-4);
 }
 
 .cancelButton,
 .submitButton {
 	height: 36px;
-	padding: 0 16px;
+	padding: 0 var(--twitter-space-4);
 	border-radius: var(--twitter-radius-pill);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	font-weight: 700;
 	transition:
 		background-color var(--twitter-duration-fast) ease,

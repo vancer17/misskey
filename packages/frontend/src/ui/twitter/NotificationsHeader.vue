@@ -120,13 +120,13 @@ function goBack() {
 }
 
 .back {
-	margin-left: 8px;
+	margin-left: var(--twitter-space-2);
 }
 
 .title {
 	min-width: 0;
 	margin: 0;
-	padding: 0 8px;
+	padding: 0 var(--twitter-space-2);
 	overflow: hidden;
 	color: var(--twitter-fg);
 	font-size: 17px;
@@ -138,9 +138,9 @@ function goBack() {
 
 .actions {
 	display: flex;
-	gap: 4px;
+	gap: var(--twitter-space-1);
 	justify-content: flex-end;
-	padding-right: 8px;
+	padding-right: var(--twitter-space-2);
 }
 
 .highlighted {
@@ -169,7 +169,7 @@ function goBack() {
 	height: 100%;
 	padding: 0 14px;
 	color: var(--twitter-secondary-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	font-weight: 700;
 	transition:
 		background-color var(--twitter-duration-fast) ease,
@@ -236,7 +236,7 @@ function goBack() {
 	.back {
 		width: 32px;
 		height: 32px;
-		margin-left: 4px;
+		margin-left: var(--twitter-space-1);
 	}
 
 	.tabs {
@@ -246,7 +246,7 @@ function goBack() {
 	.tab {
 		flex: 0 0 auto;
 		min-width: 64px;
-		padding: 0 12px;
+		padding: 0 var(--twitter-space-3);
 	}
 }
 </style>

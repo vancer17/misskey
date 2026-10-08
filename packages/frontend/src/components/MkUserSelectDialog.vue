@@ -248,7 +248,7 @@ onMounted(() => {
 
 	.user {
 		padding: 8px 16px;
-		font-size: 15px;
+		font-size: var(--twitter-font-size-content);
 
 		&:hover {
 			background: var(--twitter-hover);

@@ -68,7 +68,7 @@ defineProps<{
 	border: solid 0.5px var(--twitter-border);
 	border-radius: var(--twitter-radius-large);
 	color: var(--twitter-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	line-height: 1.4;
 	overflow: clip;
 	transition: background-color var(--twitter-duration-fast) ease;
@@ -86,9 +86,9 @@ defineProps<{
 .header {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: var(--twitter-space-1);
 	min-width: 0;
-	margin-bottom: 4px;
+	margin-bottom: var(--twitter-space-1);
 	color: var(--twitter-secondary-fg);
 	white-space: nowrap;
 }
@@ -128,7 +128,7 @@ defineProps<{
 	display: flex;
 	align-items: baseline;
 	justify-content: space-between;
-	gap: 8px;
+	gap: var(--twitter-space-2);
 }
 
 .body {
@@ -152,7 +152,7 @@ defineProps<{
 .meta {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: var(--twitter-space-1);
 	margin-top: 6px;
 	color: var(--twitter-secondary-fg);
 

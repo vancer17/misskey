@@ -2062,7 +2062,7 @@ html[data-color-scheme=light] .preview {
 	width: 36px;
 	height: 36px;
 	border-radius: var(--twitter-radius-pill, 999px);
-	font-size: 18px;
+	font-size: var(--twitter-font-size-title);
 	transition: background-color var(--twitter-duration-fast, 120ms) ease;
 
 	&:hover,
@@ -2105,7 +2105,7 @@ html[data-color-scheme=light] .preview {
 	border-radius: var(--twitter-radius-medium, 8px);
 	background: color-mix(in srgb, var(--twitter-accent, var(--MI_THEME-accent)) 10%, transparent);
 	color: var(--twitter-accent, var(--MI_THEME-accent));
-	font-size: 13px;
+	font-size: var(--twitter-font-size-meta);
 
 	span {
 		flex: 1;
@@ -2138,7 +2138,7 @@ html[data-color-scheme=light] .preview {
 	gap: 8px;
 	padding: 12px 16px 0;
 	color: var(--twitter-secondary-fg, color-mix(in srgb, var(--MI_THEME-fg) 65%, transparent));
-	font-size: 13px;
+	font-size: var(--twitter-font-size-meta);
 }
 
 .twitterVisibleUsers {
@@ -2265,7 +2265,7 @@ html[data-color-scheme=light] .preview {
 .twitterCw {
 	padding: 0 0 8px;
 	border-bottom: solid 0.5px var(--twitter-border, var(--MI_THEME-divider));
-	font-size: 15px;
+	font-size: var(--twitter-font-size-content);
 }
 
 .twitterCwTextCount,
@@ -2273,7 +2273,7 @@ html[data-color-scheme=light] .preview {
 	position: absolute;
 	top: 0;
 	right: 0;
-	font-size: 13px;
+	font-size: var(--twitter-font-size-meta);
 	color: var(--MI_THEME-warn);
 }
 
@@ -2313,7 +2313,7 @@ html[data-color-scheme=light] .preview {
 .twitterHashtags {
 	padding: 8px 0 0;
 	border-top: solid 0.5px var(--twitter-border, var(--MI_THEME-divider));
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 }
 
 .twitterUploader {
@@ -2406,7 +2406,7 @@ html[data-color-scheme=light] .preview {
 	padding: 0 10px;
 	border-radius: var(--twitter-radius-pill, 999px);
 	color: var(--twitter-accent, var(--MI_THEME-accent));
-	font-size: 13px;
+	font-size: var(--twitter-font-size-meta);
 	font-weight: 700;
 	transition: background-color var(--twitter-duration-fast, 120ms) ease;
 
@@ -2437,7 +2437,7 @@ html[data-color-scheme=light] .preview {
 	border-radius: var(--twitter-radius-pill, 999px);
 	background: var(--twitter-accent, var(--MI_THEME-accent));
 	color: var(--MI_THEME-fgOnAccent);
-	font-size: 15px;
+	font-size: var(--twitter-font-size-content);
 	font-weight: 700;
 	transition:
 		background-color var(--twitter-duration-fast, 120ms) ease,
@@ -2476,7 +2476,7 @@ html[data-color-scheme=light] .preview {
 	}
 
 	.twitterText {
-		font-size: 18px;
+		font-size: var(--twitter-font-size-title);
 	}
 
 	.twitterFooter {
