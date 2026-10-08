@@ -4,7 +4,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader :tabs="headerTabs" :actions="headerActions">
+<TwitterSettingsShell
+	v-if="isTwitterUi && currentPage?.route.name != null"
+	:title="twitterShellTitle"
+>
+	<NestedRouterView/>
+</TwitterSettingsShell>
+<PageWithHeader v-else :tabs="headerTabs" :actions="headerActions">
 	<div class="_spacer" style="--MI_SPACER-w: 900px; --MI_SPACER-min: 20px; --MI_SPACER-max: 32px;">
 		<div ref="el" class="vvcocwet" :class="{ wide: !narrow }">
 			<div class="body">
@@ -35,7 +41,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue';
+import { computed, inject, onActivated, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue';
 import type { PageMetadata } from '@/page.js';
 import type { SuperMenuDef } from '@/components/MkSuperMenu.vue';
 import { i18n } from '@/i18n.js';
@@ -52,6 +58,8 @@ import { store } from '@/store.js';
 import { signout } from '@/signout.js';
 import { genSearchIndexes } from '@/utility/inapp-search.js';
 import { enableStoragePersistence, getStoragePersistenceStatusRef, storagePersistenceSupported, skipStoragePersistence } from '@/utility/storage.js';
+import { DI } from '@/di.js';
+import { TwitterSettingsShell } from '@/ui/twitter/index.js';
 
 const searchIndex = await import('search-index:settings').then(({ searchIndexes }) => genSearchIndexes(searchIndexes));
 
@@ -67,6 +75,13 @@ const el = useTemplateRef('el');
 const childInfo = ref<null | PageMetadata>(null);
 
 const router = useRouter();
+
+/** 当前 UI 样式（由 Twitter Shell 注入；非 Twitter 场景回退 'default'）。 */
+const uiStyle = inject(DI.uiStyle, ref('default'));
+const isTwitterUi = computed(() => uiStyle.value === 'twitter');
+
+/** Twitter 设置子页壳标题：子页 definePage 元数据，缺失时回退“设置”。 */
+const twitterShellTitle = computed<string>(() => childInfo.value?.title ?? i18n.ts.settings);
 
 const narrow = ref(false);
 const NARROW_THRESHOLD = 600;
