@@ -102,7 +102,7 @@ const isTwitterUi = useIsTwitterUi();
 
 /* Twitter UI 表现变体：X 发帖预览（nitter tweet/_base.scss 地面真值：15px/1.3 正文与 48px 圆形头像；置于容器查询之后以固定头像阶梯） */
 .twitter {
-	font-size: 15px;
+	font-size: var(--twitter-font-size-content);
 	line-height: 1.3;
 	color: var(--twitter-fg);
 
@@ -114,7 +114,7 @@ const isTwitterUi = useIsTwitterUi();
 	}
 
 	.header {
-		font-size: 15px;
+		font-size: var(--twitter-font-size-content);
 		color: var(--twitter-fg);
 	}
 }

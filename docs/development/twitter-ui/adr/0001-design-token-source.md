@@ -32,10 +32,15 @@
 | 次要文字色 | `fg_faded` 精确值 | 修正为精确值 `#657786` / `#8899A6` | 原实现为 `color-mix(fg 57%)` 估值，本次修正为对齐 |
 | 覆盖层体系 | 无（无菜单 / 对话框 / tooltip） | X-behavior 来源 Token + 三层改造策略 | nitter 为只读查看器；覆盖层视觉只能取自 X 行为观察 |
 | 实例来源条（MkInstanceTicker） | 无（单实例查看器） | 中性 chip：panel 底 + hairline 边 + 次要文字色 | nitter/X 均无对应物；按 X 视觉语言派生，功能保留（远程帖可见来源实例），R-2 实施 |
+| 发帖完成动效（MkModal `send`） | 无 | 淡出 + 8px 下沉（180ms） | Misskey 原上飞 300px + 回弹曲线与 X 交互语言不符；X 发帖后对话框快速消退，R-4 实施 |
 
-## 暂缓项（防止悬空 Token，规范第 9 条）
+## 已落地的阶梯（原暂缓项，R-4 实施）
 
-- 字号与间距阶梯暂不预置：现存组件散布约 12 种字面量字号，其中混有图标尺寸（非排版字号）。阶梯 Token 将在组件替换时同步引入，只定义实际被消费的档位，避免无消费者的悬空定义。
+原暂缓原因：现存组件散布约 12 种字面量字号且混有图标尺寸，预置阶梯会产生无消费者悬空定义。R-4 落地方式：
+
+- **排版阶梯**：`--twitter-font-size-caption/meta/body/content/emphasis/title/heading/display`（12/13/14/15/16/18/20/24px），档位对应 nitter 真值（正文 15 / 全名 14 / 次要 13 / 辅助 12）。迁移策略为**值恒等替换**——只替换与档位同值的字面量，不调整任何渲染结果；存量非阶梯字面量（10/11/17/22px 与 32px 图标尺寸）在 P-19 基线建立前保留，待基线可 diff 验证后再做近邻档位收敛。
+- **间距阶梯**：`--twitter-space-1..4` 与 `--twitter-space-6`（4/8/12/16/32px；24px 暂无消费者，出现真实消费点后再入梯，规范第 9 条），仅迁移单值与全档位复合声明；nitter 实测例外值（5/6/10/14px 等）保留字面量并注明来源，属地面真值而非债务；calc / safe-area / 百分比构造不迁移。
+- **动效时长双投影**：JS 侧唯一数值权威为 `domain/motion.ts` 的 `TWITTER_MOTION_DURATIONS`（供 Vue `<Transition :duration>` 消费），CSS 侧经 `tokens.scss` 的 `--twitter-duration-*` 投影；两者为跨介质单权威对，修改时长必须同步两处，禁止组件内出现第三份时长字面量。X 录屏校准到位后仅需各改一处数值。
 
 ## 后果
 
@@ -43,3 +48,4 @@
 - `--twitter-duration-slow` 补齐定义（原 `NoteActions.vue` 消费但未定义，靠 fallback 兜底）；
 - `--twitter-warning` 收敛至 tokens.scss（原在 `NotificationIcon.vue` 局部重复定义）；
 - `use-twitter-layout.ts` 迁移至 `composables/` 并经模块索引 `ui/twitter/index.ts` 对外暴露，断点消费改走 `domain/layout.ts` 权威常量。
+- R-4 后 MkModal（modal/popup/drawer/send 四类过渡）与 MkTooltip 过渡在 twitter 语境消费 motion token；emoji 选择器内部（搜索框/分组头/网格项，审计 C4）挂 twitter 变体；涟漪禁用已于 R-3 完成（审计 E2）。

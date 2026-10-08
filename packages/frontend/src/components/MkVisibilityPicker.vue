@@ -107,7 +107,7 @@ function choose(visibility: typeof Misskey.noteVisibilities[number]): void {
 
 		.label {
 			padding: 8px 16px 4px;
-			font-size: 13px;
+			font-size: var(--twitter-font-size-meta);
 			opacity: 1;
 			color: var(--twitter-secondary-fg);
 		}
@@ -116,7 +116,7 @@ function choose(visibility: typeof Misskey.noteVisibilities[number]): void {
 			min-height: 52px;
 			align-items: center;
 			padding: 8px 16px;
-			font-size: 15px;
+			font-size: var(--twitter-font-size-content);
 
 			&:hover {
 				background: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
@@ -136,12 +136,12 @@ function choose(visibility: typeof Misskey.noteVisibilities[number]): void {
 		}
 
 		.itemTitle {
-			font-size: 15px;
+			font-size: var(--twitter-font-size-content);
 			font-weight: 700;
 		}
 
 		.itemDescription {
-			font-size: 13px;
+			font-size: var(--twitter-font-size-meta);
 			opacity: 1;
 			color: var(--twitter-secondary-fg);
 		}
@@ -152,11 +152,11 @@ function choose(visibility: typeof Misskey.noteVisibilities[number]): void {
 			.item {
 				min-height: 60px;
 				padding: 10px 16px;
-				font-size: 16px;
+				font-size: var(--twitter-font-size-emphasis);
 			}
 
 			.itemTitle {
-				font-size: 16px;
+				font-size: var(--twitter-font-size-emphasis);
 			}
 		}
 	}

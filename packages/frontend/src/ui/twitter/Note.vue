@@ -459,7 +459,7 @@ const keymap = {
 	min-width: 0;
 	background: var(--twitter-bg);
 	color: var(--twitter-fg);
-	font-size: 15px;
+	font-size: var(--twitter-font-size-content);
 	line-height: 1.4;
 	transition: background-color var(--twitter-duration-fast) ease;
 
@@ -488,7 +488,7 @@ const keymap = {
 		.article {
 			grid-template-columns: 40px minmax(0, 1fr);
 			gap: 10px;
-			padding: 12px;
+			padding: var(--twitter-space-3);
 		}
 
 		.avatar {
@@ -504,7 +504,7 @@ const keymap = {
 
 .embedded {
 	background: transparent;
-	font-size: 15px;
+	font-size: var(--twitter-font-size-content);
 }
 
 .context {
@@ -513,7 +513,7 @@ const keymap = {
 	gap: 6px;
 	padding: 10px 16px 0 calc(16px + 16px);
 	color: var(--twitter-secondary-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	font-weight: 700;
 }
 
@@ -536,7 +536,7 @@ const keymap = {
 }
 
 .deleted {
-	padding: 16px;
+	padding: var(--twitter-space-4);
 	color: var(--twitter-secondary-fg);
 	text-align: center;
 }
@@ -546,7 +546,7 @@ const keymap = {
 	align-items: center;
 	gap: 10px;
 	width: 100%;
-	padding: 12px 16px;
+	padding: var(--twitter-space-3) var(--twitter-space-4);
 	text-align: left;
 
 	&:hover {
@@ -571,8 +571,8 @@ const keymap = {
 	position: relative;
 	display: grid;
 	grid-template-columns: 44px minmax(0, 1fr);
-	gap: 12px;
-	padding: 12px 16px;
+	gap: var(--twitter-space-3);
+	padding: var(--twitter-space-3) var(--twitter-space-4);
 }
 
 .avatarColumn {
@@ -592,7 +592,7 @@ const keymap = {
 	width: 2px;
 	flex: 1;
 	min-height: 8px;
-	margin-top: 4px;
+	margin-top: var(--twitter-space-1);
 	border-radius: var(--twitter-radius-pill);
 	background: var(--twitter-border);
 }
@@ -602,16 +602,16 @@ const keymap = {
 }
 
 .ticker {
-	margin-top: 4px;
+	margin-top: var(--twitter-space-1);
 }
 
 .replyContext {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: var(--twitter-space-1);
 	margin-bottom: 2px;
 	color: var(--twitter-secondary-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 
 	a {
 		color: var(--twitter-accent);
@@ -632,7 +632,7 @@ const keymap = {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 8px;
+	gap: var(--twitter-space-2);
 	margin: 0 0 6px;
 }
 
@@ -652,7 +652,7 @@ const keymap = {
 }
 
 .translation {
-	margin-top: 8px;
+	margin-top: var(--twitter-space-2);
 	padding: 8px 10px;
 	border-radius: var(--twitter-radius-medium);
 	background: color-mix(in srgb, var(--twitter-fg) 5%, transparent);
@@ -671,15 +671,15 @@ const keymap = {
 
 .channel,
 .reactions {
-	margin-top: 8px;
+	margin-top: var(--twitter-space-2);
 }
 
 .channel {
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
+	gap: var(--twitter-space-1);
 	color: var(--twitter-accent);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	text-decoration: none;
 
 	&:hover {
@@ -727,7 +727,7 @@ const keymap = {
 }
 
 .showLessButton {
-	margin-top: 4px;
+	margin-top: var(--twitter-space-1);
 	border-top: solid 0.5px var(--twitter-border);
 }
 

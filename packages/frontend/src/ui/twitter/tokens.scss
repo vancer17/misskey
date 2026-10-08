@@ -70,6 +70,39 @@ body[data-ui='twitter'] {
 	--twitter-duration-slow: 240ms;
 	--twitter-ease: cubic-bezier(0.4, 0, 0.2, 1);
 
+	/* ——— 排版阶梯（ADR-0001 暂缓项于 R-4 落地；档位对应 nitter 真值：正文 15 /
+	   全名 14 / 次要 13 / 辅助 12，仅定义实际被消费档位；非阶梯字面量待
+	   P-19 基线后再做收敛，避免基线前引入视觉漂移） ——— */
+	/* 辅助文字：tooltip、计数徽标（nitter: font-size 12px 档） */
+	--twitter-font-size-caption: 12px;
+	/* 次要文字：时间、统计、菜单描述（nitter: 13px 档） */
+	--twitter-font-size-meta: 13px;
+	/* 正文与控件文字（nitter: fullname 14px 档） */
+	--twitter-font-size-body: 14px;
+	/* 帖子正文大字号（nitter: body 15px 档） */
+	--twitter-font-size-content: 15px;
+	/* 强调文字：对话框标题等 */
+	--twitter-font-size-emphasis: 16px;
+	/* 页面标题 */
+	--twitter-font-size-title: 18px;
+	/* 大标题 / 空状态主文案 */
+	--twitter-font-size-heading: 20px;
+	/* 展示型大字（登录页标题等） */
+	--twitter-font-size-display: 24px;
+
+	/* ——— 间距阶梯（主峰值档位；nitter 实测例外值（5/6/10px 等）在组件内
+	   保留字面量并注明来源，不强行并入阶梯） ——— */
+	/* 紧凑内距（nitter 细分行距档） */
+	--twitter-space-1: 4px;
+	/* 控件内距（nitter 常规内距档） */
+	--twitter-space-2: 8px;
+	/* 卡片内距（nitter tweet 内距档） */
+	--twitter-space-3: 12px;
+	/* 区块内距（nitter 面板横向内距档） */
+	--twitter-space-4: 16px;
+	/* 大组分隔 */
+	--twitter-space-6: 32px;
+
 	/* ——— 布局宽度（对齐 nitter timeline-container 600px 等度量） ——— */
 	/* 桌面侧栏宽度 */
 	--twitter-sidebar-width: 275px;

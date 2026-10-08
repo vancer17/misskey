@@ -35,7 +35,7 @@ defineProps<{
 .text {
 	display: -webkit-box;
 	overflow: hidden;
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	line-height: 1.35;
 	overflow-wrap: anywhere;
 	-webkit-box-orient: vertical;
@@ -43,8 +43,8 @@ defineProps<{
 }
 
 .files {
-	margin-left: 4px;
+	margin-left: var(--twitter-space-1);
 	color: var(--twitter-accent);
-	font-size: 13px;
+	font-size: var(--twitter-font-size-meta);
 }
 </style>

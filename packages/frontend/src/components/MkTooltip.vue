@@ -124,9 +124,20 @@ onUnmounted(() => {
 		border: none;
 		border-radius: var(--twitter-radius-pill);
 		padding: 6px 12px;
-		font-size: 12px;
+		font-size: var(--twitter-font-size-caption);
 		-webkit-backdrop-filter: none;
 		backdrop-filter: none;
 	}
+}
+
+/* Twitter UI 表现变体：X tooltip 动效（泄漏审计 E4：200ms 硬编码收敛为 motion token 快速档；微缩放 0.97 替换 Misskey 0.75 弹跳，X-behavior 来源） */
+.twitter.transition_tooltip_enterActive,
+.twitter.transition_tooltip_leaveActive {
+	transition: transform var(--twitter-duration-fast) var(--twitter-ease), opacity var(--twitter-duration-fast) var(--twitter-ease);
+}
+
+.twitter.transition_tooltip_enterFrom,
+.twitter.transition_tooltip_leaveTo {
+	transform: scale(0.97);
 }
 </style>

@@ -99,7 +99,7 @@ const iconClass = computed(() => {
 	width: 32px;
 	height: 32px;
 	border-radius: var(--twitter-radius-pill);
-	font-size: 16px;
+	font-size: var(--twitter-font-size-emphasis);
 }
 
 .tone_accent {

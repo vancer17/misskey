@@ -178,13 +178,13 @@ const vote = async (id: number) => {
 			padding: 3px 8px;
 			background: transparent;
 			border-radius: var(--twitter-radius-small);
-			font-size: 14px;
+			font-size: var(--twitter-font-size-body);
 		}
 	}
 
 	.info {
 		color: var(--twitter-secondary-fg);
-		font-size: 13px;
+		font-size: var(--twitter-font-size-meta);
 	}
 }
 </style>

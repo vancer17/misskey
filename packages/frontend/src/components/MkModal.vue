@@ -32,7 +32,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	})"
 	:duration="transitionDuration" appear @afterLeave="onClosed" @enter="emit('opening')" @afterEnter="onOpened"
 >
-	<div v-show="manualShowing != null ? manualShowing : showing" ref="modalRootEl" v-hotkey.global="keymap" :class="[$style.root, { [$style.drawer]: type === 'drawer', [$style.dialog]: type === 'dialog', [$style.popup]: type === 'popup' }]" :style="{ zIndex, pointerEvents: (manualShowing != null ? manualShowing : showing) ? 'auto' : 'none', '--transformOrigin': transformOrigin }">
+	<div v-show="manualShowing != null ? manualShowing : showing" ref="modalRootEl" v-hotkey.global="keymap" :class="[$style.root, { [$style.drawer]: type === 'drawer', [$style.dialog]: type === 'dialog', [$style.popup]: type === 'popup', [$style.twitter]: isTwitterUi }]" :style="{ zIndex, pointerEvents: (manualShowing != null ? manualShowing : showing) ? 'auto' : 'none', '--transformOrigin': transformOrigin }">
 		<div data-testid="bg" :data-test-is-transparent="isEnableBgTransparent" class="_modalBg" :class="[$style.bg, { [$style.bgTransparent]: isEnableBgTransparent }]" :style="{ zIndex }" @click="onBgClick" @mousedown="onBgClick" @contextmenu.prevent.stop="() => {}"></div>
 		<div ref="content" :class="[$style.content, { [$style.fixed]: fixed }]" :style="{ zIndex }" @click.self="onBgClick">
 			<slot :max-height="maxHeight" :type="type"></slot>
@@ -51,6 +51,7 @@ import { focusTrap } from '@/utility/focus-trap.js';
 import { focusParent } from '@/utility/focus.js';
 import { prefer } from '@/preferences.js';
 import { DI } from '@/di.js';
+import { useIsTwitterUi, TWITTER_MOTION_DURATIONS } from '@/ui/twitter/index.js';
 
 function getFixedContainer(el: Element | null): Element | null {
 	if (el == null || el.tagName === 'BODY') return null;
@@ -105,6 +106,7 @@ const modalRootEl = useTemplateRef('modalRootEl');
 const content = useTemplateRef('content');
 const zIndex = os.claimZIndex(props.zPriority);
 const useSendAnime = ref(false);
+const isTwitterUi = useIsTwitterUi();
 const type = computed<ModalTypes>(() => {
 	if (props.preferType === 'auto') {
 		if ((prefer.s.menuStyle === 'drawer') || (prefer.s.menuStyle === 'auto' && isTouchUsing && deviceKind === 'smartphone')) {
@@ -128,16 +130,27 @@ const transitionName = computed((() =>
 					: 'modal'
 		: ''
 ));
+// 过渡时长：twitter 语境消费 domain/motion.ts 权威时长（与 tokens.scss 的 CSS 投影同步）；默认语境维持 Misskey 既有节奏
 const transitionDuration = computed((() =>
-	transitionName.value === 'send'
-		? 400
-		: transitionName.value === 'modal-popup'
-			? 100
-			: transitionName.value === 'modal'
-				? 200
-				: transitionName.value === 'modal-drawer'
+	isTwitterUi.value
+		? transitionName.value === 'send'
+			? TWITTER_MOTION_DURATIONS.normal
+			: transitionName.value === 'modal-popup'
+				? TWITTER_MOTION_DURATIONS.fast
+				: transitionName.value === 'modal'
+					? TWITTER_MOTION_DURATIONS.normal
+					: transitionName.value === 'modal-drawer'
+						? TWITTER_MOTION_DURATIONS.slow
+						: 0
+		: transitionName.value === 'send'
+			? 400
+			: transitionName.value === 'modal-popup'
+				? 100
+				: transitionName.value === 'modal'
 					? 200
-					: 0
+					: transitionName.value === 'modal-drawer'
+						? 200
+						: 0
 ));
 
 let releaseFocusTrap: (() => void) | null = null;
@@ -512,6 +525,77 @@ defineExpose({
 		background: transparent;
 		-webkit-backdrop-filter: none;
 		backdrop-filter: none;
+	}
+}
+
+/* Twitter UI 表现变体：X 模态动效（nitter 为服务端渲染查看器无模态，X-behavior 来源；时长/曲线经 tokens.scss 与 domain/motion.ts 双投影同步，见 ADR-0001） */
+.twitter {
+	&.transition_modal_enterActive,
+	&.transition_modal_leaveActive {
+		> .bg {
+			transition: opacity var(--twitter-duration-normal) var(--twitter-ease) !important;
+		}
+
+		> .content {
+			transform-origin: var(--transformOrigin);
+			transition: opacity var(--twitter-duration-normal) var(--twitter-ease), transform var(--twitter-duration-normal) var(--twitter-ease) !important;
+		}
+	}
+
+	&.transition_modal_enterFrom,
+	&.transition_modal_leaveTo {
+		> .content {
+			transform: scale(0.96);
+		}
+	}
+
+	&.transition_modalPopup_enterActive,
+	&.transition_modalPopup_leaveActive {
+		> .bg {
+			transition: opacity var(--twitter-duration-fast) var(--twitter-ease) !important;
+		}
+
+		> .content {
+			transform-origin: var(--transformOrigin);
+			transition: opacity var(--twitter-duration-fast) var(--twitter-ease), transform var(--twitter-duration-fast) var(--twitter-ease) !important;
+		}
+	}
+
+	&.transition_modalPopup_enterFrom,
+	&.transition_modalPopup_leaveTo {
+		> .content {
+			transform: scale(0.97);
+		}
+	}
+
+	&.transition_modalDrawer_enterActive,
+	&.transition_modalDrawer_leaveActive {
+		> .bg {
+			transition: opacity var(--twitter-duration-slow) var(--twitter-ease) !important;
+		}
+
+		> .content {
+			transition: transform var(--twitter-duration-slow) var(--twitter-ease) !important;
+		}
+	}
+
+	&.transition_send_enterActive,
+	&.transition_send_leaveActive {
+		> .bg {
+			transition: opacity var(--twitter-duration-normal) var(--twitter-ease) !important;
+		}
+
+		> .content {
+			transform: translateY(0);
+			transition: opacity var(--twitter-duration-normal) var(--twitter-ease), transform var(--twitter-duration-normal) var(--twitter-ease) !important;
+		}
+	}
+
+	&.transition_send_enterFrom,
+	&.transition_send_leaveTo {
+		> .content {
+			transform: translateY(8px);
+		}
 	}
 }
 </style>

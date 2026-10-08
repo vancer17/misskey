@@ -51,10 +51,10 @@ defineProps<{
 .root {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
-	gap: 4px 12px;
+	gap: var(--twitter-space-1) var(--twitter-space-3);
 	align-items: start;
 	min-height: 60px;
-	padding: 12px 16px;
+	padding: var(--twitter-space-3) var(--twitter-space-4);
 	border-bottom: solid 0.5px var(--twitter-border);
 	transition: background-color var(--twitter-duration-fast) ease;
 
@@ -70,7 +70,7 @@ defineProps<{
 .identity {
 	display: grid;
 	grid-template-columns: 44px minmax(0, 1fr);
-	gap: 12px;
+	gap: var(--twitter-space-3);
 	align-items: center;
 	min-width: 0;
 	color: inherit;
@@ -91,7 +91,7 @@ defineProps<{
 .nameRow {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: var(--twitter-space-1);
 	min-width: 0;
 }
 
@@ -111,7 +111,7 @@ defineProps<{
 .acct {
 	overflow: hidden;
 	color: var(--twitter-secondary-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -120,7 +120,7 @@ defineProps<{
 	grid-column: 1;
 	min-width: 0;
 	color: var(--twitter-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	line-height: 1.4;
 }
 
@@ -144,7 +144,7 @@ defineProps<{
 /* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
 .root.mobile {
 	grid-template-columns: minmax(0, 1fr);
-	padding: 12px;
+	padding: var(--twitter-space-3);
 
 	.identity {
 		grid-template-columns: 40px minmax(0, 1fr);

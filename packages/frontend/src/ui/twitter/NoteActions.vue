@@ -105,10 +105,10 @@ const emit = defineEmits<{
 	gap: 6px;
 	min-width: 34px;
 	height: 32px;
-	padding: 0 8px;
+	padding: 0 var(--twitter-space-2);
 	border-radius: var(--twitter-radius-pill);
 	color: var(--twitter-secondary-fg);
-	font-size: 13px;
+	font-size: var(--twitter-font-size-meta);
 
 	/* 触控命中区：纵向扩展至最小触控目标（token 驱动），横向保守扩展避免相邻重叠 */
 	&::before {

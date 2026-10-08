@@ -124,7 +124,7 @@ const showContent = ref(false);
 
 /* Twitter UI 表现变体：X 目标帖内嵌（nitter quote.scss / .avatar.mini 地面真值：mini 头像 20px + margin-right 5px、14px 正文；容器卡铬由 MkPostForm twitterTargetNote 提供） */
 .twitter {
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	line-height: 1.3;
 	color: var(--twitter-fg);
 

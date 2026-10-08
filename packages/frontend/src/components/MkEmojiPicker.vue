@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div class="omfetrab" :class="['s' + size, 'w' + width, 'h' + height, { asDrawer, asWindow }]" :style="{ maxHeight: maxHeight ? maxHeight + 'px' : undefined }">
+<div class="omfetrab" :class="['s' + size, 'w' + width, 'h' + height, { asDrawer, asWindow, twitter: isTwitterUi }]" :style="{ maxHeight: maxHeight ? maxHeight + 'px' : undefined }">
 	<input
 		ref="searchEl"
 		:value="q"
@@ -142,6 +142,7 @@ import { checkReactionPermissions } from '@/utility/check-reaction-permissions.j
 import { prefer } from '@/preferences.js';
 import { useRouter } from '@/router.js';
 import { haptic } from '@/utility/haptic.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const router = useRouter();
 
@@ -161,6 +162,8 @@ const emit = defineEmits<{
 	(ev: 'chosen', v: string): void;
 	(ev: 'esc'): void;
 }>();
+
+const isTwitterUi = useIsTwitterUi();
 
 const searchEl = useTemplateRef('searchEl');
 const emojisEl = useTemplateRef('emojisEl');
@@ -795,6 +798,78 @@ defineExpose({
 
 				&:empty {
 					display: none;
+				}
+			}
+		}
+	}
+
+	/* Twitter UI 表现变体：X emoji 选择器内部（泄漏审计 C4；nitter 为只读查看器无对应物，
+	   X-behavior 来源。外铬圆角/底色经 MkEmojiPickerDialog 与 overlay.scss 处理，此处只管内部） */
+	&.twitter {
+		> .search {
+			padding: var(--twitter-space-2) 14px;
+			font-size: var(--twitter-font-size-body);
+			background: var(--twitter-hover);
+			color: var(--twitter-fg);
+			border-radius: var(--twitter-radius-pill);
+
+			&::placeholder {
+				color: var(--twitter-secondary-fg);
+			}
+
+			&:not(.filled) {
+				box-shadow: none;
+			}
+		}
+
+		> .emojis {
+			> .group {
+				&:not(.index) {
+					border-top: solid 0.5px var(--twitter-border);
+				}
+
+				> header {
+					/* 压过全局 _acrylic 毛玻璃观感，改为实底 + 次要文字色 */
+					background: var(--twitter-panel);
+					-webkit-backdrop-filter: none;
+					backdrop-filter: none;
+					color: var(--twitter-secondary-fg);
+					font-size: var(--twitter-font-size-meta);
+				}
+			}
+
+			::v-deep(section) {
+				> header {
+					/* 同上：分组头去 _acrylic 毛玻璃 */
+					background: var(--twitter-panel);
+					-webkit-backdrop-filter: none;
+					backdrop-filter: none;
+					color: var(--twitter-secondary-fg);
+					font-size: var(--twitter-font-size-meta);
+
+					&:hover {
+						color: var(--twitter-accent);
+					}
+				}
+
+				> .body {
+					> .item {
+						border-radius: var(--twitter-radius-small);
+
+						&:hover {
+							background: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
+						}
+
+						&:active {
+							/* 收敛 Misskey 的 accent 实底 + inset 阴影涟漪语言 */
+							background: color-mix(in srgb, var(--twitter-accent) 14%, transparent);
+							box-shadow: none;
+						}
+					}
+				}
+
+				&.result {
+					border-bottom: solid 0.5px var(--twitter-border);
 				}
 			}
 		}

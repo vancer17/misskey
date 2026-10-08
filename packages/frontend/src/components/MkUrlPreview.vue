@@ -429,7 +429,7 @@ onUnmounted(() => {
 			margin-bottom: 2px;
 
 			> .title {
-				font-size: 15px;
+				font-size: var(--twitter-font-size-content);
 				font-weight: 700;
 			}
 		}

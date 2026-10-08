@@ -45,17 +45,17 @@ defineProps<{
 .root {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: var(--twitter-space-2);
 	min-width: 0;
 	padding: 10px 16px 0 calc(16px + 16px);
 	color: var(--twitter-secondary-fg);
-	font-size: 14px;
+	font-size: var(--twitter-font-size-body);
 	font-weight: 700;
 	line-height: 20px;
 
 	/* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
 	&.mobile {
-		padding-right: 12px;
+		padding-right: var(--twitter-space-3);
 		padding-left: calc(12px + 16px);
 	}
 }
