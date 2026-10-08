@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div class="zmdxowus">
+<div class="zmdxowus" :class="{ twitter: isTwitterUi }">
 	<p v-if="choices.length < 2" class="caution">
 		<i class="ti ti-alert-triangle"></i>{{ i18n.ts._poll.noOnlyOneChoice }}
 	</p>
@@ -54,6 +54,7 @@ import { formatDateTimeString } from '@/utility/format-time-string.js';
 import { addTime } from '@/utility/time.js';
 import { i18n } from '@/i18n.js';
 import { useMkSelect } from '@/composables/use-mkselect.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 export type PollEditorModelValue = {
 	expiresAt: number | null;
@@ -68,6 +69,8 @@ const props = defineProps<{
 const emit = defineEmits<{
 	(ev: 'update:modelValue', v: PollEditorModelValue): void;
 }>();
+
+const isTwitterUi = useIsTwitterUi();
 
 const choices = ref(props.modelValue.choices);
 const multiple = ref(props.modelValue.multiple);
@@ -230,6 +233,27 @@ watch([choices, multiple, expiration, atDate, atTime, after, unit], () => emit('
 					}
 				}
 			}
+		}
+	}
+
+	/* Twitter UI 表现变体：X 投票编辑（nitter 为只读查看器无编辑器，X-behavior 来源；选项行距对齐 R-2 投票展示的 nitter 6px 节奏，警示色收敛至语义 token） */
+	&.twitter {
+		padding: 4px 0;
+
+		> .caution {
+			color: var(--twitter-danger);
+		}
+
+		> ul > li {
+			margin: 6px 0;
+		}
+
+		> .add {
+			margin: 6px 0;
+		}
+
+		> section {
+			margin-top: 12px;
 		}
 	}
 }

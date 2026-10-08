@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="$style.root" class="_gaps_s">
+<div :class="[$style.root, { [$style.twitter]: isTwitterUi }]" class="_gaps_s">
 	<div
 		v-for="displayItem in displayItems"
 		:key="displayItem.item.id"
@@ -59,10 +59,13 @@ import { isPreviewable, getType } from '@/utility/lightbox.js';
 import bytes from '@/filters/bytes.js';
 import * as os from '@/os.js';
 import type { Content } from '@/components/MkLightbox.item.vue';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = defineProps<{
 	items: UploaderItem[];
 }>();
+
+const isTwitterUi = useIsTwitterUi();
 
 const displayItems = computed(() => props.items.map(item => ({
 	item,
@@ -248,6 +251,67 @@ async function onThumbnailClick(item: UploaderItem, ev: PointerEvent) {
 		position: absolute;
 		top: 8px;
 		right: 8px;
+	}
+}
+
+/* Twitter UI 表现变体：X 上传行卡（nitter 为只读查看器无上传器，X-behavior 来源；hairline 行卡 + 底部 accent 进度条替换 Misskey 斜纹进度语言，见 ADR-0001） */
+.twitter {
+	.item {
+		background: var(--twitter-panel);
+		border: solid 1px var(--twitter-border);
+		border-radius: var(--twitter-radius-medium);
+
+		&::before {
+			top: auto;
+			bottom: 0;
+			height: 2px;
+			background: var(--twitter-accent);
+			transition: width var(--twitter-duration-normal) var(--twitter-ease), left var(--twitter-duration-normal) var(--twitter-ease);
+		}
+
+		&.itemWaiting {
+			&::after {
+				top: 0;
+				bottom: auto;
+				height: 2px;
+				background: color-mix(in srgb, var(--twitter-accent) 45%, transparent);
+				background-size: auto;
+				animation: none;
+			}
+		}
+
+		&.itemCompleted {
+			&::before {
+				left: 0;
+				width: 100%;
+				background: color-mix(in srgb, var(--twitter-accent) 40%, transparent);
+			}
+
+			.itemBody {
+				color: var(--twitter-accent);
+			}
+		}
+
+		&.itemFailed {
+			.itemBody {
+				color: var(--twitter-danger);
+			}
+		}
+	}
+
+	.itemThumbnail {
+		background-color: var(--twitter-hover);
+		border-radius: var(--twitter-radius-small);
+	}
+
+	.itemBody {
+		color: var(--twitter-fg);
+	}
+
+	.itemInfo {
+		opacity: 1;
+		color: var(--twitter-secondary-fg);
+		font-size: 13px;
 	}
 }
 </style>
