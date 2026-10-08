@@ -298,6 +298,8 @@ import MkMediaList from '@/components/MkMediaList.vue';
 import MkPoll from '@/components/MkPoll.vue';
 import MkReactionsViewer from '@/components/MkReactionsViewer.vue';
 import MkUrlPreview from '@/components/MkUrlPreview.vue';
+/* 递归自引用：纯转帖分支内嵌渲染转帖目标（script setup 文件名推断的自引用名是 Note，别名需显式导入） */
+import TwitterNote from './Note.vue';
 import TwitterNoteActions from './NoteActions.vue';
 import TwitterNoteHeader from './NoteHeader.vue';
 import TwitterNoteQuote from './NoteQuote.vue';

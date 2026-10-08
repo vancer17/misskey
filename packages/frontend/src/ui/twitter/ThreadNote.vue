@@ -131,6 +131,8 @@ import MkMediaList from '@/components/MkMediaList.vue';
 import TwitterNoteActions from './NoteActions.vue';
 import TwitterNoteHeader from './NoteHeader.vue';
 import TwitterNoteQuote from './NoteQuote.vue';
+/* 递归自引用：回复线程树逐层渲染子回复 */
+import TwitterThreadNote from './ThreadNote.vue';
 import { useTwitterLayout } from './composables/use-twitter-layout.js';
 
 const { isMobile } = useTwitterLayout();
