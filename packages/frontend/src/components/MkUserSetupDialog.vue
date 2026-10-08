@@ -20,8 +20,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<template v-else #header>{{ i18n.ts.initialAccountSetting }}</template>
 
 	<div style="overflow-x: clip;">
-		<div :class="$style.progressBar">
-			<div :class="$style.progressBarValue" :style="{ width: `${(page / 5) * 100}%` }"></div>
+			<div :class="$style.progressBar">
+				<div :class="[$style.progressBarValue, { [$style.twitter]: isTwitterUi }]" :style="{ width: `${(page / 5) * 100}%` }"></div>
 		</div>
 		<Transition
 			mode="out-in"
@@ -50,7 +50,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div class="_spacer" style="--MI_SPACER-min: 20px; --MI_SPACER-max: 28px;" :class="$style.pageMain">
 							<XProfile/>
 						</div>
-						<div :class="$style.pageFooter">
+						<div :class="[$style.pageFooter, { [$style.twitter]: isTwitterUi }]">
 							<div class="_buttonsCenter">
 								<MkButton rounded data-testid="user-setup-back" @click="page--"><i class="ti ti-arrow-left"></i> {{ i18n.ts.goBack }}</MkButton>
 								<MkButton primary rounded gradate data-testid="user-setup-continue" @click="page++">{{ i18n.ts.continue }} <i class="ti ti-arrow-right"></i></MkButton>
@@ -65,7 +65,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div class="_spacer" style="--MI_SPACER-min: 20px; --MI_SPACER-max: 28px;" :class="$style.pageMain">
 							<XPrivacy/>
 						</div>
-						<div :class="$style.pageFooter">
+						<div :class="[$style.pageFooter, { [$style.twitter]: isTwitterUi }]">
 							<div class="_buttonsCenter">
 								<MkButton rounded data-testid="user-setup-back" @click="page--"><i class="ti ti-arrow-left"></i> {{ i18n.ts.goBack }}</MkButton>
 								<MkButton primary rounded gradate data-testid="user-setup-continue" @click="page++">{{ i18n.ts.continue }} <i class="ti ti-arrow-right"></i></MkButton>
@@ -79,7 +79,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div class="_spacer" style="--MI_SPACER-min: 20px; --MI_SPACER-max: 28px;">
 						<XFollow/>
 					</div>
-					<div :class="$style.pageFooter">
+					<div :class="[$style.pageFooter, { [$style.twitter]: isTwitterUi }]">
 						<div class="_buttonsCenter">
 							<MkButton rounded data-testid="user-setup-back" @click="page--"><i class="ti ti-arrow-left"></i> {{ i18n.ts.goBack }}</MkButton>
 							<MkButton primary rounded gradate style="" data-testid="user-setup-continue" @click="page++">{{ i18n.ts.continue }} <i class="ti ti-arrow-right"></i></MkButton>
@@ -141,12 +141,15 @@ import { instance } from '@/instance.js';
 import MkPushNotificationAllowButton from '@/components/MkPushNotificationAllowButton.vue';
 import { store } from '@/store.js';
 import * as os from '@/os.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const emit = defineEmits<{
 	(ev: 'closed'): void;
 }>();
 
 const dialog = useTemplateRef('dialog');
+
+const isTwitterUi = useIsTwitterUi();
 
 const page = ref(store.s.accountSetupWizard);
 
@@ -224,6 +227,11 @@ async function later(later: boolean) {
 	height: 100%;
 	background: linear-gradient(90deg, var(--MI_THEME-buttonGradateA), var(--MI_THEME-buttonGradateB));
 	transition: all 0.5s cubic-bezier(0,.5,.5,1);
+
+	/* Twitter UI 表现变体：X 向导进度条为品牌实色（窗口外铬经 MkModalWindow 变体） */
+	&.twitter {
+		background: var(--twitter-accent);
+	}
 }
 
 .centerPage {
@@ -254,5 +262,13 @@ async function later(later: boolean) {
 	border-top: solid 0.5px var(--MI_THEME-divider);
 	-webkit-backdrop-filter: blur(15px);
 	backdrop-filter: blur(15px);
+
+	/* Twitter UI 表现变体：X 页脚为实底 panel + hairline 分隔 */
+	&.twitter {
+		border-top-color: var(--twitter-border);
+		background: var(--twitter-panel);
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
 }
 </style>

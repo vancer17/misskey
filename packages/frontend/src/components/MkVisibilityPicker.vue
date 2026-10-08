@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <MkModal ref="modal" v-slot="{ type }" :zPriority="'high'" :anchorElement="anchorElement" @click="modal?.close()" @closed="emit('closed')" @esc="modal?.close()">
-	<div class="_popup" :class="{ [$style.root]: true, [$style.asDrawer]: type === 'drawer' }">
+	<div class="_popup" :class="{ [$style.root]: true, [$style.asDrawer]: type === 'drawer', [$style.twitter]: isTwitterUi }">
 		<div :class="[$style.label, $style.item]">
 			{{ i18n.ts.visibility }}
 		</div>
@@ -46,8 +46,11 @@ import { nextTick, useTemplateRef, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkModal from '@/components/MkModal.vue';
 import { i18n } from '@/i18n.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const modal = useTemplateRef('modal');
+
+const isTwitterUi = useIsTwitterUi();
 
 const props = withDefaults(defineProps<{
 	currentVisibility: typeof Misskey.noteVisibilities[number];
@@ -95,6 +98,66 @@ function choose(visibility: typeof Misskey.noteVisibilities[number]): void {
 		.item {
 			font-size: 14px;
 			padding: 10px 24px;
+		}
+	}
+
+	/* Twitter UI 表现变体：X 可见性菜单行尺度（容器底色/投影经 overlay.scss 的 ._popup/._shadow 覆写） */
+	&.twitter {
+		min-width: 300px;
+
+		.label {
+			padding: 8px 16px 4px;
+			font-size: 13px;
+			opacity: 1;
+			color: var(--twitter-secondary-fg);
+		}
+
+		.item {
+			min-height: 52px;
+			align-items: center;
+			padding: 8px 16px;
+			font-size: 15px;
+
+			&:hover {
+				background: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
+			}
+
+			&:active {
+				background: color-mix(in srgb, var(--twitter-fg) 14%, transparent);
+			}
+
+			&.active {
+				color: var(--twitter-accent);
+			}
+		}
+
+		.icon {
+			margin-right: 12px;
+		}
+
+		.itemTitle {
+			font-size: 15px;
+			font-weight: 700;
+		}
+
+		.itemDescription {
+			font-size: 13px;
+			opacity: 1;
+			color: var(--twitter-secondary-fg);
+		}
+
+		&.asDrawer {
+			border-radius: var(--twitter-sheet-radius) var(--twitter-sheet-radius) 0 0;
+
+			.item {
+				min-height: 60px;
+				padding: 10px 16px;
+				font-size: 16px;
+			}
+
+			.itemTitle {
+				font-size: 16px;
+			}
 		}
 	}
 }

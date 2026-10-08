@@ -14,7 +14,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	@closed="emit('closed')"
 >
 	<template #header>{{ i18n.ts.selectUser }}</template>
-	<div>
+	<div :class="{ [$style.twitter]: isTwitterUi }">
 		<div :class="$style.form">
 			<MkInput v-if="computedLocalOnly" v-model="username" :autofocus="true" @update:modelValue="search">
 				<template #label>{{ i18n.ts.username }}</template>
@@ -72,6 +72,7 @@ import { store } from '@/store.js';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
 import { instance } from '@/instance.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const emit = defineEmits<{
 	(ev: 'ok', selected: Misskey.entities.UserDetailed): void;
@@ -95,6 +96,8 @@ const users = ref<Misskey.entities.UserLite[]>([]);
 const recentUsers = ref<Misskey.entities.UserDetailed[]>([]);
 const selected = ref<Misskey.entities.UserLite | null>(null);
 const dialogEl = useTemplateRef('dialogEl');
+
+const isTwitterUi = useIsTwitterUi();
 
 function search() {
 	if (username.value === '' && host.value === '') {
@@ -230,5 +233,41 @@ onMounted(() => {
 	opacity: 0.7;
 	text-align: center;
 	padding: 16px;
+}
+
+/* Twitter UI 表现变体：X 用户选择列表行（窗口外铬经 MkModalWindow 的 twitter 变体） */
+.twitter {
+	.form {
+		padding: 12px 16px;
+		border-bottom: 1px solid var(--twitter-border);
+	}
+
+	.users {
+		padding: 8px 0;
+	}
+
+	.user {
+		padding: 8px 16px;
+		font-size: 15px;
+
+		&:hover {
+			background: var(--twitter-hover);
+		}
+
+		&.selected {
+			background: color-mix(in srgb, var(--twitter-accent) 14%, transparent);
+			color: var(--twitter-fg);
+		}
+	}
+
+	.userAcct {
+		opacity: 1;
+		color: var(--twitter-secondary-fg);
+	}
+
+	.empty {
+		opacity: 1;
+		color: var(--twitter-secondary-fg);
+	}
 }
 </style>
