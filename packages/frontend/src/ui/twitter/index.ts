@@ -20,3 +20,7 @@ export { TWITTER_LAYOUT_BREAKPOINTS } from './domain/index.js';
 export { TWITTER_MOTION_DURATIONS } from './domain/index.js';
 export { TWITTER_PAGE_STATE_TYPES, TWITTER_PAGE_SKELETON_VARIANTS } from './domain/index.js';
 export type { TwitterPageStateType, TwitterPageSkeletonVariant } from './domain/index.js';
+export { twitterUserErrorStateType } from './domain/index.js';
+export { default as TwitterPageState } from './components/TwitterPageState.vue';
+export { default as TwitterPageSkeleton } from './components/TwitterPageSkeleton.vue';
+export { default as TwitterUserResult } from './UserResult.vue';
