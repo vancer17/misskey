@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="$style.root" :style="{ zIndex, top: `${y - 64}px`, left: `${x - 64}px` }">
+<div v-if="!isTwitterUi" :class="$style.root" :style="{ zIndex, top: `${y - 64}px`, left: `${x - 64}px` }">
 	<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
 		<circle fill="none" cx="64" cy="64" style="stroke: var(--MI_THEME-accent);">
 			<animate
@@ -64,6 +64,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { onMounted } from 'vue';
 import * as os from '@/os.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = withDefaults(defineProps<{
 	x: number;
@@ -76,6 +77,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
 	(ev: 'end'): void;
 }>();
+
+const isTwitterUi = useIsTwitterUi();
 
 const particles: {
 	size: number;
@@ -106,6 +109,12 @@ if (props.particle) {
 }
 
 onMounted(() => {
+	// Twitter UI 不使用涟漪交互语言（泄漏审计 D2/E2 裁决：禁用）：立即上抛结束事件交由调用方 dispose，v-ripple / likeOnly 反应 / 发帖 / emoji 四个触发链零改动
+	if (isTwitterUi.value) {
+		emit('end');
+		return;
+	}
+
 	window.setTimeout(() => {
 		emit('end');
 	}, 1100);

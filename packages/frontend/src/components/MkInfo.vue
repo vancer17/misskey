@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="[$style.root, { [$style.warn]: warn }]" class="_selectable">
+<div :class="[$style.root, { [$style.warn]: warn, [$style.twitter]: isTwitterUi }]" class="_selectable">
 	<i v-if="warn" class="ti ti-alert-triangle" :class="$style.i"></i>
 	<i v-else class="ti ti-info-circle" :class="$style.i"></i>
 	<div><slot></slot></div>
@@ -14,11 +14,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { } from 'vue';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = defineProps<{
 	warn?: boolean;
 	closable?: boolean;
 }>();
+
+const isTwitterUi = useIsTwitterUi();
 
 const emit = defineEmits<{
 	(ev: 'close'): void;
@@ -53,5 +56,27 @@ function close() {
 .button {
 	margin-left: auto;
 	padding: 4px;
+}
+
+/* Twitter UI 表现变体：X 信息条（nitter 为只读查看器无对应物，X-behavior 来源；13px 行高 1.3、accent/warning 轻底色，见 ADR-0001 覆盖层策略） */
+.twitter {
+	padding: 8px 12px;
+	font-size: 13px;
+	line-height: 1.3;
+	background: color-mix(in srgb, var(--twitter-accent) 8%, transparent);
+	color: var(--twitter-fg);
+	border-radius: var(--twitter-radius-medium);
+
+	.i {
+		color: var(--twitter-accent);
+	}
+
+	&.warn {
+		background: color-mix(in srgb, var(--twitter-warning) 10%, transparent);
+
+		.i {
+			color: var(--twitter-warning);
+		}
+	}
 }
 </style>
