@@ -14,3 +14,4 @@ export { TWITTER_LAYOUT_BREAKPOINTS } from './layout.js';
 export { TWITTER_MOTION_DURATIONS } from './motion.js';
 export { TWITTER_PAGE_STATE_TYPES, TWITTER_PAGE_SKELETON_VARIANTS } from './page-state.js';
 export type { TwitterPageStateType, TwitterPageSkeletonVariant } from './page-state.js';
+export { twitterUserErrorStateType } from './user-state.js';

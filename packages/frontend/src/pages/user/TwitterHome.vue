@@ -168,7 +168,8 @@ import MkRemoteCaution from '@/components/MkRemoteCaution.vue';
 import MkAccountMoved from '@/components/MkAccountMoved.vue';
 import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
 import TwitterPageSkeleton from '@/ui/twitter/components/TwitterPageSkeleton.vue';
-import type { TwitterPageStateType } from '@/ui/twitter/domain/page-state.js';
+import { twitterUserErrorStateType } from '@/ui/twitter/index.js';
+import type { TwitterPageStateType } from '@/ui/twitter/index.js';
 import TwitterUserTimeline from './TwitterUserTimeline.vue';
 import number from '@/filters/number.js';
 import { dateString } from '@/filters/date.js';
@@ -192,19 +193,8 @@ const emit = defineEmits<{
 	(ev: 'retry'): void;
 }>();
 
-/**
- * 判定取用户错误是否为"用户不存在"（404 语义）。
- *
- * @param err users/show 返回的错误对象
- * @returns 用户不存在时返回 true（呈现 notFound 终态，不提供重试）
- */
-function isNoSuchUserError(err: unknown): boolean {
-	const maybeApiError = err as { id?: unknown } | null | undefined;
-	return maybeApiError?.id === '4362f8dc-731f-4ad8-a694-be5a88922a24';
-}
-
-/** Twitter UI 终态派生：实体不存在 → notFound，其余错误 → error（可重试）。 */
-const errorStateType = computed<TwitterPageStateType>(() => isNoSuchUserError(props.error) ? 'notFound' : 'error');
+/** Twitter UI 终态派生：实体不存在 → notFound，其余错误 → error（可重试）。权威派生见 domain/user-state.ts。 */
+const errorStateType = computed<TwitterPageStateType>(() => twitterUserErrorStateType(props.error));
 
 const router = useRouter();
 const bannerStyle = computed(() => {
