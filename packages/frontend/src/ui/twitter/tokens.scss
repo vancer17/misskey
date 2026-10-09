@@ -61,6 +61,8 @@ body[data-ui='twitter'] {
 	/* ——— 圆角（有意偏离 nitter 的 0 圆角面板，取向现代 X，见 ADR-0001） ——— */
 	--twitter-radius-small: 4px;
 	--twitter-radius-medium: 8px;
+	/* 嵌入卡圆角（nitter 地面真值：quote / card / community-note / unavailable-box 均为 10px，见 port-fidelity-audit T-5） */
+	--twitter-radius-embed: 10px;
 	--twitter-radius-large: 16px;
 	--twitter-radius-pill: 999px;
 
@@ -104,6 +106,8 @@ body[data-ui='twitter'] {
 	--twitter-space-6: 32px;
 
 	/* ——— 布局宽度（对齐 nitter timeline-container 600px 等度量） ——— */
+	/* 页面返回头高度（nitter 地面真值：navbar 高 50px；PF-1 统一权威，规范第 10 条） */
+	--twitter-header-height: 50px;
 	/* 桌面侧栏宽度 */
 	--twitter-sidebar-width: 275px;
 	/* 窄视口图标态侧栏宽度 */

@@ -825,7 +825,7 @@ defineExpose({
 		> .emojis {
 			> .group {
 				&:not(.index) {
-					border-top: solid 0.5px var(--twitter-border);
+					border-top: solid 1px var(--twitter-border);
 				}
 
 				> header {
@@ -869,7 +869,7 @@ defineExpose({
 				}
 
 				&.result {
-					border-bottom: solid 0.5px var(--twitter-border);
+					border-bottom: solid 1px var(--twitter-border);
 				}
 			}
 		}

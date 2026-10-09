@@ -65,11 +65,14 @@ defineProps<{
 	min-width: 0;
 	margin-top: 10px;
 	padding: 10px 12px;
-	border: solid 0.5px var(--twitter-border);
-	border-radius: var(--twitter-radius-large);
+	/* nitter 地面真值：quote 边框 1px（quote.scss，PF-2 N-4 裁决：对齐） */
+	border: solid 1px var(--twitter-border);
+	/* nitter 地面真值：quote 圆角 10px（quote.scss，PF-1 E-1） */
+	border-radius: var(--twitter-radius-embed);
 	color: var(--twitter-fg);
 	font-size: var(--twitter-font-size-body);
-	line-height: 1.4;
+	/* nitter 地面真值：行高 1.3（PF-2 N-3 裁决：对齐） */
+	line-height: 1.3;
 	overflow: clip;
 	transition: background-color var(--twitter-duration-fast) ease;
 
