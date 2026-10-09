@@ -13,14 +13,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			{{ i18n.ts._timelineDescription[src] }}
 		</MkTip>
 		<MkPostForm
-			v-if="$i != null && (isTwitterUi || prefer.r.showFixedPostForm.value)"
-			:class="[
-				isTwitterUi ? undefined : '_panel',
-				$style.postForm,
-				{ [$style.twitterPostForm]: isTwitterUi },
-			]"
+			v-if="$i != null && !isTwitterUi && prefer.r.showFixedPostForm.value"
+			:class="['_panel', $style.postForm]"
 			fixed
-			:style="isTwitterUi ? undefined : { marginBottom: 'var(--MI-margin)' }"
+			:style="{ marginBottom: 'var(--MI-margin)' }"
 		/>
 		<MkStreamingNotesTimeline
 			ref="tlComponent"
@@ -257,14 +253,19 @@ const headerActions = computed<PageHeaderItem[]>(() => {
 				icon: 'ti ti-photo',
 				text: i18n.ts.fileAttachedOnly,
 				ref: onlyFiles,
-				disabled: isBasicTimeline(src.value) && hasWithReplies(src.value) ? withReplies : false,
-			}, {
-				type: 'divider',
-			}, {
-				type: 'switch',
-				text: i18n.ts.showFixedPostForm,
-				ref: showFixedPostForm,
+					disabled: isBasicTimeline(src.value) && hasWithReplies(src.value) ? withReplies : false,
 			});
+
+			// twitter UI 无内联发帖表单（发帖入口为侧栏按钮 / FAB），该开关仅对 default UI 有效，避免展示无效开关
+			if (!isTwitterUi.value) {
+				menuItems.push({
+					type: 'divider',
+				}, {
+					type: 'switch',
+					text: i18n.ts.showFixedPostForm,
+					ref: showFixedPostForm,
+				});
+			}
 
 			os.popupMenu(menuItems, ev.currentTarget ?? ev.target);
 		},
@@ -383,9 +384,4 @@ definePage(() => ({
 	overflow: visible;
 }
 
-.twitterPostForm {
-	margin: 0;
-	border-radius: 0;
-	border-bottom: solid 1px var(--twitter-border);
-}
 </style>
