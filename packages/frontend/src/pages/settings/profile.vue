@@ -8,35 +8,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div
 		:class="isTwitterUi ? [$style.twitterRoot, { [$style.mobile]: isMobile }] : '_gaps_m'"
 	>
-		<!-- 身份块：Twitter 分支为 X 式编辑器布局（X-behavior 来源，nitter 无对应物）；legacy 分支保持原面板 -->
+		<!-- 身份块：Twitter 分支还原 nitter profile 卡惯例（banner 3:1 + 卡身 12px + 头像 ring 入流，
+			无控件叠压头像 / banner；变更入口为按钮行，nitter 无编辑器对应物故复用既有 MkButton） -->
 		<section v-if="isTwitterUi" :class="[$style.twitterCard, $style.twitterIdentityCard]">
-			<button
-				:class="$style.twitterBanner"
-				class="_button"
-				type="button"
-				:aria-label="i18n.ts._profile.changeBanner"
-				:style="bannerStyle"
-				@click="changeBanner"
-			>
-				<span :class="$style.twitterCameraBadge" aria-hidden="true"><i class="ti ti-camera"></i></span>
-			</button>
-			<div :class="$style.twitterAvatarRow">
-				<div :class="$style.twitterAvatarWrap">
-					<!-- 头像本体不绑定点击（span 无键盘可达性）；变更入口统一走右下相机角标按钮 -->
-					<MkAvatar :class="$style.twitterAvatar" :user="$i" forceShowDecoration/>
-					<button
-						:class="[$style.twitterCameraBadge, $style.twitterAvatarCamera]"
-						class="_button"
-						type="button"
-						:aria-label="i18n.ts._profile.changeAvatar"
-						@click="changeAvatar"
-					>
-						<i class="ti ti-camera" aria-hidden="true"></i>
-					</button>
+			<div :class="$style.twitterBanner" :style="bannerStyle" role="presentation"></div>
+			<div :class="$style.twitterIdentityBody">
+				<MkAvatar :class="$style.twitterAvatar" :user="$i" forceShowDecoration/>
+				<div :class="$style.twitterIdentityButtons">
+					<MkButton primary rounded @click="changeBanner">{{ i18n.ts._profile.changeBanner }}</MkButton>
+					<MkButton primary rounded @click="changeAvatar">{{ i18n.ts._profile.changeAvatar }}</MkButton>
+					<MkButton rounded type="routerLink" to="/settings/avatar-decoration">{{ i18n.ts.decorate }} <i class="ti ti-sparkles"></i></MkButton>
 				</div>
-			</div>
-			<div :class="$style.twitterIdentityActions">
-				<MkButton rounded type="routerLink" to="/settings/avatar-decoration">{{ i18n.ts.decorate }} <i class="ti ti-sparkles"></i></MkButton>
 			</div>
 		</section>
 		<div v-else class="_panel">
@@ -507,8 +489,9 @@ definePage(() => ({
 }
 
 /* ---- Twitter 分支（P-11，Core）----
- * 卡片：twitter token 面板 + hairline；编辑器布局为 X-behavior 来源
- *（nitter 为只读查看器，无资料编辑器对应物）。 */
+ * 卡片：twitter token 面板 + hairline。身份块还原 nitter profile 卡惯例：
+ * .profile-banner（3:1、bg 回退、下缘 4px）+ .profile-card（padding 12px、
+ * 头像 ring 4px 入流、无控件叠压）；nitter 无资料编辑器，变更按钮复用 MkButton。 */
 .twitterRoot {
 	display: grid;
 	gap: var(--twitter-space-4);
@@ -519,12 +502,8 @@ definePage(() => ({
 		padding: var(--twitter-space-3);
 
 		.twitterAvatar {
-			width: 80px;
-			height: 80px;
-		}
-
-		.twitterAvatarRow {
-			margin-top: -32px;
+			/* nitter 移动 ring 收窄为 2px（profile/card.scss @media 700px） */
+			border-width: 2px;
 		}
 	}
 }
@@ -545,73 +524,40 @@ definePage(() => ({
 	overflow: clip;
 }
 
+.twitterIdentityBody {
+	display: grid;
+	justify-items: center;
+	gap: var(--twitter-space-3);
+	padding: var(--twitter-space-3);
+}
+
 .twitterBanner {
 	position: relative;
 	display: block;
 	width: 100%;
 	aspect-ratio: 3 / 1;
 	max-height: 200px;
+	margin-bottom: var(--twitter-space-1);
 	background-color: color-mix(in srgb, var(--twitter-fg) 10%, var(--twitter-bg));
 	background-position: center;
 	background-size: cover;
-
-	&:focus-visible {
-		outline: 2px solid var(--twitter-accent);
-		outline-offset: -2px;
-	}
 }
 
-.twitterAvatarRow {
-	margin-top: -40px;
-	padding: 0 var(--twitter-space-4);
+.twitterIdentityButtons {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: var(--twitter-space-2);
 }
 
-.twitterAvatarWrap {
-	position: relative;
-	display: inline-block;
-}
-
+/* 头像：入流不叠压；ring 与 TwitterHome 同一 token 化惯例（nitter
+ * .profile-card-avatar：ring 4px，移动 2px）。容器不加不透明底色——
+ * nitter 的底色语义在 img 本体，此处由 MkAvatar 自身占位层承担；
+ * 容器底色会把图片层未绘制状态伪装成灰色实心头像 */
 .twitterAvatar {
 	display: block;
-	width: 96px;
-	height: 96px;
-}
-
-/* 相机角标：X-behavior；复用覆盖层遮罩 token 保证任意 banner 上的对比度 */
-.twitterCameraBadge {
-	position: absolute;
-	right: var(--twitter-space-3);
-	bottom: var(--twitter-space-3);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 32px;
-	height: 32px;
-	border-radius: var(--twitter-radius-pill);
-	background: var(--twitter-overlay-backdrop);
-	color: var(--twitter-fg-on-accent);
-	font-size: 16px;
-	transition: background-color var(--twitter-duration-fast) ease;
-
-	&:hover {
-		background: color-mix(in srgb, var(--twitter-fg) 35%, var(--twitter-overlay-backdrop));
-	}
-
-	&:focus-visible {
-		outline: 2px solid var(--twitter-accent);
-		outline-offset: 2px;
-	}
-}
-
-/* 头像角标：贴头像右下角 */
-.twitterAvatarCamera {
-	right: 0;
-	bottom: 0;
-}
-
-.twitterIdentityActions {
-	display: flex;
-	justify-content: center;
-	padding-bottom: var(--twitter-space-4);
+	width: 80px;
+	height: 80px;
+	border: solid 4px var(--twitter-bg);
 }
 </style>
