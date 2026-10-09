@@ -90,6 +90,8 @@ defineProps<{
 .name {
 	min-width: 0;
 	overflow: hidden;
+	/* nitter 地面真值：fullname 14px / 700（PF-2 N-5 裁决：对齐） */
+	font-size: var(--twitter-font-size-body);
 	font-weight: 700;
 	color: var(--twitter-fg);
 	text-decoration: none;
@@ -104,7 +106,7 @@ defineProps<{
 .bot {
 	flex-shrink: 0;
 	padding: 0 var(--twitter-space-1);
-	border: solid 0.5px var(--twitter-border);
+	border: solid 1px var(--twitter-border);
 	border-radius: var(--twitter-radius-small);
 	color: var(--twitter-secondary-fg);
 	font-size: 11px;
@@ -128,7 +130,8 @@ defineProps<{
 	gap: var(--twitter-space-1);
 	min-width: 0;
 	color: var(--twitter-secondary-fg);
-	font-size: var(--twitter-font-size-body);
+	/* nitter 地面真值：username / 日期继承 body 15px（PF-2 N-5 裁决：对齐） */
+	font-size: var(--twitter-font-size-content);
 	white-space: nowrap;
 }
 
