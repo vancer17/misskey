@@ -210,7 +210,7 @@ onUnmounted(() => {
 
 	/* Twitter UI 表现变体：播放器容器与链接卡同圆角体系 */
 	&.twitter {
-		border-radius: var(--twitter-radius-large);
+		border-radius: var(--twitter-radius-embed);
 		overflow: clip;
 	}
 }
@@ -403,7 +403,8 @@ onUnmounted(() => {
    置于容器查询之后，确保窄容器下 compact 的 56px 收缩分支（同优先级）不会与 98px 偏移产生错位。 */
 .link.twitter {
 	border: solid 1px var(--twitter-border);
-	border-radius: var(--twitter-radius-large);
+	/* nitter 地面真值：card 圆角 10px（card.scss，PF-1 E-2） */
+	border-radius: var(--twitter-radius-embed);
 	background: var(--twitter-panel);
 	color: var(--twitter-fg);
 	box-shadow: none;

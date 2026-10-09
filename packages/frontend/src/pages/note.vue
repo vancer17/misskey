@@ -259,7 +259,7 @@ definePage(() => ({
 }
 
 .twitterContext {
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .twitterMain {
@@ -271,7 +271,7 @@ definePage(() => ({
 	display: flex;
 	justify-content: center;
 	padding: 10px 16px;
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .twitterDetail {
@@ -280,7 +280,7 @@ definePage(() => ({
 
 .twitterClips {
 	min-width: 0;
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 
 	> div:last-child {
 		padding-bottom: 16px;

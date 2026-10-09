@@ -188,8 +188,8 @@ function onContextmenu(ev: PointerEvent) {
 	flex-direction: column;
 	min-width: 0;
 	min-height: 0;
-	border-right: solid 0.5px var(--twitter-border);
-	border-left: solid 0.5px var(--twitter-border);
+	border-right: solid 1px var(--twitter-border);
+	border-left: solid 1px var(--twitter-border);
 	background: var(--twitter-bg);
 }
 
@@ -216,7 +216,7 @@ function onContextmenu(ev: PointerEvent) {
 .rightRail {
 	min-width: 0;
 	min-height: 0;
-	border-right: solid 0.5px var(--twitter-border);
+	border-right: solid 1px var(--twitter-border);
 }
 
 @media (prefers-reduced-motion: reduce) {

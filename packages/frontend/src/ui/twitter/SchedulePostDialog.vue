@@ -284,7 +284,7 @@ function submit() {
 	padding: 0;
 	background: var(--twitter-bg);
 	color: var(--twitter-fg);
-	border: solid 0.5px var(--twitter-border);
+	border: solid 1px var(--twitter-border);
 	border-radius: var(--twitter-radius-large);
 	box-shadow: 0 8px 32px color-mix(in srgb, var(--twitter-fg) 28%, transparent);
 }
