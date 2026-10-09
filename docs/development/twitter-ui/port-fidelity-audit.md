@@ -126,7 +126,7 @@ S-1 裁决建议：三栏 Shell 是 phase-1 P-00 的产品决策（总表原文"
 | --- | --- | --- | --- | --- | --- |
 | O-1 | 通知页 / 行 / 图标 | 无（只读查看器，无通知域） | X-behavior（P-06 PR 记录） | ✅ | C |
 | O-2 | 骨架屏 / 终态件（P-09） | 无 | X-behavior（ADR-0001 决策 6） | ✅ | C |
-| O-3 | Composer 全链（P-05 / R-3） | 无（无发帖能力） | X-behavior（PR 记录） | ✅ | C |
+| O-3 | Composer 全链（P-05 / R-3） | 无（无发帖能力） | X-behavior（PR 记录）。**产品决策（2026-10-09）**：twitter UI 时间线不设内联发帖表单（X 桌面行为不予采纳，方向与 nitter 一致）；发帖入口 = 桌面侧栏「ノート」按钮 + 移动 FAB；`showFixedPostForm` 偏好开关在 twitter UI 菜单中隐藏（default UI 不受影响） | ✅ 已裁决 | C |
 | O-4 | 菜单 / 对话框 / tooltip / emoji 内部（P-08 / R-1 / R-4） | 无（服务端渲染查看器，检索范围：全部 sass/ 无 overlay 体系） | X-behavior token 组（ADR-0001 决策 5） | ✅ | C |
 | O-5 | 17px 字面量档 | nitter 无 17px 档位（14/15/16/18/20） | back/标题 icon 17px 散布 5 处（NotificationsHeader / SettingsShell / NoteDetailShell / TwitterTag / TwitterFollowList）——R-4 阶梯外遗留 | ⚠️ | C→收敛候选（ADR-0001 暂缓条款允许，登记待 P-19 后收敛） |
 
