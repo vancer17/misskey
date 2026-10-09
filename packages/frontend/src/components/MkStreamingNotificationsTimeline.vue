@@ -348,7 +348,7 @@ defineExpose({
 	justify-content: center;
 	padding: 8px 0;
 	background: var(--twitter-bg);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .twitterNotifications {

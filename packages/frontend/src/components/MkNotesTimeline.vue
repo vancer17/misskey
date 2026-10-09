@@ -130,7 +130,7 @@ defineExpose({
 
 .twitterAd {
 	padding: 8px;
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .date {
