@@ -2052,7 +2052,7 @@ html[data-color-scheme=light] .preview {
 	align-items: center;
 	min-height: 48px;
 	padding: 0 8px;
-	border-bottom: solid 0.5px var(--twitter-border, var(--MI_THEME-divider));
+	border-bottom: solid 1px var(--twitter-border, var(--MI_THEME-divider));
 }
 
 .twitterCancelButton {
@@ -2078,7 +2078,7 @@ html[data-color-scheme=light] .preview {
 
 .twitterContext {
 	padding: 12px 16px 0;
-	border-bottom: solid 0.5px var(--twitter-border, var(--MI_THEME-divider));
+	border-bottom: solid 1px var(--twitter-border, var(--MI_THEME-divider));
 }
 
 .twitterTargetNote {
@@ -2092,7 +2092,7 @@ html[data-color-scheme=light] .preview {
 
 .twitterQuoteTarget {
 	margin-top: 8px;
-	border: solid 0.5px var(--twitter-border, var(--MI_THEME-divider));
+	border: solid 1px var(--twitter-border, var(--MI_THEME-divider));
 	background: var(--twitter-bg, var(--MI_THEME-bg));
 }
 
@@ -2264,7 +2264,7 @@ html[data-color-scheme=light] .preview {
 
 .twitterCw {
 	padding: 0 0 8px;
-	border-bottom: solid 0.5px var(--twitter-border, var(--MI_THEME-divider));
+	border-bottom: solid 1px var(--twitter-border, var(--MI_THEME-divider));
 	font-size: var(--twitter-font-size-content);
 }
 
@@ -2312,7 +2312,7 @@ html[data-color-scheme=light] .preview {
 
 .twitterHashtags {
 	padding: 8px 0 0;
-	border-top: solid 0.5px var(--twitter-border, var(--MI_THEME-divider));
+	border-top: solid 1px var(--twitter-border, var(--MI_THEME-divider));
 	font-size: var(--twitter-font-size-body);
 }
 
@@ -2331,7 +2331,7 @@ html[data-color-scheme=light] .preview {
 	justify-content: space-between;
 	gap: 8px;
 	padding: 6px 16px 12px 72px;
-	border-top: solid 0.5px var(--twitter-border, var(--MI_THEME-divider));
+	border-top: solid 1px var(--twitter-border, var(--MI_THEME-divider));
 }
 
 .twitterToolbar {

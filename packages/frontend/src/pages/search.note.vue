@@ -402,7 +402,7 @@ watch(searchParams, (params, oldParams) => {
 }
 
 .filters {
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .results {

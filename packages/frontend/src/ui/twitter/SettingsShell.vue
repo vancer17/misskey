@@ -88,11 +88,11 @@ function goBack(): void {
 	display: grid;
 	grid-template-columns: 44px minmax(0, 1fr);
 	align-items: center;
-	height: 50px;
+	height: var(--twitter-header-height);
 	background: color-mix(in srgb, var(--twitter-bg) 82%, transparent);
 	-webkit-backdrop-filter: blur(12px);
 	backdrop-filter: blur(12px);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .back {

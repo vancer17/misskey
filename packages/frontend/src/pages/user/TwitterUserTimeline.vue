@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div>
+<div :class="{ [$style.mobile]: isMobile }">
 	<nav :class="$style.tabs" :aria-label="i18n.ts.timeline">
 		<MkA
 			v-for="tab in tabs"
@@ -56,6 +56,7 @@ import * as Misskey from 'misskey-js';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import TwitterNote from '@/ui/twitter/Note.vue';
 import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
+import { useTwitterLayout } from '@/ui/twitter/index.js';
 import { Paginator } from '@/utility/paginator.js';
 import { userPage } from '@/filters/user.js';
 import { i18n } from '@/i18n.js';
@@ -66,6 +67,9 @@ const props = withDefaults(defineProps<{
 }>(), {
 	page: 'notes',
 });
+
+/** Twitter 布局状态（移动端 class 驱动，ADR-0001 决策 4）。 */
+const { isMobile } = useTwitterLayout();
 
 type TimelineTab = 'notes' | 'replies' | 'files' | 'featured';
 
@@ -141,14 +145,15 @@ const paginators = {
 <style lang="scss" module>
 .tabs {
 	position: sticky;
-	top: 53px;
+	/* 与上方 TwitterHome 返回头同高对齐（PF-1 S-2/S-3 权威 token，评审修复遗留 53px 孤值） */
+	top: var(--twitter-header-height);
 	z-index: 9;
 	display: flex;
 	height: 48px;
 	background: color-mix(in srgb, var(--twitter-bg) 90%, transparent);
 	-webkit-backdrop-filter: blur(12px);
 	backdrop-filter: blur(12px);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .tab {
@@ -212,7 +217,7 @@ const paginators = {
 }
 
 .pinned {
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .timelinePane {
@@ -223,14 +228,15 @@ const paginators = {
 	min-height: 50vh;
 }
 
-@media (max-width: 500px) {
+/* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
+.mobile {
 	.tabs {
 		height: 46px;
 	}
 
 	.tab {
-		padding: 0 8px;
-		font-size: 13px;
+		padding: 0 var(--twitter-space-2);
+		font-size: var(--twitter-font-size-meta);
 	}
 }
 

@@ -648,7 +648,7 @@ defineExpose({
 	background: color-mix(in srgb, var(--twitter-bg) 88%, transparent);
 	-webkit-backdrop-filter: blur(10px);
 	backdrop-filter: blur(10px);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 
 	.newBg1,
 	.newBg2 {
@@ -692,7 +692,7 @@ defineExpose({
 	background: var(--twitter-bg);
 	color: var(--twitter-accent);
 	font-weight: 700;
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 	transition: background-color var(--twitter-duration-fast) ease;
 
 	&:hover {

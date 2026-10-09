@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div class="_pageScrollable" :class="$style.root">
+<div class="_pageScrollable" :class="[$style.root, { [$style.mobile]: isMobile }]">
 	<MkStickyContainer>
 		<template #header>
 			<header :class="$style.header">
@@ -135,6 +135,7 @@ import type { Endpoints } from 'misskey-js';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
 import { instance } from '@/instance.js';
 import TwitterSearchField from '@/ui/twitter/SearchField.vue';
+import { useTwitterLayout } from '@/ui/twitter/index.js';
 import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
 import { apLookup } from '@/utility/lookup.js';
 import { i18n } from '@/i18n.js';
@@ -162,6 +163,8 @@ const props = withDefaults(defineProps<{
 });
 
 const router = useRouter();
+/** Twitter 布局状态（移动端 class 驱动，ADR-0001 决策 4）。 */
+const { isMobile } = useTwitterLayout();
 const draftQuery = ref(props.query);
 const tab = ref(props.type);
 const lookupLoading = ref(false);
@@ -318,18 +321,28 @@ async function lookupUrl() {
 .root {
 	min-height: 100%;
 	background: var(--twitter-bg);
+
+	/* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
+	&.mobile {
+		.header,
+		.originBar {
+			padding-right: var(--twitter-space-3);
+			padding-left: var(--twitter-space-3);
+		}
+	}
 }
 
 .header {
 	display: flex;
 	gap: 8px;
 	align-items: center;
-	min-height: 53px;
+	/* nitter 地面真值：navbar 50px（PF-1 S-2/S-3 统一权威 token） */
+	min-height: var(--twitter-header-height);
 	padding: 8px 16px;
 	background: color-mix(in srgb, var(--twitter-bg) 82%, transparent);
 	-webkit-backdrop-filter: blur(12px);
 	backdrop-filter: blur(12px);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .searchField {
@@ -342,7 +355,7 @@ async function lookupUrl() {
 	background: color-mix(in srgb, var(--twitter-bg) 82%, transparent);
 	-webkit-backdrop-filter: blur(12px);
 	backdrop-filter: blur(12px);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .tab {
@@ -350,7 +363,8 @@ async function lookupUrl() {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	min-height: 53px;
+	/* 既有 tab 行高度惯例（NotificationsHeader 为 50px，消除 53px 孤值） */
+	min-height: 50px;
 	padding: 0 12px;
 	color: var(--twitter-secondary-fg);
 	font-size: 15px;
@@ -397,7 +411,7 @@ async function lookupUrl() {
 	padding: 8px 16px;
 	overflow-x: auto;
 	background: var(--twitter-bg);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 	scrollbar-width: none;
 
 	&::-webkit-scrollbar {
@@ -439,7 +453,7 @@ async function lookupUrl() {
 
 .intents {
 	display: grid;
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .intent {
@@ -489,14 +503,6 @@ async function lookupUrl() {
 	color: var(--twitter-secondary-fg);
 	font-size: 15px;
 	text-align: center;
-}
-
-@media (max-width: 500px) {
-	.header,
-	.originBar {
-		padding-right: 12px;
-		padding-left: 12px;
-	}
 }
 
 @media (prefers-reduced-motion: reduce) {
