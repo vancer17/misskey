@@ -513,7 +513,7 @@ definePage(() => ({
 	gap: var(--twitter-space-4);
 	padding: var(--twitter-space-4);
 	background: var(--twitter-panel);
-	border: solid 0.5px var(--twitter-border);
+	border: solid 1px var(--twitter-border);
 	border-radius: var(--twitter-radius-medium);
 }
 

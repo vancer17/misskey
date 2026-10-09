@@ -277,7 +277,7 @@ function rejectFollowRequest() {
 	color: inherit;
 	text-decoration: none;
 	background: var(--twitter-bg);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 	transition: background-color var(--twitter-duration-fast) ease;
 
 	&:hover {

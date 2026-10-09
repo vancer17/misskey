@@ -53,9 +53,10 @@ defineProps<{
 	grid-template-columns: minmax(0, 1fr) auto;
 	gap: var(--twitter-space-1) var(--twitter-space-3);
 	align-items: start;
-	min-height: 60px;
-	padding: var(--twitter-space-3) var(--twitter-space-4);
-	border-bottom: solid 0.5px var(--twitter-border);
+	/* nitter 地面真值：timeline-item 内距 12px 四向一致（N-2）+ profile-result min-height 54px（PF-2 U-5 裁决：对齐） */
+	min-height: 54px;
+	padding: var(--twitter-space-3);
+	border-bottom: solid 1px var(--twitter-border);
 	transition: background-color var(--twitter-duration-fast) ease;
 
 	&:hover {
@@ -99,6 +100,8 @@ defineProps<{
 .name {
 	overflow: hidden;
 	color: var(--twitter-fg);
+	/* nitter 地面真值：fullname 14px / 700（PF-2 N-5 裁决：对齐） */
+	font-size: var(--twitter-font-size-body);
 	font-weight: 700;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -112,7 +115,8 @@ defineProps<{
 .acct {
 	overflow: hidden;
 	color: var(--twitter-secondary-fg);
-	font-size: var(--twitter-font-size-body);
+	/* nitter 地面真值：username 继承 body 15px（PF-2 N-5 裁决：对齐） */
+	font-size: var(--twitter-font-size-content);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -122,13 +126,16 @@ defineProps<{
 	min-width: 0;
 	color: var(--twitter-fg);
 	font-size: var(--twitter-font-size-body);
-	line-height: 1.4;
+	/* nitter 地面真值：行高 1.3（PF-2 N-3 裁决：对齐） */
+	line-height: 1.3;
 }
 
 .description {
 	display: -webkit-box;
 	-webkit-box-orient: vertical;
 	-webkit-line-clamp: 2;
+	/* nitter 地面真值：行高 1.3（PF-2 N-3 裁决：对齐） */
+	line-height: 1.3;
 	overflow: hidden;
 }
 
@@ -148,12 +155,13 @@ defineProps<{
 	padding: var(--twitter-space-3);
 
 	.identity {
-		grid-template-columns: 40px minmax(0, 1fr);
+		/* nitter 无移动端头像收缩（PF-2 N-9 裁决：对齐 48px） */
+		grid-template-columns: 48px minmax(0, 1fr);
 	}
 
 	.avatar {
-		width: 40px;
-		height: 40px;
+		width: 48px;
+		height: 48px;
 	}
 
 	.follow {

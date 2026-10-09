@@ -87,11 +87,12 @@ function onTabClick(tab: Tab, ev: PointerEvent) {
 	display: grid;
 	grid-template-columns: minmax(44px, 1fr) minmax(0, 3fr) minmax(44px, 1fr);
 	align-items: center;
-	height: 53px;
+	/* nitter 地面真值：navbar 50px（PF-1 S-2/S-3 统一权威 token） */
+	height: var(--twitter-header-height);
 	background: color-mix(in srgb, var(--twitter-bg) 82%, transparent);
 	-webkit-backdrop-filter: blur(12px);
 	backdrop-filter: blur(12px);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .left {
