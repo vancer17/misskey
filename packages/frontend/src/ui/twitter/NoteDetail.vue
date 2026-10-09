@@ -538,13 +538,14 @@ const keymap = {
 	}
 
 	.header {
-		grid-template-columns: 40px minmax(0, 1fr) 32px;
+		/* nitter 无移动端头像收缩（PF-2 N-11 裁决：对齐 48px） */
+		grid-template-columns: 48px minmax(0, 1fr) 32px;
 		gap: 10px;
 	}
 
 	.avatar {
-		width: 40px;
-		height: 40px;
+		width: 48px;
+		height: 48px;
 	}
 
 	.text {
@@ -560,7 +561,7 @@ const keymap = {
 	display: flex;
 	justify-content: center;
 	padding: var(--twitter-space-4);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .contextError {
@@ -569,7 +570,7 @@ const keymap = {
 	justify-content: center;
 	gap: var(--twitter-space-3);
 	padding: var(--twitter-space-3) var(--twitter-space-4);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 	color: var(--twitter-secondary-fg);
 	font-size: var(--twitter-font-size-body);
 
@@ -609,7 +610,7 @@ const keymap = {
 	width: 100%;
 	padding: var(--twitter-space-4);
 	color: var(--twitter-secondary-fg);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 	text-align: center;
 }
 
@@ -621,7 +622,7 @@ const keymap = {
 	position: relative;
 	min-width: 0;
 	padding: var(--twitter-space-4);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 
 	&:focus-visible {
 		outline: 2px solid var(--twitter-accent);
@@ -672,7 +673,7 @@ const keymap = {
 .bot {
 	flex-shrink: 0;
 	padding: 0 var(--twitter-space-1);
-	border: solid 0.5px var(--twitter-border);
+	border: solid 1px var(--twitter-border);
 	border-radius: var(--twitter-radius-small);
 	color: var(--twitter-secondary-fg);
 	font-size: 11px;
@@ -808,7 +809,7 @@ const keymap = {
 	flex-wrap: wrap;
 	gap: 20px;
 	padding: var(--twitter-space-3) 0;
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .stat {
@@ -869,7 +870,7 @@ const keymap = {
 	align-items: center;
 	gap: var(--twitter-space-1);
 	padding: var(--twitter-space-1) var(--twitter-space-2);
-	border: solid 0.5px var(--twitter-border);
+	border: solid 1px var(--twitter-border);
 	border-radius: var(--twitter-radius-pill);
 	color: var(--twitter-secondary-fg);
 	font-size: var(--twitter-font-size-meta);

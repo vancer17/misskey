@@ -86,7 +86,7 @@ const rows = computed<number>(() => props.variant === 'notifications' ? 6 : 4);
 	grid-template-columns: 48px minmax(0, 1fr);
 	gap: var(--twitter-space-3);
 	padding: var(--twitter-space-3) var(--twitter-space-4);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 
 	&:last-child {
 		border-bottom: none;
@@ -196,7 +196,7 @@ const rows = computed<number>(() => props.variant === 'notifications' ? 6 : 4);
 	display: flex;
 	gap: var(--twitter-space-6);
 	padding: var(--twitter-space-3) var(--twitter-space-4);
-	border-top: solid 0.5px var(--twitter-border);
+	border-top: solid 1px var(--twitter-border);
 
 	.tab {
 		height: 8px;
