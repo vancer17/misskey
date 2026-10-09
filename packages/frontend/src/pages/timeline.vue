@@ -386,6 +386,6 @@ definePage(() => ({
 .twitterPostForm {
 	margin: 0;
 	border-radius: 0;
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 </style>
