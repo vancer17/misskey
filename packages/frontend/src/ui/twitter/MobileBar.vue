@@ -78,7 +78,7 @@ onBeforeUnmount(() => {
 	padding-left: env(safe-area-inset-left, 0px);
 	padding-bottom: env(safe-area-inset-bottom, 0px);
 	background: var(--twitter-bg);
-	border-top: solid 0.5px var(--twitter-border);
+	border-top: solid 1px var(--twitter-border);
 }
 
 .item {
