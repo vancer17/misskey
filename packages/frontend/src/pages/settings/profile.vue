@@ -5,9 +5,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <SearchMarker path="/settings/profile" :label="i18n.ts.profile" :keywords="['profile']" icon="ti ti-user">
-	<div class="_gaps_m">
-		<div class="_panel">
-			<div :class="$style.banner" :style="{ backgroundImage: $i.bannerUrl ? `url(${ $i.bannerUrl })` : '' }">
+	<div
+		:class="isTwitterUi ? [$style.twitterRoot, { [$style.mobile]: isMobile }] : '_gaps_m'"
+	>
+		<!-- 身份块：Twitter 分支还原 nitter profile 卡惯例（banner 3:1 + 卡身 12px + 头像 ring 入流，
+			无控件叠压头像 / banner；变更入口为按钮行，nitter 无编辑器对应物故复用既有 MkButton） -->
+		<section v-if="isTwitterUi" :class="[$style.twitterCard, $style.twitterIdentityCard]">
+			<div :class="$style.twitterBanner" :style="bannerStyle" role="presentation"></div>
+			<div :class="$style.twitterIdentityBody">
+				<MkAvatar :class="$style.twitterAvatar" :user="$i" forceShowDecoration/>
+				<div :class="$style.twitterIdentityButtons">
+					<MkButton primary rounded @click="changeBanner">{{ i18n.ts._profile.changeBanner }}</MkButton>
+					<MkButton primary rounded @click="changeAvatar">{{ i18n.ts._profile.changeAvatar }}</MkButton>
+					<MkButton rounded type="routerLink" to="/settings/avatar-decoration">{{ i18n.ts.decorate }} <i class="ti ti-sparkles"></i></MkButton>
+				</div>
+			</div>
+		</section>
+		<div v-else class="_panel">
+			<div :class="$style.banner" :style="bannerStyle">
 				<div :class="$style.bannerEdit">
 					<SearchMarker :keywords="['banner', 'change']">
 						<MkButton primary rounded @click="changeBanner"><SearchLabel>{{ i18n.ts._profile.changeBanner }}</SearchLabel></MkButton>
@@ -25,6 +40,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 
+		<!-- 主字段组（name / bio）：Twitter 分支为 token 卡片，控件本体共享（Core 级主工作流） -->
+		<div :class="isTwitterUi ? $style.twitterCard : '_gaps_m'">
 		<SearchMarker :keywords="['name']">
 			<MkInput v-model="profile.name" :max="30" manualSave :mfmAutocomplete="['emoji']">
 				<template #label><SearchLabel>{{ i18n.ts._profile.name }}</SearchLabel></template>
@@ -37,7 +54,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template #caption>{{ i18n.ts._profile.youCanIncludeHashtags }}</template>
 			</MkTextarea>
 		</SearchMarker>
+		</div>
 
+		<!-- 次要控件组：Twitter 分支为 token 卡片，控件本体共享（Core 级基础兼容） -->
+		<div :class="isTwitterUi ? $style.twitterCard : '_gaps_m'">
 		<SearchMarker :keywords="['location', 'locale']">
 			<MkInput v-model="profile.location" manualSave>
 				<template #label><SearchLabel>{{ i18n.ts.location }}</SearchLabel></template>
@@ -157,12 +177,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<SearchLabel>{{ i18n.ts.qr }}</SearchLabel>
 			</FormLink>
 		</SearchMarker>
+		</div>
 	</div>
 </SearchMarker>
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, inject, reactive, ref, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
@@ -184,8 +205,23 @@ import { store } from '@/store.js';
 import MkInfo from '@/components/MkInfo.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import { genId } from '@/utility/id.js';
+import { DI } from '@/di.js';
+import { useTwitterLayout } from '@/ui/twitter/index.js';
 
 const $i = ensureSignin();
+
+/** 当前 UI 样式（由 Twitter Shell 注入；非 Twitter 场景回退 'default'）。 */
+const uiStyle = inject(DI.uiStyle, ref('default'));
+const isTwitterUi = computed(() => uiStyle.value === 'twitter');
+
+/** Twitter 布局状态（移动端 class 驱动，ADR-0001 决策 4）。 */
+const { isMobile } = useTwitterLayout();
+
+/** banner 背景样式（Twitter / legacy 分支共用，单一来源派生）。 */
+const bannerStyle = computed<{ backgroundImage?: string }>(() => {
+	if ($i.bannerUrl == null) return {};
+	return { backgroundImage: `url(${$i.bannerUrl})` };
+});
 
 const reactionAcceptance = store.model('reactionAcceptance');
 
@@ -450,5 +486,78 @@ definePage(() => ({
 
 .dragItemForm {
 	flex-grow: 1;
+}
+
+/* ---- Twitter 分支（P-11，Core）----
+ * 卡片：twitter token 面板 + hairline。身份块还原 nitter profile 卡惯例：
+ * .profile-banner（3:1、bg 回退、下缘 4px）+ .profile-card（padding 12px、
+ * 头像 ring 4px 入流、无控件叠压）；nitter 无资料编辑器，变更按钮复用 MkButton。 */
+.twitterRoot {
+	display: grid;
+	gap: var(--twitter-space-4);
+	padding: var(--twitter-space-4);
+
+	&.mobile {
+		gap: var(--twitter-space-3);
+		padding: var(--twitter-space-3);
+
+		.twitterAvatar {
+			/* nitter 移动 ring 收窄为 2px（profile/card.scss @media 700px） */
+			border-width: 2px;
+		}
+	}
+}
+
+.twitterCard {
+	display: grid;
+	gap: var(--twitter-space-4);
+	padding: var(--twitter-space-4);
+	background: var(--twitter-panel);
+	border: solid 0.5px var(--twitter-border);
+	border-radius: var(--twitter-radius-medium);
+}
+
+/* 身份卡：banner 通栏（与 TwitterHome banner 同为 3:1 / max 200px） */
+.twitterIdentityCard {
+	gap: 0;
+	padding: 0;
+	overflow: clip;
+}
+
+.twitterIdentityBody {
+	display: grid;
+	justify-items: center;
+	gap: var(--twitter-space-3);
+	padding: var(--twitter-space-3);
+}
+
+.twitterBanner {
+	position: relative;
+	display: block;
+	width: 100%;
+	aspect-ratio: 3 / 1;
+	max-height: 200px;
+	margin-bottom: var(--twitter-space-1);
+	background-color: color-mix(in srgb, var(--twitter-fg) 10%, var(--twitter-bg));
+	background-position: center;
+	background-size: cover;
+}
+
+.twitterIdentityButtons {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: var(--twitter-space-2);
+}
+
+/* 头像：入流不叠压；ring 与 TwitterHome 同一 token 化惯例（nitter
+ * .profile-card-avatar：ring 4px，移动 2px）。容器不加不透明底色——
+ * nitter 的底色语义在 img 本体，此处由 MkAvatar 自身占位层承担；
+ * 容器底色会把图片层未绘制状态伪装成灰色实心头像 */
+.twitterAvatar {
+	display: block;
+	width: 80px;
+	height: 80px;
+	border: solid 4px var(--twitter-bg);
 }
 </style>
