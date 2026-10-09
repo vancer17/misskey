@@ -224,14 +224,17 @@ const keymap = {
 .root {
 	position: relative;
 	display: grid;
-	grid-template-columns: 40px minmax(0, 1fr);
+	/* nitter 地面真值：thread 行复用 tweet-avatar 48×48（PF-2 N-11 裁决：对齐） */
+	grid-template-columns: 48px minmax(0, 1fr);
 	gap: 10px;
 	min-width: 0;
-	padding: 10px 16px;
+	/* nitter 地面真值：timeline-item 内距 12px 四向一致（PF-2 N-2 裁决：对齐） */
+	padding: var(--twitter-space-3);
 	color: var(--twitter-fg);
 	font-size: var(--twitter-font-size-body);
-	line-height: 1.4;
-	border-bottom: solid 0.5px var(--twitter-border);
+	/* nitter 地面真值：行高 1.3（PF-2 N-3 裁决：对齐） */
+	line-height: 1.3;
+	border-bottom: solid 1px var(--twitter-border);
 	transition: background-color var(--twitter-duration-fast) ease;
 
 	&:hover {
@@ -253,17 +256,18 @@ const keymap = {
 }
 
 .avatar {
-	width: 40px;
-	height: 40px;
+	width: 48px;
+	height: 48px;
 }
 
 .threadLine {
-	width: 2px;
+	/* nitter 地面真值：thread-line 3px / accent_dark（thread.scss；twitter 主题 accent_dark = accent，PF-1 N-8） */
+	width: 3px;
 	flex: 1;
 	min-height: 8px;
 	margin-top: var(--twitter-space-1);
 	border-radius: var(--twitter-radius-pill);
-	background: var(--twitter-border);
+	background: var(--twitter-accent);
 }
 
 .main {
@@ -377,7 +381,7 @@ const keymap = {
 	width: 100%;
 	padding: var(--twitter-space-3) var(--twitter-space-4);
 	color: var(--twitter-secondary-fg);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .muted {
@@ -386,13 +390,14 @@ const keymap = {
 
 /* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
 .root.mobile {
-	grid-template-columns: 36px minmax(0, 1fr);
+	/* nitter 无移动端头像收缩（PF-2 N-9 裁决：对齐 48px） */
+	grid-template-columns: 48px minmax(0, 1fr);
 	gap: var(--twitter-space-2);
-	padding: 10px 12px;
+	padding: var(--twitter-space-3);
 
 	.avatar {
-		width: 36px;
-		height: 36px;
+		width: 48px;
+		height: 48px;
 	}
 
 	.children {

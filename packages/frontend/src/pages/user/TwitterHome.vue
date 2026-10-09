@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div v-if="user" :class="$style.root" class="_pageScrollable">
+<div v-if="user" :class="[$style.root, { [$style.mobile]: isMobile }]" class="_pageScrollable">
 	<header :class="$style.header">
 		<button
 			class="_button"
@@ -168,7 +168,7 @@ import MkRemoteCaution from '@/components/MkRemoteCaution.vue';
 import MkAccountMoved from '@/components/MkAccountMoved.vue';
 import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
 import TwitterPageSkeleton from '@/ui/twitter/components/TwitterPageSkeleton.vue';
-import { twitterUserErrorStateType } from '@/ui/twitter/index.js';
+import { twitterUserErrorStateType, useTwitterLayout } from '@/ui/twitter/index.js';
 import type { TwitterPageStateType } from '@/ui/twitter/index.js';
 import TwitterUserTimeline from './TwitterUserTimeline.vue';
 import number from '@/filters/number.js';
@@ -192,6 +192,9 @@ const props = defineProps<{
 const emit = defineEmits<{
 	(ev: 'retry'): void;
 }>();
+
+/** Twitter 布局状态（移动端 class 驱动，ADR-0001 决策 4）。 */
+const { isMobile } = useTwitterLayout();
 
 /** Twitter UI 终态派生：实体不存在 → notFound，其余错误 → error（可重试）。权威派生见 domain/user-state.ts。 */
 const errorStateType = computed<TwitterPageStateType>(() => twitterUserErrorStateType(props.error));
@@ -226,10 +229,16 @@ function showMenu(ev: PointerEvent) {
 	min-height: 100%;
 	background: var(--twitter-bg);
 	color: var(--twitter-fg);
-	padding-bottom: calc(72px + env(safe-area-inset-bottom));
 
-	@media (min-width: 501px) {
-		padding-bottom: 0;
+	/* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
+	&.mobile {
+		padding-bottom: calc(72px + env(safe-area-inset-bottom));
+
+		.identity {
+			--profileAvatarSize: 80px;
+			--profileAvatarOverlap: 32px;
+			padding: 0 12px;
+		}
 	}
 }
 
@@ -240,12 +249,13 @@ function showMenu(ev: PointerEvent) {
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	height: 53px;
+	/* nitter 地面真值：navbar 50px（PF-1 S-2/S-3 统一权威 token） */
+	height: var(--twitter-header-height);
 	padding: 0 8px 0 4px;
 	background: color-mix(in srgb, var(--twitter-bg) 82%, transparent);
 	-webkit-backdrop-filter: blur(12px);
 	backdrop-filter: blur(12px);
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 }
 
 .back {
@@ -301,12 +311,6 @@ function showMenu(ev: PointerEvent) {
 	--profileAvatarSize: 112px;
 	--profileAvatarOverlap: 44px;
 	padding: 0 16px;
-
-	@media (max-width: 500px) {
-		--profileAvatarSize: 80px;
-		--profileAvatarOverlap: 32px;
-		padding: 0 12px;
-	}
 }
 
 .identityTop {
@@ -418,7 +422,8 @@ function showMenu(ev: PointerEvent) {
 	margin-top: 12px;
 	color: var(--twitter-fg);
 	font-size: 15px;
-	line-height: 1.4;
+	/* nitter 地面真值：body 行高 1.3（PF-2 N-3 裁决：对齐） */
+	line-height: 1.3;
 	overflow-wrap: anywhere;
 	white-space: pre-wrap;
 }

@@ -63,11 +63,12 @@ function clear() {
 .root {
 	display: flex;
 	align-items: center;
-	gap: var(--twitter-space-2);
-	height: 44px;
-	padding: 0 var(--twitter-space-4);
-	border-radius: var(--twitter-radius-pill);
-	background: var(--twitter-hover);
+	/* nitter 地面真值：search-bar 紧凑条（general.scss：button 30×30 定义栏高 / input radius 4px / bg_elements，PF-2 H-1 裁决：对齐） */
+	gap: var(--twitter-space-1);
+	height: 30px;
+	padding: 0 var(--twitter-space-1);
+	border-radius: var(--twitter-radius-small);
+	background: var(--twitter-panel);
 	color: var(--twitter-secondary-fg);
 	transition:
 		background-color var(--twitter-duration-fast) ease,
@@ -83,7 +84,7 @@ function clear() {
 
 .icon {
 	flex-shrink: 0;
-	font-size: var(--twitter-font-size-title);
+	font-size: var(--twitter-font-size-emphasis);
 }
 
 .input {
@@ -92,7 +93,8 @@ function clear() {
 	border: none;
 	background: transparent;
 	color: var(--twitter-fg);
-	font-size: var(--twitter-font-size-content);
+	/* nitter 地面真值：搜索输入 16px（general.scss search-bar input） */
+	font-size: var(--twitter-font-size-emphasis);
 	outline: none;
 
 	&::placeholder {
@@ -109,8 +111,8 @@ function clear() {
 	align-items: center;
 	justify-content: center;
 	flex-shrink: 0;
-	width: 32px;
-	height: 32px;
+	width: 24px;
+	height: 24px;
 	border-radius: var(--twitter-radius-pill);
 	color: inherit;
 	transition: background-color var(--twitter-duration-fast) ease;

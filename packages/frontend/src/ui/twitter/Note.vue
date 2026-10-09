@@ -460,7 +460,8 @@ const keymap = {
 	background: var(--twitter-bg);
 	color: var(--twitter-fg);
 	font-size: var(--twitter-font-size-content);
-	line-height: 1.4;
+	/* nitter 地面真值：body / tweet-content 行高 1.3（PF-2 N-3 裁决：对齐） */
+	line-height: 1.3;
 	transition: background-color var(--twitter-duration-fast) ease;
 
 	&:focus-visible {
@@ -476,7 +477,7 @@ const keymap = {
 	}
 
 	&:not(.embedded) {
-		border-bottom: solid 0.5px var(--twitter-border);
+		border-bottom: solid 1px var(--twitter-border);
 
 		&:hover {
 			background: color-mix(in srgb, var(--twitter-fg) 4%, transparent);
@@ -486,14 +487,15 @@ const keymap = {
 	/* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
 	&.mobile {
 		.article {
-			grid-template-columns: 40px minmax(0, 1fr);
+			/* nitter 无移动端头像收缩（PF-2 N-9 裁决：对齐 48px） */
+			grid-template-columns: 48px minmax(0, 1fr);
 			gap: 10px;
 			padding: var(--twitter-space-3);
 		}
 
 		.avatar {
-			width: 40px;
-			height: 40px;
+			width: 48px;
+			height: 48px;
 		}
 
 		.muted {
@@ -570,9 +572,11 @@ const keymap = {
 .article {
 	position: relative;
 	display: grid;
-	grid-template-columns: 44px minmax(0, 1fr);
+	/* nitter 地面真值：tweet-avatar 48×48（tweet/_base.scss，PF-1 N-1） */
+	grid-template-columns: 48px minmax(0, 1fr);
 	gap: var(--twitter-space-3);
-	padding: var(--twitter-space-3) var(--twitter-space-4);
+	/* nitter 地面真值：timeline-item 内距 0.75em = 12px 四向一致（PF-2 N-2 裁决：对齐） */
+	padding: var(--twitter-space-3);
 }
 
 .avatarColumn {
@@ -584,17 +588,18 @@ const keymap = {
 }
 
 .avatar {
-	width: 44px;
-	height: 44px;
+	width: 48px;
+	height: 48px;
 }
 
 .threadLine {
-	width: 2px;
+	/* nitter 地面真值：thread-line 3px / accent_dark（thread.scss；twitter 主题 accent_dark = accent，PF-1 N-8） */
+	width: 3px;
 	flex: 1;
 	min-height: 8px;
 	margin-top: var(--twitter-space-1);
 	border-radius: var(--twitter-radius-pill);
-	background: var(--twitter-border);
+	background: var(--twitter-accent);
 }
 
 .main {
@@ -728,12 +733,12 @@ const keymap = {
 
 .showLessButton {
 	margin-top: var(--twitter-space-1);
-	border-top: solid 0.5px var(--twitter-border);
+	border-top: solid 1px var(--twitter-border);
 }
 
 .muted {
 	padding: 14px 16px;
-	border-bottom: solid 0.5px var(--twitter-border);
+	border-bottom: solid 1px var(--twitter-border);
 	color: var(--twitter-secondary-fg);
 	cursor: pointer;
 }
