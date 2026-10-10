@@ -60,7 +60,7 @@ A 路由级 / B 启动与全局弹窗链 / C 交互子层弹窗 / D 嵌入式 Mi
 
 | # | 区域 | 组件 | 判定 | 处置 |
 | --- | --- | --- | --- | --- |
-| D1 | **右栏挂件系统（用户报告：时间、统计列表）** | `RightRail.vue` → `_common_/widgets.vue` → `MkWidgets` 全家：WidgetClock、server-metric、WidgetInstanceInfo、WidgetInstanceCloud、WidgetMemo、WidgetActivity.calendar…＋「编辑挂件」`_textButton` | ❌ | ❓产品决策：挂件壳 Compatible vs 改为 X 式**固定右栏内容**（Trending/推荐关注/精选） |
+| D1 | **右栏挂件系统（用户报告：时间、统计列表）** | `RightRail.vue` → `_common_/widgets.vue` → `MkWidgets` 全家：WidgetClock、server-metric、WidgetInstanceInfo、WidgetInstanceCloud、WidgetMemo、WidgetActivity.calendar…＋「编辑挂件」`_textButton` | ~~❌~~ → ✅（P-23 落地，2026-10-09） | 决策 D2：改为 X 式**固定右栏内容**（趋势 + 推荐关注）；widgets 挂载已从 `RightRail.vue` 移除，形制与数据源成文见 ADR-0004、保真登记见 port-fidelity-audit RR-1~RR-6 |
 | D2 | 发帖表单内嵌 | MkUploaderItems、MkNotePreview、MkPollEditor、MkNoteSimple、MkInfo（部分已 twitterNotice）、MkRippleEffect | ❌ | 组件变体（批次3） |
 | D3 | 帖子卡片内容内嵌 | MkPoll、MkUrlPreview、MkCwButton、MkReactionsViewer、MkInstanceTicker、MkMediaList | ❌ | 组件变体（批次2；MkNoteMediaGrid 在 P-02 清单锚点中但 PR 未触及） |
 | D4 | Shell systemChrome | XAnnouncements、XStatusBars、XReloadSuggestion、XPreferenceRestore、XThemePreviewing | ❌ | Compatible 化或按需 Hide（批次1） |
@@ -93,7 +93,7 @@ A 路由级 / B 启动与全局弹窗链 / C 交互子层弹窗 / D 嵌入式 Mi
 | 2 | D3 帖子卡内嵌件六件 | 组件变体 |
 | 3 | D2 发帖内嵌件 | 组件变体 |
 | 4 | A1-A4（=P-11/12/13/15 转正）+ A6 reactions | 第二阶段必做主体 |
-| 5 | D1 右栏固定内容改造（决策 2：趋势 / 推荐关注，新建功能） | 独立功能开发 |
+| 5 | ~~D1 右栏固定内容改造（决策 2：趋势 / 推荐关注，新建功能）~~ → **已完成（P-23，2026-10-09）** | 独立功能开发 |
 | 6 | E1/E2/E4 + C4 emoji 内部 + 字号/间距阶梯（P-21 债务） | motion token / 阶梯收敛 |
 
 批次 1-3 完成后执行人工走查矩阵复核；全部修复 + 复核通过后，方可建立视觉回归基线。
