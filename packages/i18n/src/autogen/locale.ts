@@ -393,6 +393,14 @@ export interface Locale extends ILocale {
      */
     "followsYou": string;
     /**
+     * トレンド
+     */
+    "trending": string;
+    /**
+     * おすすめユーザー
+     */
+    "whoToFollow": string;
+    /**
      * リスト作成
      */
     "createList": string;
