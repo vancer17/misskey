@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/** 账户状态：从 Bootstrap 已验证的本地会话建立既有响应式账户单例，供页面和 Store 只读消费。 */
+
 import { reactive } from 'vue';
-import * as Misskey from 'misskey-js';
+import type { AccountWithToken } from '@/accounts/index.js';
 import { miLocalStorage } from '@/local-storage.js';
 
 // TODO: 他のタブと永続化されたstateを同期
-
-type AccountWithToken = Misskey.entities.MeDetailed & { token: string };
 
 const accountData = miLocalStorage.getItem('account');
 

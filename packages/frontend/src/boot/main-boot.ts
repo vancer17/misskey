@@ -3,12 +3,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/** 主 Bootstrap：沿用 Misskey UI 选择与挂载流程；会话恢复已在入口完成，远端配置失败不启动账户向导。 */
+
 import { createApp, defineAsyncComponent, markRaw } from 'vue';
 import { ui } from '@@/js/config.js';
 import * as Misskey from 'misskey-js';
 import { compareVersions } from 'compare-versions';
 import { common } from './common.js';
-import type { Component } from 'vue';
+import type { App, Component } from 'vue';
 import type { Keymap } from '@/utility/hotkey.js';
 import { i18n } from '@/i18n.js';
 import { alert, confirm, popup, post } from '@/os.js';
@@ -30,39 +32,45 @@ import { updateCurrentAccountPartial } from '@/accounts.js';
 import { unisonReload } from '@/utility/unison-reload.js';
 import { isBirthday } from '@/utility/is-birthday.js';
 
-export async function mainBoot() {
-	const { isClientUpdated, lastVersion } = await common(async () => {
-		let uiStyle = ui;
-		const searchParams = new URLSearchParams(window.location.search);
+/** 在主页面入口完成共享启动，受控会话重载时不继续执行登录态副作用。 */
+export async function mainBoot(): Promise<void> {
+	const bootResult: Awaited<ReturnType<typeof common>> = await common(
+		/** 按既有 UI 选择规则创建根应用，不额外定义业务身份。 */
+		async (): Promise<App<Element>> => {
+			let uiStyle: string | null = ui;
+			const searchParams: URLSearchParams = new URLSearchParams(window.location.search);
 
-		if (!$i) uiStyle = 'visitor';
+			if (!$i) uiStyle = 'visitor';
 
-		if (searchParams.has('zen')) uiStyle = 'zen';
-		if (uiStyle === 'deck' && prefer.s['deck.useSimpleUiForNonRootPages'] && window.location.pathname !== '/') uiStyle = 'zen';
+			if (searchParams.has('zen')) uiStyle = 'zen';
+			if (uiStyle === 'deck' && prefer.s['deck.useSimpleUiForNonRootPages'] && window.location.pathname !== '/') uiStyle = 'zen';
 
-		if (searchParams.has('ui')) uiStyle = searchParams.get('ui');
+			if (searchParams.has('ui')) uiStyle = searchParams.get('ui');
 
-		let rootComponent: Component;
-		switch (uiStyle) {
-			case 'zen':
-				rootComponent = await import('@/ui/zen.vue').then(x => x.default);
-				break;
-			case 'twitter':
-				rootComponent = await import('@/ui/twitter.vue').then(x => x.default);
-				break;
-			case 'deck':
-				rootComponent = await import('@/ui/deck.vue').then(x => x.default);
-				break;
-			case 'visitor':
-				rootComponent = await import('@/ui/visitor.vue').then(x => x.default);
-				break;
-			default:
-				rootComponent = await import('@/ui/universal.vue').then(x => x.default);
-				break;
-		}
+			let rootComponent: Component;
+			switch (uiStyle) {
+				case 'zen':
+					rootComponent = await import('@/ui/zen.vue').then(x => x.default);
+					break;
+				case 'twitter':
+					rootComponent = await import('@/ui/twitter.vue').then(x => x.default);
+					break;
+				case 'deck':
+					rootComponent = await import('@/ui/deck.vue').then(x => x.default);
+					break;
+				case 'visitor':
+					rootComponent = await import('@/ui/visitor.vue').then(x => x.default);
+					break;
+				default:
+					rootComponent = await import('@/ui/universal.vue').then(x => x.default);
+					break;
+			}
 
-		return createApp(rootComponent);
-	});
+			return createApp(rootComponent);
+		},
+	);
+	if (bootResult === null) return;
+	const { isClientUpdated, lastVersion } = bootResult;
 
 	reactionPicker.init();
 	emojiPicker.init();
@@ -101,13 +109,19 @@ export async function mainBoot() {
 	}
 
 	if ($i) {
-		store.loaded.then(async () => {
-			if (store.s.accountSetupWizard !== -1) {
-				const { dispose } = popup(defineAsyncComponent(() => import('@/components/MkUserSetupDialog.vue')), {}, {
-					closed: () => dispose(),
-				});
-			}
-		});
+		void store.loaded.then(
+			/** 仅在远端配置确实加载成功后打开账户初始化向导。 */
+			(): void => {
+				if (store.s.accountSetupWizard !== -1) {
+					const { dispose } = popup(defineAsyncComponent(() => import('@/components/MkUserSetupDialog.vue')), {}, {
+						closed: () => dispose(),
+					});
+				}
+			},
+		).catch(
+			/** 失败时保留本地设置并跳过向导，不产生第二条无人处理的 Promise。 */
+			(_error: unknown): void => console.warn('Account setup was not opened because remote settings or the dialog failed.'),
+		);
 
 		for (const announcement of ($i.unreadAnnouncements ?? []).filter(x => x.display === 'dialog')) {
 			const { dispose } = popup(defineAsyncComponent(() => import('@/components/MkAnnouncementDialog.vue')), {
