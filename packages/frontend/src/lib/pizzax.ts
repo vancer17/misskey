@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/** 既有状态存储层：维护本地初始化与远端配置加载生命周期；只传播加载结果，不承担注销或环境探测。 */
+
 // PIZZAX --- A lightweight store
 
 // TODO: Misskeyのドメイン知識があるのでutilityなどに移動する
@@ -89,7 +91,14 @@ export class Pizzax<T extends StateDef> {
 		}
 
 		this.ready = this.init();
-		this.loaded = this.ready.then(() => this.load());
+		this.loaded = this.ready.then(
+			/** 本地初始化完成后加载远端账户配置。 */
+			(): Promise<void> => this.load(),
+		);
+		void this.loaded.catch(
+			/** 即时观察失败，防止消费方尚未挂载时触发全局错误；原 loaded 仍保持 rejected。 */
+			(_error: unknown): void => console.warn(`Pizzax ${this.key}: remote settings were not loaded; local settings were retained.`),
+		);
 	}
 
 	private isPureObject(value: unknown): value is Record<string | number | symbol, unknown> {
@@ -135,36 +144,39 @@ export class Pizzax<T extends StateDef> {
 		});
 	}
 
-	private load(): Promise<void> {
-		return new Promise((resolve, reject) => {
-			if ($i) {
-				// api関数と循環参照なので一応setTimeoutしておく
-				window.setTimeout(async () => {
-					await store.ready;
-
-					misskeyApi('i/registry/get-all', { scope: ['client', this.key] })
-						.then(kvs => {
-							const cache: Partial<T> = {};
-							for (const [k, v] of Object.entries(this.def) as [keyof T, T[keyof T]['default']][]) {
-								if (v.where === 'account') {
-									if (Object.prototype.hasOwnProperty.call(kvs, k)) {
-										this.r[k].value = this.s[k] = (kvs as Partial<T>)[k];
-										cache[k] = (kvs as Partial<T>)[k];
-									} else {
-										// 参照渡しになるのを防ぐためclone
-										this.r[k].value = this.s[k] = deepClone(v.default);
-									}
-								}
-							}
-
-							return set(this.registryCacheKeyName, cache);
-						})
-						.then(() => resolve());
-				}, 1);
-			} else {
-				resolve();
+	/**
+	 * 加载账户配置并写入既有缓存；请求、映射和持久化处于同一 Promise 链。
+	 * 保留循环依赖所需的任务延迟，失败由调用方处理，不将失败伪装为成功。
+	 */
+	private async load(): Promise<void> {
+		if (!$i) return;
+		await new Promise<void>(
+			/** 延后访问循环依赖的 Store，且让外层等待该任务。 */
+			(resolve: () => void): void => { window.setTimeout(resolve, 1); },
+		);
+		await store.ready;
+		const controller: AbortController = new AbortController();
+		const timeout: number = window.setTimeout(
+			/** 终止无响应的远端加载，避免 loaded 永久悬挂。 */
+			(): void => controller.abort(),
+			10_000,
+		);
+		try {
+			const kvs: State<T> = await misskeyApi('i/registry/get-all', { scope: ['client', this.key] }, undefined, controller.signal);
+			const cache: Partial<State<T>> = {};
+			for (const [key, definition] of Object.entries(this.def) as [keyof T, T[keyof T]][]) {
+				if (definition.where !== 'account') continue;
+				if (Object.prototype.hasOwnProperty.call(kvs, key)) {
+					this.r[key].value = this.s[key] = kvs[key];
+					cache[key] = kvs[key];
+				} else {
+					this.r[key].value = this.s[key] = deepClone(definition.default);
+				}
 			}
-		});
+			await set(this.registryCacheKeyName, cache);
+		} finally {
+			window.clearTimeout(timeout);
+		}
 	}
 
 	public set<K extends keyof T>(key: K, value: T[K]['default']): Promise<void> {
