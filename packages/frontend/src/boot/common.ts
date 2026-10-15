@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/** 通用 Bootstrap：在启动前会话验证之后编排 Store、账户恢复与应用挂载，不把运行探测下放到组件。 */
+
 import { watch, version as vueVersion } from 'vue';
 import { compareVersions } from 'compare-versions';
 import { version, lang, isSafeMode } from '@@/js/config.js';
@@ -16,11 +18,12 @@ import components from '@/components/index.js';
 import { themeManager } from '@/theme.js';
 import { isDeviceDarkmode } from '@/utility/is-device-darkmode.js';
 import { i18n } from '@/i18n.js';
-import { refreshCurrentAccount, login } from '@/accounts.js';
+import { removeInvalidAccount, updateCurrentAccount, login } from '@/accounts.js';
+import { getInvalidSessionReason } from '@/accounts/index.js';
 import { store } from '@/store.js';
 import { fetchInstance, instance } from '@/instance.js';
 import { updateDeviceKind } from '@/utility/device-kind.js';
-import { reloadChannel } from '@/utility/unison-reload.js';
+import { reloadChannel, unisonReload } from '@/utility/unison-reload.js';
 import { getUrlWithoutLoginId } from '@/utility/login-id.js';
 import { getAccountFromId } from '@/utility/get-account-from-id.js';
 import { deckStore } from '@/ui/deck/deck-store.js';
@@ -32,7 +35,11 @@ import { $i } from '@/i.js';
 import { launchPlugins } from '@/plugin.js';
 import { initTelemetry } from '@/telemetry.js';
 
-export async function common(createVue: () => Promise<App<Element>>) {
+/** 通用启动成功结果；null 表示会话已切换并进入受控重载，不应继续挂载页面。 */
+type CommonBootResult = { isClientUpdated: boolean; lastVersion: string | null; app: App<Element> };
+
+/** 在共享状态就绪后挂载应用，并在凭据失效时停止当前启动链。 */
+export async function common(createVue: () => Promise<App<Element>>): Promise<CommonBootResult | null> {
 	console.info(`Misskey v${version}`);
 
 	if (_DEV_) {
@@ -117,6 +124,16 @@ export async function common(createVue: () => Promise<App<Element>>) {
 
 	await store.ready;
 	await deckStore.ready;
+	if ($i) await updateCurrentAccount($i);
+
+	const registryResults: PromiseSettledResult<void>[] = await Promise.allSettled([store.loaded, deckStore.loaded]);
+	for (const result of registryResults) {
+		if (result.status === 'rejected' && $i && getInvalidSessionReason(result.reason) !== null) {
+			await removeInvalidAccount({ id: $i.id, token: $i.token });
+			unisonReload();
+			return null;
+		}
+	}
 
 	const fetchInstanceMetaPromise = fetchInstance();
 
@@ -231,16 +248,6 @@ export async function common(createVue: () => Promise<App<Element>>) {
 	if (prefer.s.makeEveryTextElementsSelectable) {
 		window.document.documentElement.classList.add('forceSelectableAll');
 	}
-
-	//#region Fetch user
-	if ($i && $i.token) {
-		if (_DEV_) {
-			console.log('account cache found. refreshing...');
-		}
-
-		refreshCurrentAccount();
-	}
-	//#endregion
 
 	try {
 		await fetchCustomEmojis();

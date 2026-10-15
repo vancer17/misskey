@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/** 账户应用层：协调既有账户 Store、登录交互与本地会话恢复；失效恢复不执行云备份或全量存储清理。 */
+
 import { defineAsyncComponent, ref } from 'vue';
 import * as Misskey from 'misskey-js';
-import { apiUrl, host } from '@@/js/config.js';
+import { host } from '@@/js/config.js';
 import type { MenuItem } from '@/types/menu.js';
 import { showSuspendedDialog } from '@/utility/show-suspended-dialog.js';
 import { i18n } from '@/i18n.js';
@@ -15,9 +17,8 @@ import { unisonReload, reloadChannel } from '@/utility/unison-reload.js';
 import { prefer } from '@/preferences.js';
 import { store } from '@/store.js';
 import { $i } from '@/i.js';
-import { signout } from '@/signout.js';
-
-type AccountWithToken = Misskey.entities.MeDetailed & { token: string };
+import { getAccountErrorCode, parseAccountCredentials, requestAccount } from '@/accounts/index.js';
+import type { AccountCredentials, AccountWithToken } from '@/accounts/index.js';
 
 export async function getAccounts(): Promise<{
 	host: string;
@@ -38,102 +39,93 @@ export async function getAccounts(): Promise<{
 	}));
 }
 
-async function addAccount(host: string, user: Misskey.entities.MeDetailed, token: AccountWithToken['token']) {
-	if (!prefer.s.accounts.some(x => x[0] === host && x[1].id === user.id)) {
-		store.set('accountTokens', { ...store.s.accountTokens, [host + '/' + user.id]: token });
-		store.set('accountInfos', { ...store.s.accountInfos, [host + '/' + user.id]: user });
-		prefer.commit('accounts', [...prefer.s.accounts, [host, { id: user.id, username: user.username }]]);
+/** 保存真实登录返回的凭据与账户信息；已有账户重新登录时也更新旧凭据。 */
+async function addAccount(accountHost: string, user: Misskey.entities.MeDetailed, token: AccountWithToken['token']): Promise<void> {
+	await store.ready;
+	const key: string = accountHost + '/' + user.id;
+	await Promise.all([
+		store.set('accountTokens', { ...store.s.accountTokens, [key]: token }),
+		store.set('accountInfos', { ...store.s.accountInfos, [key]: user }),
+	]);
+	const exists: boolean = prefer.s.accounts.some(
+		/** 以实例与用户标识查找已保存账户，不把显示信息当作身份事实。 */
+		([savedHost, savedUser]: (typeof prefer.s.accounts)[number]): boolean => savedHost === accountHost && savedUser.id === user.id,
+	);
+	if (!exists) prefer.commit('accounts', [...prefer.s.accounts, [accountHost, { id: user.id, username: user.username }]]);
+}
+
+/**
+ * 经既有 Store 定向移除一个账户并等待持久化；可选凭据约束防止删除重新登录后的同名账户。
+ * 不清理设备配置、不影响其他账户，也不执行需要认证的云端写入。
+ */
+export async function removeAccount(accountHost: string, id: AccountWithToken['id'], expectedToken?: string): Promise<boolean> {
+	await store.ready;
+	const key: string = accountHost + '/' + id;
+	const savedToken: string | undefined = store.s.accountTokens[key];
+	const current: AccountCredentials | null = parseAccountCredentials(miLocalStorage.getItem('account'));
+	if (expectedToken !== undefined && (
+		(savedToken !== undefined && savedToken !== expectedToken)
+		|| (current?.id === id && current.token !== expectedToken)
+	)) return false;
+
+	const tokens: typeof store.s.accountTokens = { ...store.s.accountTokens };
+	const accountInfos: typeof store.s.accountInfos = { ...store.s.accountInfos };
+	delete tokens[key];
+	delete accountInfos[key];
+	await Promise.all([store.set('accountTokens', tokens), store.set('accountInfos', accountInfos)]);
+	const latest: AccountCredentials | null = parseAccountCredentials(miLocalStorage.getItem('account'));
+	if (expectedToken !== undefined && latest?.id === id && latest.token !== expectedToken) return false;
+	prefer.commit('accounts', prefer.s.accounts.filter(
+		/** 仅删除指定实例的目标账户，保留其他账户及所有设备偏好。 */
+		([savedHost, savedUser]: (typeof prefer.s.accounts)[number]): boolean => savedHost !== accountHost || savedUser.id !== id,
+	));
+	return true;
+}
+
+/** 失效会话的本地恢复入口；旧请求只能移除自身凭据，不能覆盖其他标签页的新会话。 */
+export async function removeInvalidAccount(credentials: AccountCredentials): Promise<boolean> {
+	const removed: boolean = await removeAccount(host, credentials.id, credentials.token);
+	if (!removed) return false;
+	const current: AccountCredentials | null = parseAccountCredentials(miLocalStorage.getItem('account'));
+	if (current?.id === credentials.id && current.token === credentials.token) miLocalStorage.removeItem('account');
+	return true;
+}
+
+/** 登录交互复用独立协议适配器，错误提示不再负责判定或清理当前会话。 */
+async function fetchAccount(token: string, id?: string, forceShowDialog?: boolean): Promise<Misskey.entities.MeDetailed> {
+	try {
+		return await requestAccount(token);
+	} catch (error: unknown) {
+		const code: string | null = getAccountErrorCode(error);
+		const show: boolean = forceShowDialog === true || ($i !== null && (token === $i.token || id === $i.id));
+		if (show) {
+			if (code === 'SUSPENDED') {
+				await showSuspendedDialog();
+			} else {
+				await alert({
+					type: 'error',
+					title: code === 'AUTHENTICATION_FAILED' ? i18n.ts.tokenRevoked : code === 'USER_IS_DELETED' ? i18n.ts.accountDeleted : i18n.ts.failedToFetchAccountInformation,
+					text: code === 'AUTHENTICATION_FAILED' ? i18n.ts.tokenRevokedDescription : code === 'USER_IS_DELETED' ? i18n.ts.accountDeletedDescription : code ?? i18n.ts.failedToFetchAccountInformation,
+				});
+			}
+		}
+		throw error;
 	}
 }
 
-export async function removeAccount(host: string, id: AccountWithToken['id']) {
-	const tokens = JSON.parse(JSON.stringify(store.s.accountTokens));
-	delete tokens[host + '/' + id];
-	store.set('accountTokens', tokens);
-	const accountInfos = JSON.parse(JSON.stringify(store.s.accountInfos));
-	delete accountInfos[host + '/' + id];
-	store.set('accountInfos', accountInfos);
-
-	prefer.commit('accounts', prefer.s.accounts.filter(x => x[0] !== host || x[1].id !== id));
-}
-
-const isAccountDeleted = Symbol('isAccountDeleted');
-
-function fetchAccount(token: string, id?: string, forceShowDialog?: boolean): Promise<Misskey.entities.MeDetailed> {
-	return new Promise((done, fail) => {
-		window.fetch(`${apiUrl}/i`, {
-			method: 'POST',
-			body: JSON.stringify({
-				i: token,
-			}),
-			headers: {
-				'Content-Type': 'application/json',
-			},
-		})
-			.then(res => new Promise<Misskey.entities.MeDetailed | { error: Record<string, any> }>((done2, fail2) => {
-				if (res.status >= 500 && res.status < 600) {
-					// サーバーエラー(5xx)の場合をrejectとする
-					// （認証エラーなど4xxはresolve）
-					return fail2(res);
-				}
-				res.json().then(done2, fail2);
-			}))
-			.then(async res => {
-				if ('error' in res) {
-					if (res.error.id === 'a8c724b3-6e9c-4b46-b1a8-bc3ed6258370') {
-						// SUSPENDED
-						if (forceShowDialog || $i && (token === $i.token || id === $i.id)) {
-							await showSuspendedDialog();
-						}
-					} else if (res.error.id === 'e5b3b9f0-2b8f-4b9f-9c1f-8c5c1b2e1b1a') {
-						// USER_IS_DELETED
-						// アカウントが削除されている
-						if (forceShowDialog || $i && (token === $i.token || id === $i.id)) {
-							await alert({
-								type: 'error',
-								title: i18n.ts.accountDeleted,
-								text: i18n.ts.accountDeletedDescription,
-							});
-						}
-					} else if (res.error.id === 'b0a7f5f8-dc2f-4171-b91f-de88ad238e14') {
-						// AUTHENTICATION_FAILED
-						// トークンが無効化されていたりアカウントが削除されたりしている
-						if (forceShowDialog || $i && (token === $i.token || id === $i.id)) {
-							await alert({
-								type: 'error',
-								title: i18n.ts.tokenRevoked,
-								text: i18n.ts.tokenRevokedDescription,
-							});
-						}
-					} else {
-						await alert({
-							type: 'error',
-							title: i18n.ts.failedToFetchAccountInformation,
-							text: JSON.stringify(res.error),
-						});
-					}
-
-					fail(isAccountDeleted);
-				} else {
-					done(res);
-				}
-			})
-			.catch(fail);
-	});
-}
-
-export function updateCurrentAccount(accountData: Misskey.entities.MeDetailed) {
+/** 将已验证账户同步到现有单例和保存账户列表；持久化完成前不结束本次更新。 */
+export async function updateCurrentAccount(accountData: Misskey.entities.MeDetailed): Promise<void> {
 	if (!$i) return;
-	const token = $i.token;
-	for (const key of Object.keys($i)) {
-		delete $i[key as keyof typeof $i];
+	const current: AccountCredentials | null = parseAccountCredentials(miLocalStorage.getItem('account'));
+	if (current?.id !== $i.id || current.token !== $i.token) return;
+	const account: AccountWithToken = { ...accountData, token: $i.token };
+	for (const key of Object.keys($i)) Reflect.deleteProperty($i, key);
+	Object.assign($i, account);
+	await addAccount(host, accountData, account.token);
+	const latest: AccountCredentials | null = parseAccountCredentials(miLocalStorage.getItem('account'));
+	if (latest?.id === account.id && latest.token === account.token) {
+		miLocalStorage.setItem('account', JSON.stringify(account));
 	}
-	for (const [key, value] of Object.entries(accountData)) {
-		($i[key as keyof typeof accountData] as any) = value;
-	}
-	store.set('accountInfos', { ...store.s.accountInfos, [host + '/' + $i.id]: $i });
-	$i.token = token;
-	miLocalStorage.setItem('account', JSON.stringify($i));
 }
 
 export function updateCurrentAccountPartial(accountData: Partial<Misskey.entities.MeDetailed>) {
@@ -145,21 +137,6 @@ export function updateCurrentAccountPartial(accountData: Partial<Misskey.entitie
 	store.set('accountInfos', { ...store.s.accountInfos, [host + '/' + $i.id]: $i });
 
 	miLocalStorage.setItem('account', JSON.stringify($i));
-}
-
-export async function refreshCurrentAccount() {
-	if (!$i) return;
-	const me = $i;
-	return fetchAccount($i.token, $i.id).then(updateCurrentAccount).catch(reason => {
-		if (reason === isAccountDeleted) {
-			removeAccount(host, me.id);
-			if (Object.keys(store.s.accountTokens).length > 0) {
-				login(Object.values(store.s.accountTokens)[0]);
-			} else {
-				signout();
-			}
-		}
-	});
 }
 
 export async function login(token: AccountWithToken['token'], redirect?: string) {
