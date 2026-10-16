@@ -55,8 +55,8 @@
 
 | 路由组 / 界面 | 当前代码区域 | 第一阶段处置 |
 | --- | --- | --- |
-| 未登录欢迎页 `/` | `packages/frontend/src/pages/welcome.vue` | 阶段外；已登录 `/` 属于 P-01。公开登录体验另行 scope。 |
-| 登录 / 注册对话框 | `packages/frontend/src/components/MkSigninDialog.vue`；`packages/frontend/src/components/MkSignupDialog.vue` | 仅演示需要时做 Compatible。 |
+| 未登录欢迎页 `/` | `packages/frontend/src/pages/welcome.vue` | 第一阶段外；已登录 `/` 属于 P-01。匿名入口当前纳入第二阶段 P-26，见 `anonymous-entry.md`。 |
+| 登录 / 注册对话框 | `packages/frontend/src/components/MkSigninDialog.vue`；`packages/frontend/src/components/MkSignupDialog.vue` | P-26 复用既有认证流程，表现层保持 Compatible；不复制认证状态机。 |
 | Profile 以外的设置页 | `packages/frontend/src/pages/settings/*` | Phase 2 Compatible。 |
 | Drive | `packages/frontend/src/pages/drive*.vue` | Phase 2 Compatible。 |
 | Admin | `packages/frontend/src/pages/admin/*` | Legacy allowed，不进入用户侧 rollout 验收。 |

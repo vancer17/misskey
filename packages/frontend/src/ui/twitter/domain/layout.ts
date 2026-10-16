@@ -10,7 +10,7 @@
  * 禁止在 SCSS 媒体查询或组件中复制断点后依靠测试维持一致）。
  *
  * 数据链角色：本常量（权威事实）→ composables/use-twitter-layout.ts（响应式状态派生）
- * → Shell 组件（唯一消费点）；CSS 侧不书写布局断点媒体查询。
+ * → Shell 与匿名入口组件（消费点）；CSS 侧不书写布局断点媒体查询。
  */
 
 /**
@@ -21,4 +21,8 @@ export const TWITTER_LAYOUT_BREAKPOINTS = {
 	mobile: 500,
 	/** 右栏阈值：视口宽 ≥ 此值时显示右侧信息栏。 */
 	rightRail: 1280,
+	/** 匿名入口紧凑布局上界（不含）：X 归档 max-sm，独立于业务移动 Shell。 */
+	entryCompact: 512,
+	/** 匿名入口双列布局下界：X 归档 md；禁止改写业务右栏断点。 */
+	entrySplit: 768,
 } as const;
