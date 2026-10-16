@@ -145,4 +145,39 @@ body[data-ui='twitter'] {
 	--twitter-bottom-bar-height: 56px;
 	/* 发帖 FAB 尺寸 */
 	--twitter-fab-size: 56px;
+
+	/* 匿名入口专用尺度：指定 X 归档 styles-BA2hjDdO.css / index.html；
+	   Nitter 无登录实现，见 ADR-0007。不得改写业务 Shell 的通用 token。 */
+	/* 入口整页底色：归档明／暗画布。 */
+	--twitter-entry-bg: light-dark(#FFFFFF, #000000);
+	/* 标题与实心动作：归档标题 #1A1A1A、暗色 white。 */
+	--twitter-entry-fg: light-dark(#1A1A1A, #FFFFFF);
+	/* 操作描边沿用本项目主题边界语义（明确品牌适配，不伪称 X 精确色值）。 */
+	--twitter-entry-border: var(--twitter-border);
+	/* max-w-7xl，按归档默认根字号折算。 */
+	--twitter-entry-max-width: 1280px;
+	/* max-w-[400px]：入口主面板。 */
+	--twitter-entry-panel-width: 400px;
+	/* max-w-96：主面板内的操作组。 */
+	--twitter-entry-actions-width: 384px;
+	/* gap-5：操作纵向间距。 */
+	--twitter-entry-action-gap: 20px;
+	/* h-12：主操作高度。 */
+	--twitter-entry-primary-height: 48px;
+	/* h-11：登录与访客头部操作高度。 */
+	--twitter-entry-secondary-height: 44px;
+	/* text-[50px]：中等视口入口标题。 */
+	--twitter-entry-title-size: 50px;
+	/* md:text-[64px]：双列入口标题。 */
+	--twitter-entry-title-size-wide: 64px;
+	/* py-10：入口内容上下留白。 */
+	--twitter-entry-block-padding: 40px;
+	/* md:ps-9：双列内容起始留白。 */
+	--twitter-entry-start-padding: 36px;
+	/* max-w-[140px]：中等视口内联品牌。 */
+	--twitter-entry-inline-logo-width: 140px;
+	/* max-w-[250px]：紧凑视口品牌容器。 */
+	--twitter-entry-compact-logo-width: 250px;
+	/* max-w-[480px]：宽屏品牌展示上限。 */
+	--twitter-entry-brand-width: 480px;
 }
