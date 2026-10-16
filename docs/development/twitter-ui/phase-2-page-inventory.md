@@ -32,7 +32,8 @@
 | **P-23** | 右栏固定内容：趋势 + 推荐关注 | RightRail 整体替换 | `ui/twitter/RightRail.vue`（移除 widgets 挂载）；新增 `ui/twitter/components/TwitterTrending.vue`、`TwitterWhoToFollow.vue`；数据源 `hashtags/trend`、`users/recommendation` | 新功能件 | 决策 D2；R-1 | `MkWidgets` 本体不动（其他 UI 继续使用）；推荐数据源实现前先 spike，fallback：meta.pinnedUsers / explore featured；权威类型入 `ui/twitter/domain/` |
 | **P-25** | Channels 页 | `/channels`、`/channels/:id` | `pages/channels.vue`；`pages/channel.vue`；`pages/channel-editor.vue` | Compatible | 决策 D4；P-00 ✅ | 修正第一阶段"Hide/延后"处置；帖子卡频道链接（A5）保留 |
 | **P-20** | Compatible 面：设置首页、About、公告、Drive | `/settings`、`/about*`、`/announcements*`、`/drive*` | `pages/settings/*`；`pages/about*.vue`；`pages/announcements.vue`、`announcement.vue`；`pages/drive*.vue` | Compatible | P-00 ✅ | 复用 Shell/Token/header/按钮，不重做信息架构；含审计 A6（`/notes/:id/reactions` 为 note.vue 的 `initialTab` 标签，作详情页标签复核而非独立页面） |
-| **P-19** | 视觉回归 + 验收测试基线 | Playwright 截图基线（页面 × 视口 × 明暗） | 新增测试基建 | 基建 | R-1~R-4、P-11~P-25 全部完成 + 走查复核通过 | **位置后置**：在泄漏清零前建基线会把泄漏固化为期望快照 |
+| **P-26** | 匿名入口与业务 Shell 边界 | 未登录 `/`；公开内容的访客头部；登录／注册入口 | `ui/twitter.vue`；`pages/welcome.vue`；`ui/twitter/components/TwitterWelcome.vue`、`TwitterAuthButtons.vue` | Core（认证复用 Compatible） | P-00；ADR-0007 | 独立入口、初始化优先、业务组件不挂载；X 归档仅补充 Nitter 无对应部分，见 `anonymous-entry.md` |
+| **P-19** | 视觉回归 + 验收测试基线 | Playwright 截图基线（页面 × 视口 × 明暗） | 新增测试基建 | 基建 | R-1~R-4、P-11~P-26 全部完成 + 走查复核通过 | **位置后置**：在泄漏清零前建基线会把泄漏固化为期望快照 |
 | **P-22** | 走查矩阵复审 + rollout 评估 | 审计走查矩阵（页面 × 交互 × 视口 × 主题） | — | 出口 | P-19 | 评估结论与默认 UI 切换决策 → ADR-0003 |
 
 ## 不纳入项（维持既有裁决）
@@ -57,7 +58,8 @@ G0 develop 全量校验
     ├── P-15
     ├── P-11
     ├── P-23（依赖 R-1；spike → 组件 → Shell 替换）
-    └── P-25 / P-20（Compatible 面）
+    ├── P-25 / P-20（Compatible 面）
+    └── P-26 匿名入口与业务 Shell 边界
 └── R-4 动效与阶梯债务（收尾打磨）
 └── 走查矩阵复核
     └── P-19 视觉回归基线

@@ -25,3 +25,5 @@ export { default as TwitterPageState } from './components/TwitterPageState.vue';
 export { default as TwitterPageSkeleton } from './components/TwitterPageSkeleton.vue';
 export { default as TwitterUserResult } from './UserResult.vue';
 export { default as TwitterSettingsShell } from './SettingsShell.vue';
+export { default as TwitterWelcome } from './components/TwitterWelcome.vue';
+export { default as TwitterAuthButtons } from './components/TwitterAuthButtons.vue';
