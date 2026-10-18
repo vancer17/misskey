@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：原用户时间线页面。
+作用：原数据所有者处理写入与回访，不移动基础组件内部逻辑。
+数据链：确认信号 → 原查询 → 当前实体／分页集合；无环境探测。
+-->
+
 <template>
 <MkStickyContainer>
 	<template #header>
@@ -24,7 +30,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { inject, ref, computed, markRaw, onActivated } from 'vue';
+import { useGlobalEvent } from '@/events.js';
+import { useTwitterPaginatorRefresh } from '@/ui/twitter/index.js';
+import { inject, ref, computed, markRaw } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkTab from '@/components/MkTab.vue';
@@ -59,18 +67,12 @@ const notesPaginator = markRaw(new Paginator('users/notes', {
 	})),
 }));
 
-/** KeepAlive 首次激活跳过标志（挂载期已完成首拉，防止双拉）。 */
-let skipNextActivation = true;
-
-/** 回访刷新（K-04：用户新帖后回访时间线不陈旧；按 tab 定向重载，仅有条目时执行）。 */
-onActivated(() => {
-	if (skipNextActivation) {
-		skipNextActivation = false;
-		return;
-	}
-	const paginator = tab.value === 'featured' ? featuredPaginator : notesPaginator;
-	if (paginator.items.value.length > 0) void paginator.reload();
-});
+/** 原 UI 列表使用既有分页器；非空、空结果与在途请求采用同一规则。 */
+const invalidateNotes: () => void = useTwitterPaginatorRefresh(/** 普通帖子数据源。 */ (): typeof notesPaginator => notesPaginator,
+	/** 保持原 v-if 分支归属。 */ (): boolean => tab.value !== 'featured');
+useTwitterPaginatorRefresh(/** 热门仍仅在回访重取，不因发帖保证上榜。 */ (): typeof featuredPaginator => featuredPaginator,
+	/** 已显示的热门面板。 */ (): boolean => tab.value === 'featured');
+useGlobalEvent('notePosted', /** 发布者必须属于当前主页。 */ (note: Misskey.entities.Note): void => { if (note.userId === props.user.id) invalidateNotes(); });
 </script>
 
 <style lang="scss" module>

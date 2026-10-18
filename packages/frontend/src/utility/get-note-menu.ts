@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * 文件领域：既有帖子业务菜单与命令边界。
+ * 作用：保留原菜单及后端校验，仅在真实成功后通知有关集合；不拦截其他 API。
+ */
 import * as Misskey from 'misskey-js';
 import { url } from '@@/js/config.js';
 import { claimAchievement } from './achievements.js';
@@ -25,17 +29,20 @@ import { genEmbedCode } from '@/utility/get-embed-code.js';
 import { prefer } from '@/preferences.js';
 import { getPluginHandlers } from '@/plugin.js';
 import { globalEvents } from '@/events.js';
+import { updateCurrentAccountPartial } from '@/accounts.js';
 
 const isInBrowserTranslationAvailable = (
 	'LanguageDetector' in window &&
 	'Translator' in window
 );
 
+/** 组装既有 Clip 命令菜单，成功事件只让对应数据所有者重新确认。 */
 export async function getNoteClipMenu(props: {
 	note: Misskey.entities.Note;
 	currentClip?: Misskey.entities.Clip | null;
-}) {
-	function getClipName(clip: Misskey.entities.Clip) {
+}): Promise<MenuItem[]> {
+	/** 展示原服务端 Clip 名称及数量，不由菜单维护计数。 */
+	function getClipName(clip: Misskey.entities.Clip): string {
 		if ($i && clip.userId === $i.id && clip.notesCount != null) {
 			return `${clip.name} (${clip.notesCount}/${$i.policies.noteEachClipsLimit})`;
 		} else {
@@ -43,37 +50,31 @@ export async function getNoteClipMenu(props: {
 		}
 	}
 
-	const appearNote = getAppearNote(props.note) ?? props.note;
+	const appearNote: Misskey.entities.Note = getAppearNote(props.note) ?? props.note;
 
-	const clips = await clipsCache.fetch();
-	const menu: MenuItem[] = [...clips.map(clip => ({
+	const clips: Misskey.entities.Clip[] = await clipsCache.fetch();
+	const menu: MenuItem[] = [...clips.map(/** 原 Clip 对应一个命令入口。 */ (clip: Misskey.entities.Clip): MenuItem => ({
 		text: getClipName(clip),
-		action: () => {
+		action: /** 添加成员后仅发确认通知，不回写 DTO 数量。 */ (): void => {
 			claimAchievement('noteClipped1');
 			os.promiseDialog(
-				misskeyApi('clips/add-note', { clipId: clip.id, noteId: appearNote.id }),
+				misskeyApi('clips/add-note', { clipId: clip.id, noteId: appearNote.id }).then(/** 原请求成功才更新菜单缓存和集合消费者。 */ (): void => { clipsCache.delete(); globalEvents.emit('clipNotesChanged', clip.id); }),
 				null,
-				async (err) => {
-					if (err.id === '734806c4-542c-463a-9311-15c512803965') {
-						const confirm = await os.confirm({
+				/** 已知错误仍走原提示和解除确认，不把错误消化当成添加成功。 */ async (err: unknown): Promise<void> => {
+					const failureId: string = typeof err === 'object' && err != null && 'id' in err ? String(err.id) : '';
+					const failureMessage: string = typeof err === 'object' && err != null && 'message' in err ? String(err.message) : String(err);
+					if (failureId === '734806c4-542c-463a-9311-15c512803965') {
+						const confirm: Awaited<ReturnType<typeof os.confirm>> = await os.confirm({
 							type: 'warning',
 							text: i18n.tsx.confirmToUnclipAlreadyClippedNote({ name: clip.name }),
 						});
 						if (!confirm.canceled) {
-							os.apiWithDialog('clips/remove-note', { clipId: clip.id, noteId: appearNote.id }).then(() => {
-								clipsCache.set(clips.map(c => {
-									if (c.id === clip.id) {
-										return {
-											...c,
-											notesCount: Math.max(0, ((c.notesCount ?? 0) - 1)),
-										};
-									} else {
-										return c;
-									}
-								}));
-							});
+							os.apiWithDialog('clips/remove-note', { clipId: clip.id, noteId: appearNote.id }).then(
+								/** 移除确认后失效，不手算数量。 */ (): void => { clipsCache.delete(); globalEvents.emit('clipNotesChanged', clip.id); },
+								/** 原对话框已呈现请求错误，拒绝不产生成功通知。 */ (): void => {},
+							);
 						}
-					} else if (err.id === 'f0dba960-ff73-4615-8df4-d6ac5d9dc118') {
+					} else if (failureId === 'f0dba960-ff73-4615-8df4-d6ac5d9dc118') {
 						os.alert({
 							type: 'error',
 							text: i18n.ts.clipNoteLimitExceeded,
@@ -81,27 +82,16 @@ export async function getNoteClipMenu(props: {
 					} else {
 						os.alert({
 							type: 'error',
-							text: err.message + '\n' + err.id,
+							text: failureMessage + '\n' + failureId,
 						});
 					}
 				},
-			).then(() => {
-				clipsCache.set(clips.map(c => {
-					if (c.id === clip.id) {
-						return {
-							...c,
-							notesCount: (c.notesCount ?? 0) + 1,
-						};
-					} else {
-						return c;
-					}
-				}));
-			});
+			);
 		},
 	})), { type: 'divider' }, {
 		icon: 'ti ti-plus',
 		text: i18n.ts.createNew,
-		action: async () => {
+		action: /** 先创建 Clip 再添加成员，两次真实成功分别处理。 */ async (): Promise<void> => {
 			const { canceled, result } = await os.form(i18n.ts.createNewClip, {
 				name: {
 					type: 'string',
@@ -123,12 +113,18 @@ export async function getNoteClipMenu(props: {
 			});
 			if (canceled) return;
 
-			const clip = await os.apiWithDialog('clips/create', result);
+			const clip: Misskey.entities.Clip | null = await os.apiWithDialog('clips/create', result).catch(
+				/** 原对话框已呈现创建错误，停止后续添加命令。 */ (): null => null,
+			);
+			if (clip == null) return;
 
 			clipsCache.delete();
 
 			claimAchievement('noteClipped1');
-			os.apiWithDialog('clips/add-note', { clipId: clip.id, noteId: appearNote.id });
+			await os.apiWithDialog('clips/add-note', { clipId: clip.id, noteId: appearNote.id }).then(
+				/** 添加成功才通知成员集合。 */ (): void => { globalEvents.emit('clipNotesChanged', clip.id); },
+				/** 原对话框已呈现添加错误，不继续成功副作用。 */ (): void => {},
+			);
 		},
 	}];
 
@@ -231,11 +227,15 @@ export function getNoteMenu(props: {
 		});
 	}
 
+	/** 收藏成功后通知当前账户的收藏集合，不把对话框关闭当成成功。 */
 	function toggleFavorite(favorite: boolean): void {
 		claimAchievement('noteFavorited1');
 		os.apiWithDialog(favorite ? 'notes/favorites/create' : 'notes/favorites/delete', {
 			noteId: appearNote.id,
-		});
+		}).then(
+			/** 不伪造收藏结果。 */ (): void => { globalEvents.emit('noteFavoritesChanged'); },
+			/** 原对话框已呈现请求错误，拒绝分支不刷新。 */ (): void => {},
+		);
 	}
 
 	function toggleThreadMute(mute: boolean): void {
@@ -248,6 +248,7 @@ export function getNoteMenu(props: {
 		copyToClipboard(appearNote.text);
 	}
 
+	/** 置顶命令确认后使该作者主页的置顶集合失效。 */
 	function togglePin(pin: boolean): void {
 		os.apiWithDialog(pin ? 'i/pin' : 'i/unpin', {
 			noteId: appearNote.id,
@@ -255,12 +256,23 @@ export function getNoteMenu(props: {
 			'72dab508-c64d-498f-8740-a8eec1ba385a': {
 				text: i18n.ts.pinLimitExceeded,
 			},
-		});
+		}).then(
+			/** 真实账户回执经原更新入口提交，菜单与主页共享同一置顶事实。 */ (updated: Misskey.entities.MeDetailed): void => {
+				if ($i?.id === updated.id) updateCurrentAccountPartial(updated);
+				globalEvents.emit('userPinnedNotesChanged', updated.id);
+			},
+			/** 原对话框已呈现置顶拒绝，不让新增成功分支产生未处理的拒绝。 */ (): void => {},
+		);
 	}
 
+	/** 从当前 Clip 移除成功才通知成员集合。 */
 	async function unclip(): Promise<void> {
 		if (!props.currentClip) return;
-		os.apiWithDialog('clips/remove-note', { clipId: props.currentClip.id, noteId: appearNote.id });
+		const clipId: string = props.currentClip.id;
+		await os.apiWithDialog('clips/remove-note', { clipId, noteId: appearNote.id }).then(
+			/** 删除成功后统一失效菜单与成员集合。 */ (): void => { clipsCache.delete(); globalEvents.emit('clipNotesChanged', clipId); },
+			/** 原对话框已呈现错误，当前成员保持原样。 */ (): void => {},
+		);
 	}
 
 	async function removeFromAntenna(): Promise<void> {
