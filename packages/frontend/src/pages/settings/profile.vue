@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：个人资料编辑页面。
+作用：保留 Misskey 既有表单、文件选择和校验，服务端确认后通过账户更新入口提交状态。
+数据链：临时表单 → 串行保存请求 → 已确认账户单例；展示不将草稿当作业务事实。
+-->
+
 <template>
 <SearchMarker path="/settings/profile" :label="i18n.ts.profile" :keywords="['profile']" icon="ti ti-user">
 	<div
@@ -15,8 +21,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div :class="$style.twitterIdentityBody">
 				<MkAvatar :class="$style.twitterAvatar" :user="$i" forceShowDecoration/>
 				<div :class="$style.twitterIdentityButtons">
-					<MkButton primary rounded @click="changeBanner">{{ i18n.ts._profile.changeBanner }}</MkButton>
-					<MkButton primary rounded @click="changeAvatar">{{ i18n.ts._profile.changeAvatar }}</MkButton>
+					<MkButton primary rounded data-testid="profile-change-banner" @click="changeBanner">{{ i18n.ts._profile.changeBanner }}</MkButton>
+					<MkButton primary rounded data-testid="profile-change-avatar" @click="changeAvatar">{{ i18n.ts._profile.changeAvatar }}</MkButton>
 					<MkButton rounded type="routerLink" to="/settings/avatar-decoration">{{ i18n.ts.decorate }} <i class="ti ti-sparkles"></i></MkButton>
 				</div>
 			</div>
@@ -25,7 +31,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div :class="$style.banner" :style="bannerStyle">
 				<div :class="$style.bannerEdit">
 					<SearchMarker :keywords="['banner', 'change']">
-						<MkButton primary rounded @click="changeBanner"><SearchLabel>{{ i18n.ts._profile.changeBanner }}</SearchLabel></MkButton>
+						<MkButton primary rounded data-testid="profile-change-banner" @click="changeBanner"><SearchLabel>{{ i18n.ts._profile.changeBanner }}</SearchLabel></MkButton>
 					</SearchMarker>
 				</div>
 			</div>
@@ -33,7 +39,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkAvatar :class="$style.avatar" :user="$i" forceShowDecoration @click="changeAvatar"/>
 				<div class="_buttonsCenter">
 					<SearchMarker :keywords="['avatar', 'icon', 'change']">
-						<MkButton primary rounded @click="changeAvatar"><SearchLabel>{{ i18n.ts._profile.changeAvatar }}</SearchLabel></MkButton>
+						<MkButton primary rounded data-testid="profile-change-avatar" @click="changeAvatar"><SearchLabel>{{ i18n.ts._profile.changeAvatar }}</SearchLabel></MkButton>
 					</SearchMarker>
 					<MkButton primary rounded type="routerLink" to="/settings/avatar-decoration">{{ i18n.ts.decorate }} <i class="ti ti-sparkles"></i></MkButton>
 				</div>
@@ -43,7 +49,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<!-- 主字段组（name / bio）：Twitter 分支为 token 卡片，控件本体共享（Core 级主工作流） -->
 		<div :class="isTwitterUi ? $style.twitterCard : '_gaps_m'">
 		<SearchMarker :keywords="['name']">
-			<MkInput v-model="profile.name" :max="30" manualSave :mfmAutocomplete="['emoji']">
+			<MkInput v-model="profile.name" data-testid="profile-name" :max="30" manualSave :mfmAutocomplete="['emoji']">
 				<template #label><SearchLabel>{{ i18n.ts._profile.name }}</SearchLabel></template>
 			</MkInput>
 		</SearchMarker>
@@ -198,6 +204,7 @@ import { chooseDriveFile } from '@/utility/drive.js';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
 import { ensureSignin } from '@/i.js';
+import { updateCurrentAccountPartial } from '@/accounts.js';
 import { langmap } from '@/utility/langmap.js';
 import { definePage } from '@/page.js';
 import { claimAchievement } from '@/utility/achievements.js';
@@ -240,11 +247,11 @@ const profile = reactive({
 	isCat: $i.isCat ?? false,
 });
 
-watch(() => profile, () => {
-	save();
-}, {
-	deep: true,
-});
+watch(profile,
+	/** 手动保存控件提交 v-model 后等待整条保存链路，不使用悬空 Promise。 */
+	async (): Promise<void> => { await save(); },
+	{ deep: true },
+);
 
 const fields = ref($i.fields.map(field => ({ id: genId(), name: field.name, value: field.value })) ?? []);
 const fieldEditMode = ref(false);
@@ -265,15 +272,52 @@ function deleteField(itemId: string) {
 	fields.value = fields.value.filter(f => f.id !== itemId);
 }
 
-function saveFields() {
-	os.apiWithDialog('i/update', {
-		fields: fields.value.filter(field => field.name !== '' && field.value !== '').map(field => ({ name: field.name, value: field.value })),
+/** 保存命令串行执行，防止旧请求晚到覆盖后一次编辑；不存放账户事实。 */
+let profileSaveQueue: Promise<void> = Promise.resolve();
+
+/** 仅将服务端确认的结果提交到 Misskey 既有账户更新入口。 */
+function saveProfileChanges(
+	changes: Misskey.Endpoints['i/update']['req'],
+	customErrors?: os.ApiWithDialogCustomErrors,
+): Promise<boolean> {
+	const result: Promise<boolean> = profileSaveQueue.then(
+		/** 保持同一编辑器内各次服务端写入及账户回填的顺序。 */
+		async (): Promise<boolean> => {
+			const saved: Misskey.entities.MeDetailed | null = await os.apiWithDialog('i/update', changes, undefined, customErrors).catch(
+				/** 请求错误已由 apiWithDialog 呈现，失败不提交草稿或伪造成功。 */
+				(): null => null,
+			);
+			if (saved == null) return false;
+			updateCurrentAccountPartial(saved);
+			return true;
+		},
+	);
+	profileSaveQueue = result.then(
+		/** 释放成功命令占用，下一条命令可以执行。 */
+		(): void => {},
+		/** 队列不因异常永久中断；原 result 仍向调用方传播异常。 */
+		(): void => {},
+	);
+	return result;
+}
+
+/** 将扩展字段草稿序列化后提交，账户展示仅消费服务端确认值。 */
+async function saveFields(): Promise<void> {
+	await saveProfileChanges({
+		fields: fields.value.filter(
+			/** 空白表单行不是已保存字段。 */
+			(field: (typeof fields.value)[number]): boolean => field.name !== '' && field.value !== '',
+		).map(
+			/** 移除临时 UI 行标识，保持原请求 Schema。 */
+			(field: (typeof fields.value)[number]): { name: string; value: string } => ({ name: field.name, value: field.value }),
+		),
 	});
 }
 
-function save() {
-	os.apiWithDialog('i/update', {
-		// 空文字列をnullにしたいので??は使うな
+/** 保存基本资料的值快照，成功后才执行原有成就逻辑。 */
+async function save(): Promise<void> {
+	const changes: Misskey.Endpoints['i/update']['req'] = {
+		// 请求契约中空字符串规范化为 null，而不是缺省值。
 		// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
 		name: profile.name || null,
 		// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
@@ -288,29 +332,25 @@ function save() {
 		lang: profile.lang || null,
 		isBot: !!profile.isBot,
 		isCat: !!profile.isCat,
-	}, undefined, {
+	};
+	const saved: boolean = await saveProfileChanges(changes, {
+		/** 保持原资料名称校验的错误提示。 */
 		'0b3f9f6a-2f4d-4b1f-9fb4-49d3a2fd7191': {
 			title: i18n.ts.yourNameContainsProhibitedWords,
 			text: i18n.ts.yourNameContainsProhibitedWordsDescription,
 		},
 	});
+	if (!saved) return;
 	claimAchievement('profileFilled');
-	if (profile.name === 'syuilo' || profile.name === 'しゅいろ') {
-		claimAchievement('setNameToSyuilo');
-	}
-	if (profile.isCat) {
-		claimAchievement('markedAsCat');
-	}
+	if (changes.name === 'syuilo' || changes.name === 'しゅいろ') claimAchievement('setNameToSyuilo');
+	if (changes.isCat) claimAchievement('markedAsCat');
 }
 
-function changeAvatar(ev: PointerEvent) {
-	async function done(driveFile: Misskey.entities.DriveFile) {
-		const i = await os.apiWithDialog('i/update', {
-			avatarId: driveFile.id,
-		});
-		$i.avatarId = i.avatarId;
-		$i.avatarUrl = i.avatarUrl;
-		claimAchievement('profileFilled');
+/** 保留原头像文件选择流程，等待保存及既有账户状态提交完成。 */
+function changeAvatar(ev: PointerEvent): void {
+	/** 将已上传或云盘已有文件的标识提交，头像附属元数据来自服务端。 */
+	async function done(driveFile: Misskey.entities.DriveFile): Promise<void> {
+		if (await saveProfileChanges({ avatarId: driveFile.id })) claimAchievement('profileFilled');
 	}
 
 	os.popupMenu([{
@@ -319,46 +359,37 @@ function changeAvatar(ev: PointerEvent) {
 	}, {
 		text: i18n.ts.upload,
 		icon: 'ti ti-upload',
-		action: async () => {
-			const files = await os.chooseFileFromPc({ multiple: false });
-			const file = files[0];
-
-			let originalOrCropped = file;
-
-			const { canceled } = await os.confirm({
-				type: 'question',
-				text: i18n.ts.cropImageAsk,
-				okText: i18n.ts.cropYes,
-				cancelText: i18n.ts.cropNo,
+		/** 选择、裁剪、上传与保存按原顺序等待，取消不产生写入。 */
+		action: async (): Promise<void> => {
+			const files: Awaited<ReturnType<typeof os.chooseFileFromPc>> = await os.chooseFileFromPc({ multiple: false });
+			const file: File | undefined = files[0];
+			if (file == null) return;
+			let originalOrCropped: File = file;
+			const { canceled }: Awaited<ReturnType<typeof os.confirm>> = await os.confirm({
+				type: 'question', text: i18n.ts.cropImageAsk, okText: i18n.ts.cropYes, cancelText: i18n.ts.cropNo,
 			});
-
-			if (!canceled) {
-				originalOrCropped = await os.cropImageFile(file, {
-					aspectRatio: 1,
-				});
-			}
-
-			const driveFile = (await os.launchUploader([originalOrCropped], { multiple: false }))[0];
-			done(driveFile);
+			if (!canceled) originalOrCropped = await os.cropImageFile(file, { aspectRatio: 1 });
+			const uploaded: Misskey.entities.DriveFile[] = await os.launchUploader([originalOrCropped], { multiple: false });
+			const driveFile: Misskey.entities.DriveFile | undefined = uploaded[0];
+			if (driveFile != null) await done(driveFile);
 		},
 	}, {
 		text: i18n.ts.fromDrive,
 		icon: 'ti ti-cloud',
-		action: () => {
-			chooseDriveFile({ multiple: false }).then(files => {
-				done(files[0]);
-			});
+		/** 云盘选择取消时无操作，选择成功后等待完整保存链路。 */
+		action: async (): Promise<void> => {
+			const files: Misskey.entities.DriveFile[] = await chooseDriveFile({ multiple: false });
+			const file: Misskey.entities.DriveFile | undefined = files[0];
+			if (file != null) await done(file);
 		},
 	}], ev.currentTarget ?? ev.target);
 }
 
-function changeBanner(ev: PointerEvent) {
-	async function done(driveFile: Misskey.entities.DriveFile) {
-		const i = await os.apiWithDialog('i/update', {
-			bannerId: driveFile.id,
-		});
-		$i.bannerId = i.bannerId;
-		$i.bannerUrl = i.bannerUrl;
+/** 保留原横幅选择流程，与其他资料写入共用串行提交入口。 */
+function changeBanner(ev: PointerEvent): void {
+	/** 只提交横幅文件标识，URL 与附属状态使用服务端确认结果。 */
+	async function done(driveFile: Misskey.entities.DriveFile): Promise<void> {
+		await saveProfileChanges({ bannerId: driveFile.id });
 	}
 
 	os.popupMenu([{
@@ -367,35 +398,28 @@ function changeBanner(ev: PointerEvent) {
 	}, {
 		text: i18n.ts.upload,
 		icon: 'ti ti-upload',
-		action: async () => {
-			const files = await os.chooseFileFromPc({ multiple: false });
-			const file = files[0];
-
-			let originalOrCropped = file;
-
-			const { canceled } = await os.confirm({
-				type: 'question',
-				text: i18n.ts.cropImageAsk,
-				okText: i18n.ts.cropYes,
-				cancelText: i18n.ts.cropNo,
+		/** 保留横幅原裁剪比例，顺序等待上传和保存完成。 */
+		action: async (): Promise<void> => {
+			const files: Awaited<ReturnType<typeof os.chooseFileFromPc>> = await os.chooseFileFromPc({ multiple: false });
+			const file: File | undefined = files[0];
+			if (file == null) return;
+			let originalOrCropped: File = file;
+			const { canceled }: Awaited<ReturnType<typeof os.confirm>> = await os.confirm({
+				type: 'question', text: i18n.ts.cropImageAsk, okText: i18n.ts.cropYes, cancelText: i18n.ts.cropNo,
 			});
-
-			if (!canceled) {
-				originalOrCropped = await os.cropImageFile(file, {
-					aspectRatio: 2,
-				});
-			}
-
-			const driveFile = (await os.launchUploader([originalOrCropped], { multiple: false }))[0];
-			done(driveFile);
+			if (!canceled) originalOrCropped = await os.cropImageFile(file, { aspectRatio: 2 });
+			const uploaded: Misskey.entities.DriveFile[] = await os.launchUploader([originalOrCropped], { multiple: false });
+			const driveFile: Misskey.entities.DriveFile | undefined = uploaded[0];
+			if (driveFile != null) await done(driveFile);
 		},
 	}, {
 		text: i18n.ts.fromDrive,
 		icon: 'ti ti-cloud',
-		action: () => {
-			chooseDriveFile({ multiple: false }).then(files => {
-				done(files[0]);
-			});
+		/** 已有云盘文件按相同保存契约处理。 */
+		action: async (): Promise<void> => {
+			const files: Misskey.entities.DriveFile[] = await chooseDriveFile({ multiple: false });
+			const file: Misskey.entities.DriveFile | undefined = files[0];
+			if (file != null) await done(file);
 		},
 	}], ev.currentTarget ?? ev.target);
 }
