@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：账户设置页路由宿主。
+作用：呈现设置菜单和子页，保留有效设置路由的展示上下文。
+数据链：全局路由只在归属 settings 时更新本页；离开后的缓存不创建无效嵌套路由，不保存业务实体。
+-->
+
 <template>
 <TwitterSettingsShell
 	v-if="isTwitterUi && currentPage?.route.name != null"
@@ -29,7 +35,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkSuperMenu :def="menuDef" :grid="narrow" :searchIndex="searchIndex"></MkSuperMenu>
 					</div>
 				</div>
-				<div v-if="!(narrow && currentPage?.route.name == null)" class="main">
+				<div v-if="currentPage?.route.name != null" class="main">
 					<div style="container-type: inline-size;">
 						<NestedRouterView/>
 					</div>
@@ -42,6 +48,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script setup lang="ts">
 import { computed, inject, onActivated, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from 'vue';
+import type { ComputedRef, Ref, ShallowRef } from 'vue';
+import type { PathResolvedResult } from '@/lib/nirax.js';
 import type { PageMetadata } from '@/page.js';
 import type { SuperMenuDef } from '@/components/MkSuperMenu.vue';
 import { i18n } from '@/i18n.js';
@@ -61,18 +69,17 @@ import { enableStoragePersistence, getStoragePersistenceSharedRefSync, storagePe
 import { DI } from '@/di.js';
 import { TwitterSettingsShell } from '@/ui/twitter/index.js';
 
-/* 以下两项原为顶层 await（async setup）。async setup 页面经 RouterView 的
- * KeepAlive > Suspense 结构缓存后再次激活会渲染空白（Vue 3.5.x 恢复缺陷，
- * 见 keepalive-freshness-audit K-13），故改为同步声明 + 异步填充，不阻塞 setup。 */
+/** 设置搜索索引后台填充，不阻塞设置树的同步挂载。 */
+const searchIndex: ShallowRef<ReturnType<typeof genSearchIndexes>> = shallowRef([]);
+void import('search-index:settings').then(
+	/** 转换构建期搜索资料为既有菜单索引。 */
+	({ searchIndexes }: typeof import('search-index:settings')): void => {
+		searchIndex.value = genSearchIndexes(searchIndexes);
+	},
+);
 
-/** 设置菜单搜索索引：动态导入异步填充（legacy 分支 SuperMenu 消费，晚到仅延迟搜索可用性）。 */
-const searchIndex = shallowRef<ReturnType<typeof genSearchIndexes>>([]);
-void import('search-index:settings').then(({ searchIndexes }) => {
-	searchIndex.value = genSearchIndexes(searchIndexes);
-});
-
-/** 存储持久化状态：同步持有共享只读 ref（后台初始化；enableStoragePersistence 的后续变更经共享 ref 生效）。 */
-const storagePersisted = getStoragePersistenceSharedRefSync();
+/** 只读消费既有存储状态，探测实现留在原 utility。 */
+const storagePersisted: Readonly<Ref<boolean>> = getStoragePersistenceSharedRefSync();
 
 const indexInfo = {
 	title: i18n.ts.settings,
@@ -95,12 +102,32 @@ const twitterShellTitle = computed<string>(() => childInfo.value?.title ?? i18n.
 const narrow = ref(false);
 const NARROW_THRESHOLD = 600;
 
-const currentPage = computed(() => router.currentRef.value.child);
+/** 设置 UI 副作用的路由准入，不参与业务权限或实体决策。 */
+const isSettingsRoute: ComputedRef<boolean> = computed(
+	/** 从全局路由派生当前是否属于设置树。 */
+	(): boolean => router.currentRef.value.route.name === 'settings',
+);
 
-const ro = new ResizeObserver((entries, observer) => {
-	if (entries.length === 0) return;
-	narrow.value = entries[0].borderBoxSize[0].inlineSize < NARROW_THRESHOLD;
-});
+/** 最近的有效设置子路由展示引用；非 settings 导航不将其清空。 */
+const currentPage: ShallowRef<PathResolvedResult | undefined> = shallowRef(
+	isSettingsRoute.value ? router.currentRef.value.child : undefined,
+);
+watch(router.currentRef,
+	/** 只接受设置树自身的上下文，避免停用缓存被无关路由重建。 */
+	(current: PathResolvedResult): void => {
+		if (current.route.name === 'settings') currentPage.value = current.child;
+	},
+	{ flush: 'sync' },
+);
+
+/** 仅测量当前设置布局，停用缓存页不解释零尺寸。 */
+const ro: ResizeObserver = new ResizeObserver(
+	/** 将有效节点宽度投影为菜单展示状态。 */
+	(entries: ResizeObserverEntry[]): void => {
+		if (!isSettingsRoute.value || entries.length === 0) return;
+		narrow.value = entries[0].borderBoxSize[0].inlineSize < NARROW_THRESHOLD;
+	},
+);
 
 function skipAutoBackup() {
 	store.set('showPreferencesAutoCloudBackupSuggestion', false);
@@ -219,37 +246,35 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 	}],
 }]);
 
-onMounted(() => {
-	if (el.value == null) return; // TSを黙らすため
-
-	ro.observe(el.value);
-
+/** 只在设置首页测量并沿用宽屏默认入口，其他页面不触发重定向。 */
+function measureSettings(): void {
+	if (!isSettingsRoute.value || el.value == null) return;
 	narrow.value = el.value.offsetWidth < NARROW_THRESHOLD;
+	if (!narrow.value && currentPage.value?.route.name == null) router.replace('/settings/profile');
+}
 
-	if (!narrow.value && currentPage.value?.route.name == null) {
-		router.replace('/settings/profile');
-	}
-});
-
-onActivated(() => {
-	if (el.value == null) return; // TSを黙らすため
-
-	narrow.value = el.value.offsetWidth < NARROW_THRESHOLD;
-
-	if (!narrow.value && currentPage.value?.route.name == null) {
-		router.replace('/settings/profile');
-	}
-});
-
-onUnmounted(() => {
-	ro.disconnect();
-});
-
-watch(router.currentRef, (to) => {
-	if (to.route.name === 'settings' && to.child?.route.name == null && !narrow.value) {
-		router.replace('/settings/profile');
-	}
-});
+watch(el,
+	/** 跟随本地布局节点更换观察对象，覆盖首页与子页切换。 */
+	(value: HTMLElement | null, previous: HTMLElement | null): void => {
+		if (previous != null) ro.unobserve(previous);
+		if (value != null) ro.observe(value);
+	},
+	{ flush: 'post' },
+);
+onMounted(measureSettings);
+onActivated(measureSettings);
+onUnmounted(
+	/** 最终销毁时释放本页尺寸观察。 */
+	(): void => { ro.disconnect(); },
+);
+watch(router.currentRef,
+	/** 仅在有效设置首页执行既有宽屏入口导航。 */
+	(to: PathResolvedResult): void => {
+		if (to.route.name === 'settings' && to.child?.route.name == null && !narrow.value) {
+			router.replace('/settings/profile');
+		}
+	},
+);
 
 const emailNotConfigured = computed(() => $i && instance.enableEmail && ($i.email == null || !$i.emailVerified));
 

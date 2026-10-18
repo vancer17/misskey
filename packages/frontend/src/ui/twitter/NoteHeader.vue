@@ -3,22 +3,28 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter 帖子身份展示（NoteHeader）。
+作用：保持帖子模型只读，将作者头像和名称绑定到既有账户／用户展示引用。
+数据链：实际作者标识 → 只读身份展示；不改写帖子事实或动作参数。
+-->
+
 <template>
 <header :class="$style.root">
 	<div :class="$style.identity">
 		<MkA
 			v-if="!mock"
-			v-user-preview="note.user.id"
+			v-user-preview="displayUser.id"
 			:class="$style.name"
-			:to="userPage(note.user)"
+			:to="userPage(displayUser)"
 		>
-			<MkUserName :user="note.user"/>
+			<MkUserName :user="displayUser"/>
 		</MkA>
-		<span v-else :class="$style.name"><MkUserName :user="note.user"/></span>
+		<span v-else :class="$style.name"><MkUserName :user="displayUser"/></span>
 
-		<span v-if="note.user.isBot" :class="$style.bot">bot</span>
+		<span v-if="displayUser.isBot" :class="$style.bot">bot</span>
 		<span
-			v-for="(role, index) in note.user.badgeRoles"
+			v-for="(role, index) in displayUser.badgeRoles"
 			:key="index"
 			v-tooltip="role.name"
 			:class="$style.badgeRole"
@@ -28,7 +34,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<div :class="$style.meta">
-		<span :class="$style.username"><MkAcct :user="note.user"/></span>
+		<span :class="$style.username"><MkAcct :user="displayUser"/></span>
 		<span aria-hidden="true">·</span>
 		<MkA v-if="!mock" :to="notePage(note)"><MkTime :time="note.createdAt"/></MkA>
 		<span v-else><MkTime :time="note.createdAt"/></span>
@@ -59,14 +65,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import * as Misskey from 'misskey-js';
+import type { ComputedRef } from 'vue';
+import { useTwitterDisplayUser } from './composables/use-twitter-display-user.js';
 import { i18n } from '@/i18n.js';
 import { notePage } from '@/filters/note.js';
 import { userPage } from '@/filters/user.js';
 
-defineProps<{
+/** 既有帖子与展示上下文作为只读输入。 */
+const props = defineProps<{
 	note: Misskey.entities.Note;
 	mock?: boolean;
 }>();
+/** 身份展示与帖子的业务快照分离。 */
+const displayUser: ComputedRef<Readonly<Misskey.entities.UserLite>> = useTwitterDisplayUser(
+	/** 提取该组件实际显示的作者，不混淆转发者与原作者。 */
+	(): Misskey.entities.UserLite => props.note.user,
+	/** 样本展示不混入真实账户。 */
+	(): boolean => props.mock ?? false,
+);
 </script>
 
 <style lang="scss" module>
