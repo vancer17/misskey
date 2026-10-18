@@ -32,7 +32,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { defineAsyncComponent, computed, inject, watch, ref } from 'vue';
+import { defineAsyncComponent, computed, inject, watch, ref, onActivated } from 'vue';
 import * as Misskey from 'misskey-js';
 import { acct as getAcct } from '@/filters/user.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -98,6 +98,32 @@ function fetchUser(): void {
 
 watch(() => props.acct, fetchUser, {
 	immediate: true,
+});
+
+/** KeepAlive 首次激活跳过标志（挂载期 watch immediate 已完成首拉，防止双拉）。 */
+let skipNextActivation = true;
+
+/** 回访软刷新（K-04）：拉取成功才回填、失败保留缓存实体。
+ *  不沿用 fetchUser——其先置空 user 再拉取（硬刷新语义），会拆建 TwitterHome 子树并闪空态。 */
+async function refreshUserOnActivation(): Promise<void> {
+	if (props.acct == null) return;
+
+	const { username, host } = Misskey.acct.parse(props.acct);
+	const fetched = await misskeyApi('users/show', {
+		username,
+		host,
+	}).catch(() => null);
+	if (fetched != null) {
+		user.value = fetched;
+	}
+}
+
+onActivated(() => {
+	if (skipNextActivation) {
+		skipNextActivation = false;
+		return;
+	}
+	void refreshUserOnActivation();
 });
 
 const headerActions = computed(() => []);
