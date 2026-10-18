@@ -17,3 +17,6 @@ export type { TwitterPageStateType, TwitterPageSkeletonVariant } from './page-st
 export { RIGHT_RAIL_LIMITS } from './right-rail.js';
 export type { TwitterTrendItem } from './right-rail.js';
 export { twitterUserErrorStateType } from './user-state.js';
+
+/** 服务端确认帖子计数的只读展示投影。 */
+export type { TwitterNoteCounters } from './note-counters.js';
