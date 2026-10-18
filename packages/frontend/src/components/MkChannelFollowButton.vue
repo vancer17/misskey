@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <button
 	class="_button"
-	:class="[$style.root, { [$style.wait]: wait, [$style.active]: isFollowing, [$style.full]: full }]"
+	:class="[$style.root, { [$style.wait]: wait, [$style.active]: isFollowing, [$style.full]: full, [$style.twitter]: isTwitterUi }]"
 	:disabled="wait"
 	@click="onClick"
 >
@@ -29,6 +29,7 @@ import { ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = withDefaults(defineProps<{
 	channel: Misskey.entities.Channel;
@@ -36,6 +37,9 @@ const props = withDefaults(defineProps<{
 }>(), {
 	full: false,
 });
+
+/** Twitter UI 判定（Shell 注入；驱动关注按钮的 X 表现变体）。 */
+const isTwitterUi = useIsTwitterUi();
 
 const isFollowing = ref(props.channel.isFollowing);
 const wait = ref(false);
@@ -116,6 +120,33 @@ async function onClick() {
 	&.wait {
 		cursor: wait !important;
 		opacity: 0.7;
+	}
+}
+
+/* Twitter UI 表现变体（P-25）：X follow button 行为——nitter 为只读查看器无关注能力（检索证据见
+ * port-fidelity-audit 滚动章节），故取 X-behavior：未关注 = accent 实心 pill（fg-on-accent 文字）、
+ * 已关注 = hairline 描边 pill、悬停转危险色提示取关。 */
+.twitter {
+	border-color: var(--twitter-accent);
+	background: var(--twitter-accent);
+	color: var(--twitter-fg-on-accent);
+	border-radius: var(--twitter-radius-pill);
+
+	&:hover {
+		background: var(--twitter-accent-hover);
+		border-color: var(--twitter-accent-hover);
+	}
+
+	&.active {
+		background: transparent;
+		border-color: var(--twitter-border);
+		color: var(--twitter-fg);
+
+		&:hover {
+			background: color-mix(in srgb, var(--twitter-danger) 10%, transparent);
+			border-color: var(--twitter-danger);
+			color: var(--twitter-danger);
+		}
 	}
 }
 
