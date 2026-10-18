@@ -957,7 +957,19 @@ type ChannelsFollowedRequest = operations['channels___followed']['requestBody'][
 type ChannelsFollowedResponse = operations['channels___followed']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type ChannelsFollowedTimelineRequest = operations['channels___followed-timeline']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChannelsFollowedTimelineResponse = operations['channels___followed-timeline']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type ChannelsFollowRequest = operations['channels___follow']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChannelsGlobalTimelineRequest = operations['channels___global-timeline']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChannelsGlobalTimelineResponse = operations['channels___global-timeline']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type ChannelsMuteCreateRequest = operations['channels___mute___create']['requestBody']['content']['application/json'];
@@ -1722,6 +1734,10 @@ declare namespace entities {
         ChannelsFollowRequest,
         ChannelsFollowedRequest,
         ChannelsFollowedResponse,
+        ChannelsFollowedTimelineRequest,
+        ChannelsFollowedTimelineResponse,
+        ChannelsGlobalTimelineRequest,
+        ChannelsGlobalTimelineResponse,
         ChannelsMuteCreateRequest,
         ChannelsMuteDeleteRequest,
         ChannelsMuteListResponse,

@@ -62,7 +62,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, watch, ref, markRaw, inject } from 'vue';
+import { computed, watch, ref, markRaw, inject, onActivated } from 'vue';
 import * as Misskey from 'misskey-js';
 import { host } from '@@/js/config.js';
 import PageWithHeader from '@/components/global/PageWithHeader.vue';
@@ -199,6 +199,39 @@ function fetchNote() {
 
 watch(() => props.noteId, fetchNote, {
 	immediate: true,
+});
+
+/** KeepAlive 首次激活跳过标志（挂载期 watch immediate 已完成首拉，防止双拉）。 */
+let skipNextActivation = true;
+
+/**
+ * 回访刷新（K-03）：重取主帖使编辑 / 删除生效（拉取失败保留缓存内容，不强转错误终态），
+ * 并仅重载已展开的线程段（保留 showPrev / showNext 展开状态，不整体收起）。
+ */
+async function refreshNoteOnActivation(): Promise<void> {
+	const fetched = await misskeyApi('notes/show', {
+		noteId: props.noteId,
+	}).catch(() => null);
+	if (fetched == null) return;
+
+	note.value = fetched;
+
+	if (showPrev.value !== false) {
+		const prevPaginator = showPrev.value === 'channel' ? prevChannelPaginator : prevUserPaginator;
+		if (prevPaginator.items.value.length > 0) void prevPaginator.reload();
+	}
+	if (showNext.value !== false) {
+		const nextPaginator = showNext.value === 'channel' ? nextChannelPaginator : nextUserPaginator;
+		if (nextPaginator.items.value.length > 0) void nextPaginator.reload();
+	}
+}
+
+onActivated(() => {
+	if (skipNextActivation) {
+		skipNextActivation = false;
+		return;
+	}
+	void refreshNoteOnActivation();
 });
 
 definePage(() => ({

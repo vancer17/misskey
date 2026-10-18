@@ -36,3 +36,7 @@ twitter UI 下 `MkUserSetupDialog` **继续弹出**，按 Compatible 等级改�
 | --- | --- | --- |
 | P-23 右栏固定内容（趋势 + 推荐关注） | 本决策 D2 | 新功能件（组件 + 数据源） |
 | P-25 Channels 页 Compatible 化 | 本决策 D4 | 新页面项 |
+
+## 补记（2026-10-14）：D4 裁决更新
+
+P-25 落地后的用户走查驱动产品决策变更：频道**详情页**处理等级由 Compatible 升级为 **X Communities IA 对齐（Full）**——社区头（banner + 名称 / 描述 / 参加人数 + Join·收藏动作行）、tab 集合按关注态派生（关注后 Home / Explore / About / Search，未关注仅 Explore，join 后落 Home）。列表页 `/channels` 维持 Compatible 不变。布局真值映射 nitter `views/community.nim` + `profile/_community.scss`；join-gate 与 Home/Explore 命名为 X-behavior（B 类登记）。完整映射表与偏离登记见 [port-fidelity-audit.md](../port-fidelity-audit.md) 第九节 CH-11。
