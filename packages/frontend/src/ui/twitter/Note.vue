@@ -3,11 +3,19 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter 业务帖子组件。
+作用：复用既有 useNote 动作与订阅，仅将用户身份展示绑定到响应式引用。
+数据链：帖子事实留在 useNote；账户更新单向派生至展示，不反馈至业务动作。
+-->
+
 <template>
 <div
 	v-if="!isDeleted && !hardMuted && !hideByPlugin && muted === false"
 	ref="rootEl"
 	v-hotkey="keymap"
+	data-testid="twitter-note"
+	:data-note-id="note.id"
 		:class="[$style.root, { [$style.embedded]: embedded, [$style.mobile]: isMobile }]"
 	tabindex="0"
 >
@@ -41,7 +49,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			type="button"
 			@click="renoteCollapsed = false"
 		>
-			<MkAvatar :class="$style.collapsedAvatar" :user="appearNote.user" :link="!mock" :preview="!mock"/>
+			<MkAvatar :class="$style.collapsedAvatar" :user="displayUser" :link="!mock" :preview="!mock"/>
 			<span :class="$style.collapsedText">
 				<Mfm
 					:text="getNoteSummary(appearNote)"
@@ -70,7 +78,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div :class="$style.avatarColumn">
 			<MkAvatar
 				:class="$style.avatar"
-				:user="appearNote.user"
+				:user="displayUser"
 				:link="!mock"
 				:preview="!mock"
 			/>
@@ -252,21 +260,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<I18n v-if="muted === 'sensitiveMute'" :src="i18n.ts.userSaysSomethingSensitive" tag="small">
 		<template #name>
 			<MkA v-user-preview="appearNote.userId" :to="userPage(appearNote.user)">
-				<MkUserName :user="appearNote.user"/>
+				<MkUserName :user="displayUser"/>
 			</MkA>
 		</template>
 	</I18n>
 	<I18n v-else-if="isMutedContextVisible" :src="i18n.ts.userSaysSomething" tag="small">
 		<template #name>
 			<MkA v-user-preview="appearNote.userId" :to="userPage(appearNote.user)">
-				<MkUserName :user="appearNote.user"/>
+				<MkUserName :user="displayUser"/>
 			</MkA>
 		</template>
 	</I18n>
 	<I18n v-else :src="i18n.ts.userSaysSomethingAbout" tag="small">
 		<template #name>
 			<MkA v-user-preview="appearNote.userId" :to="userPage(appearNote.user)">
-				<MkUserName :user="appearNote.user"/>
+				<MkUserName :user="displayUser"/>
 			</MkA>
 		</template>
 		<template #word>
@@ -281,7 +289,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import type { ComponentPublicInstance } from 'vue';
 import { computed, inject, provide, ref, shallowRef, useTemplateRef } from 'vue';
-import type { Ref } from 'vue';
+import type { ComputedRef, Ref } from 'vue';
+import { useTwitterDisplayUser } from './composables/use-twitter-display-user.js';
 import * as Misskey from 'misskey-js';
 import { useNote } from '@/composables/use-note.js';
 import { prefer } from '@/preferences.js';
@@ -387,6 +396,14 @@ const {
 	currentClip,
 	currentAntenna,
 });
+
+/** 展示作者响应账户变更；useNote 的事实和动作参数保持原样。 */
+const displayUser: ComputedRef<Readonly<Misskey.entities.UserLite>> = useTwitterDisplayUser(
+	/** 提取帖子真实显示的作者。 */
+	(): Misskey.entities.UserLite => appearNote.user,
+	/** 样本模式不读取真实账户作为替代。 */
+	(): boolean => props.mock,
+);
 
 provide(DI.mfmEmojiReactCallback, reactViaMfmEmoji);
 
