@@ -35,6 +35,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</span>
 		</MkA>
 
+		<!-- 频道入口（P-25 可达性补全）：对齐 X Communities 侧栏项（位于 Profile 前）；
+			X 对未加入任何 Community 的用户收纳入口，此处按 Misskey 频道为核心功能常驻显示
+			（已记录偏离，见 port-fidelity-audit CH-10）。 -->
+		<MkA
+			:class="$style.item"
+			:activeClass="$style.active"
+			to="/channels"
+			:aria-label="i18n.ts.channel"
+		>
+			<i :class="$style.itemIcon" class="ti ti-device-tv ti-fw"></i>
+			<span :class="$style.itemText">{{ i18n.ts.channel }}</span>
+		</MkA>
+
 		<MkA
 			v-if="profilePath != null"
 			:class="$style.item"
