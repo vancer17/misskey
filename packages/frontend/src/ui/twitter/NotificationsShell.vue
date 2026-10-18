@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter 通知页面壳。
+作用：呈现通知页签与吸顶头，主出口的位置恢复委托 Shell；独立窗口保留自己的滚动。
+数据链：当前页面 DOM → UI 滚动位置；通知状态仍归既有实现。
+-->
+
 <template>
 <div ref="rootEl" class="_pageScrollable" :class="$style.root">
 	<MkStickyContainer>
@@ -38,7 +44,7 @@ import type { Tab } from '@/components/global/MkPageHeader.tabs.vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
 import MkSwiper from '@/components/MkSwiper.vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
-import { useScrollPositionKeeper } from '@/composables/use-scroll-position-keeper.js';
+import { useTwitterScrollPositionKeeper } from '@/ui/twitter/composables/use-twitter-scroll-host.js';
 import { prefer } from '@/preferences.js';
 import TwitterNotificationsHeader from './NotificationsHeader.vue';
 
@@ -54,11 +60,11 @@ withDefaults(defineProps<{
 const tabModel = defineModel<string>('tab');
 const rootEl = useTemplateRef('rootEl');
 
-useScrollPositionKeeper(rootEl);
+useTwitterScrollPositionKeeper(rootEl);
 
 /** 滚回通知列表顶部（X 行为：重按当前 tab 触发）。 */
 function scrollToTop(): void {
-	if (rootEl.value != null) {
+	if (rootEl.value != null && rootEl.value.isConnected) {
 		scrollInContainer(rootEl.value, {
 			top: 0,
 			behavior: prefersReducedMotion ? 'auto' : 'smooth',

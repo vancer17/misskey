@@ -91,7 +91,7 @@ import {
 	useTwitterLayout,
 } from '@/ui/twitter/index.js';
 import type { TwitterPageStateType } from '@/ui/twitter/index.js';
-import { useScrollPositionKeeper } from '@/composables/use-scroll-position-keeper.js';
+import { useTwitterScrollPositionKeeper } from '@/ui/twitter/index.js';
 import number from '@/filters/number.js';
 import { userPage } from '@/filters/user.js';
 import { i18n } from '@/i18n.js';
@@ -118,7 +118,7 @@ const { isMobile } = useTwitterLayout();
 const rootEl = useTemplateRef<HTMLDivElement>('rootEl');
 
 /** 保留列表滚动位置（返回导航 / tab 互切后恢复）。 */
-useScrollPositionKeeper(rootEl);
+useTwitterScrollPositionKeeper(rootEl);
 
 /**
  * 分页器：按列表类型绑定唯一端点（不创建未消费实例，规范第 9 条）；

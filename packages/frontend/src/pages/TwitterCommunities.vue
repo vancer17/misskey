@@ -181,7 +181,7 @@ import MkButton from '@/components/MkButton.vue';
 import MkFoldableSection from '@/components/MkFoldableSection.vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
 import { TwitterSearchField, useTwitterLayout } from '@/ui/twitter/index.js';
-import { useScrollPositionKeeper } from '@/composables/use-scroll-position-keeper.js';
+import { useTwitterScrollPositionKeeper } from '@/ui/twitter/index.js';
 import { i18n } from '@/i18n.js';
 import type { Paginator } from '@/utility/paginator.js';
 
@@ -218,7 +218,7 @@ const { isMobile } = useTwitterLayout();
 const rootEl = useTemplateRef<HTMLDivElement>('rootEl');
 
 /** 保留列表滚动位置（返回导航后恢复）。 */
-useScrollPositionKeeper(rootEl);
+useTwitterScrollPositionKeeper(rootEl);
 
 /** Home 空关注判定（A-3 引导卡渲染条件：拉取完成且无条目）。 */
 const followedChannelsEmpty = computed(() =>
