@@ -200,7 +200,7 @@ import MkStreamingNotesTimeline from '@/components/MkStreamingNotesTimeline.vue'
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
 import { TwitterNote, useTwitterLayout } from '@/ui/twitter/index.js';
-import { useScrollPositionKeeper } from '@/composables/use-scroll-position-keeper.js';
+import { useTwitterScrollPositionKeeper } from '@/ui/twitter/index.js';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
 import type { PageHeaderItem } from '@/types/page-header.js';
@@ -245,7 +245,7 @@ const { isMobile } = useTwitterLayout();
 const rootEl = useTemplateRef<HTMLDivElement>('rootEl');
 
 /** 保留详情页滚动位置（返回导航后恢复）。 */
-useScrollPositionKeeper(rootEl);
+useTwitterScrollPositionKeeper(rootEl);
 
 /** tab 集合按关注态派生（join-gate，ADR-0005 D7 / ADR-0002 补记）：
  *  已关注 = ホーム / みつける / 情報 / 検索；未关注 = みつける / 情報 / 検索。 */
