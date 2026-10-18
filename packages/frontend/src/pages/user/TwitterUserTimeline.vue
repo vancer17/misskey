@@ -51,7 +51,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, markRaw } from 'vue';
+import { computed, markRaw, onActivated } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import TwitterNote from '@/ui/twitter/Note.vue';
@@ -139,6 +139,19 @@ const paginators = {
 		},
 	})),
 };
+
+/** KeepAlive 首次激活跳过标志（挂载期已完成首拉，防止双拉）。 */
+let skipNextActivation = true;
+
+/** 回访刷新（K-04：用户新帖后回访时间线不陈旧；按 activeTab 定向重载，仅有条目时执行）。 */
+onActivated(() => {
+	if (skipNextActivation) {
+		skipNextActivation = false;
+		return;
+	}
+	const paginator = paginators[activeTab.value];
+	if (paginator.items.value.length > 0) void paginator.reload();
+});
 
 </script>
 

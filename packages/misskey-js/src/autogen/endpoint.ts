@@ -186,6 +186,10 @@ import type {
 	ChannelsFollowRequest,
 	ChannelsFollowedRequest,
 	ChannelsFollowedResponse,
+	ChannelsFollowedTimelineRequest,
+	ChannelsFollowedTimelineResponse,
+	ChannelsGlobalTimelineRequest,
+	ChannelsGlobalTimelineResponse,
 	ChannelsMuteCreateRequest,
 	ChannelsMuteDeleteRequest,
 	ChannelsMuteListResponse,
@@ -797,6 +801,8 @@ export type Endpoints = {
 	'channels/featured': { req: EmptyRequest; res: ChannelsFeaturedResponse };
 	'channels/follow': { req: ChannelsFollowRequest; res: EmptyResponse };
 	'channels/followed': { req: ChannelsFollowedRequest; res: ChannelsFollowedResponse };
+	'channels/followed-timeline': { req: ChannelsFollowedTimelineRequest; res: ChannelsFollowedTimelineResponse };
+	'channels/global-timeline': { req: ChannelsGlobalTimelineRequest; res: ChannelsGlobalTimelineResponse };
 	'channels/mute/create': { req: ChannelsMuteCreateRequest; res: EmptyResponse };
 	'channels/mute/delete': { req: ChannelsMuteDeleteRequest; res: EmptyResponse };
 	'channels/mute/list': { req: EmptyRequest; res: ChannelsMuteListResponse };
