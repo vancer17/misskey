@@ -32,3 +32,6 @@ export { default as TwitterAuthButtons } from './components/TwitterAuthButtons.v
 
 /** 当前账户身份的只读展示派生，不改变输入业务模型。 */
 export { useTwitterDisplayUser } from './composables/use-twitter-display-user.js';
+
+/** 主视口滚动及独立页面回退的 UI 协调入口。 */
+export { provideTwitterScrollHost, useTwitterScrollPositionKeeper } from './composables/use-twitter-scroll-host.js';
