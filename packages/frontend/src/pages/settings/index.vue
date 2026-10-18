@@ -41,7 +41,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script setup lang="ts">
-import { computed, inject, onActivated, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue';
+import { computed, inject, onActivated, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from 'vue';
 import type { PageMetadata } from '@/page.js';
 import type { SuperMenuDef } from '@/components/MkSuperMenu.vue';
 import { i18n } from '@/i18n.js';
@@ -57,13 +57,22 @@ import { enableAutoBackup, getPreferencesProfileMenu } from '@/preferences/utili
 import { store } from '@/store.js';
 import { signout } from '@/signout.js';
 import { genSearchIndexes } from '@/utility/inapp-search.js';
-import { enableStoragePersistence, getStoragePersistenceStatusRef, storagePersistenceSupported, skipStoragePersistence } from '@/utility/storage.js';
+import { enableStoragePersistence, getStoragePersistenceSharedRefSync, storagePersistenceSupported, skipStoragePersistence } from '@/utility/storage.js';
 import { DI } from '@/di.js';
 import { TwitterSettingsShell } from '@/ui/twitter/index.js';
 
-const searchIndex = await import('search-index:settings').then(({ searchIndexes }) => genSearchIndexes(searchIndexes));
+/* 以下两项原为顶层 await（async setup）。async setup 页面经 RouterView 的
+ * KeepAlive > Suspense 结构缓存后再次激活会渲染空白（Vue 3.5.x 恢复缺陷，
+ * 见 keepalive-freshness-audit K-13），故改为同步声明 + 异步填充，不阻塞 setup。 */
 
-const storagePersisted = await getStoragePersistenceStatusRef();
+/** 设置菜单搜索索引：动态导入异步填充（legacy 分支 SuperMenu 消费，晚到仅延迟搜索可用性）。 */
+const searchIndex = shallowRef<ReturnType<typeof genSearchIndexes>>([]);
+void import('search-index:settings').then(({ searchIndexes }) => {
+	searchIndex.value = genSearchIndexes(searchIndexes);
+});
+
+/** 存储持久化状态：同步持有共享只读 ref（后台初始化；enableStoragePersistence 的后续变更经共享 ref 生效）。 */
+const storagePersisted = getStoragePersistenceSharedRefSync();
 
 const indexInfo = {
 	title: i18n.ts.settings,

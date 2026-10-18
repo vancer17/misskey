@@ -2315,6 +2315,7 @@ _channel:
   featured: "トレンド"
   owned: "管理中"
   following: "フォロー中"
+  noFollowing: "フォローしているチャンネルはありません"
   usersCount: "{n}人が参加中"
   notesCount: "{n}投稿があります"
   nameAndDescription: "名前と説明"

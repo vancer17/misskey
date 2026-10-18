@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div style="position: relative;">
-	<MkA :to="`/channels/${channel.id}`" class="eftoefju _panel" @click="updateLastReadedAt">
+	<MkA :to="`/channels/${channel.id}`" class="eftoefju _panel" :class="{ twitter: isTwitterUi }" @click="updateLastReadedAt">
 		<div class="banner" :style="bannerStyle">
 			<div class="fade"></div>
 			<div class="name"><i class="ti ti-device-tv"></i> {{ channel.name }}</div>
@@ -55,10 +55,14 @@ import * as Misskey from 'misskey-js';
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
 import { miLocalStorage } from '@/local-storage.js';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const props = defineProps<{
 	channel: Misskey.entities.Channel;
 }>();
+
+/** Twitter UI 判定（Shell 注入；驱动频道预览卡的 token 表现变体，R-2 组件变体路径）。 */
+const isTwitterUi = useIsTwitterUi();
 
 const getLastReadedAt = (): number | null => {
 	return miLocalStorage.getItemAsJson(`channelLastReadedAt:${props.channel.id}`) ?? null;
@@ -77,6 +81,9 @@ const updateLastReadedAt = () => {
 const bannerStyle = computed(() => {
 	if (props.channel.bannerUrl) {
 		return { backgroundImage: `url(${props.channel.bannerUrl})` };
+	} else if (isTwitterUi.value) {
+		/* twitter 变体：无 banner 时回退面板 token（内联样式优先级高于类，须在此分流） */
+		return { backgroundColor: 'var(--twitter-panel)' };
 	} else {
 		return { backgroundColor: '#4c5e6d' };
 	}
@@ -180,6 +187,51 @@ const bannerStyle = computed(() => {
 		> span {
 			opacity: 0.7;
 			font-size: 0.9em;
+		}
+	}
+
+	/* Twitter UI 表现变体（P-25 / D4 裁决：Channels 页 Compatible 化）。
+	 * 地面真值映射 nitter tweet/card.scss 链接卡（结构同构：图 + 标题卡）：
+	 * card-container border 1px dark_grey / radius 10px / bg_elements → twitter token；
+	 * card-title bold 1.1em(≈16.5px) → emphasis 16px 档（舍入登记见 port-fidelity-audit 滚动章节）；
+	 * hover 边框 grey → secondary-fg 近似派生（无独立 grey token）。 */
+	&.twitter {
+		border: solid 1px var(--twitter-border);
+		border-radius: var(--twitter-radius-embed);
+		background: var(--twitter-panel);
+		color: var(--twitter-fg);
+		/* 根字号对齐 nitter 正文 15px 档，使内部 em 值自阶梯派生 */
+		font-size: var(--twitter-font-size-content);
+
+		&:hover {
+			border-color: var(--twitter-secondary-fg);
+		}
+
+		&:focus-within::after {
+			box-shadow: inset 0 0 0 2px var(--twitter-accent);
+		}
+
+		> .banner {
+			> .fade {
+				background: linear-gradient(0deg, var(--twitter-panel), color(from var(--twitter-panel) srgb r g b / 0));
+			}
+
+			> .name {
+				font-size: var(--twitter-font-size-emphasis);
+				font-weight: 700;
+			}
+		}
+
+		> article > p {
+			color: var(--twitter-fg);
+		}
+
+		> footer {
+			border-top: solid 1px var(--twitter-border);
+
+			> span {
+				font-size: var(--twitter-font-size-meta);
+			}
 		}
 	}
 
