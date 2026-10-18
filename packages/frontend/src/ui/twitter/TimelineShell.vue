@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter 时间线页面壳。
+作用：保留原时间线交互与吸顶头，主出口的位置恢复委托 Shell；独立窗口沿用既有容器。
+数据链：当前页面 DOM → 滚动宿主与锚点；不读写帖子事实。
+-->
+
 <template>
 <div ref="rootEl" class="_pageScrollable" :class="$style.root">
 	<MkStickyContainer>
@@ -39,7 +45,7 @@ import type { Tab } from '@/components/global/MkPageHeader.tabs.vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
 import MkSwiper from '@/components/MkSwiper.vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
-import { useScrollPositionKeeper } from '@/composables/use-scroll-position-keeper.js';
+import { useTwitterScrollPositionKeeper } from '@/ui/twitter/composables/use-twitter-scroll-host.js';
 import { useRouter } from '@/router.js';
 import { prefer } from '@/preferences.js';
 import TwitterTimelineHeader from './TimelineHeader.vue';
@@ -58,16 +64,18 @@ withDefaults(defineProps<{
 const tabModel = defineModel<string>('tab');
 const rootEl = useTemplateRef('rootEl');
 
-useScrollPositionKeeper(rootEl);
+useTwitterScrollPositionKeeper(rootEl);
 
 const router = useRouter();
 
-router.useListener('same', () => {
-	scrollToTop();
-});
+router.useListener('same',
+	/** 仅仍挂载在活动文档中的时间线响应重选。 */
+	(): void => { scrollToTop(); },
+);
 
-function scrollToTop() {
-	if (rootEl.value != null) {
+/** 通过现有工具滚回所属宿主顶部，停用缓存不影响当前页面。 */
+function scrollToTop(): void {
+	if (rootEl.value != null && rootEl.value.isConnected) {
 		scrollInContainer(rootEl.value, {
 			top: 0,
 			behavior: prefersReducedMotion ? 'auto' : 'smooth',
