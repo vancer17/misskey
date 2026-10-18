@@ -25,7 +25,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, defineAsyncComponent, inject, markRaw, ref } from 'vue';
+import { computed, defineAsyncComponent, inject, markRaw, onActivated, ref } from 'vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkButton from '@/components/MkButton.vue';
@@ -51,6 +51,18 @@ const paginator = markRaw(new Paginator('notes/search-by-tag', {
 		tag: props.tag,
 	})),
 }));
+
+/** KeepAlive 首次激活跳过标志（挂载期已完成首拉，防止双拉）。 */
+let skipNextActivation = true;
+
+/** 回访刷新（K-07：新带该 tag 的帖子出现后回访不陈旧；仅有条目时执行）。 */
+onActivated(() => {
+	if (skipNextActivation) {
+		skipNextActivation = false;
+		return;
+	}
+	if (paginator.items.value.length > 0) void paginator.reload();
+});
 
 async function post() {
 	store.set('postFormHashtags', props.tag);
