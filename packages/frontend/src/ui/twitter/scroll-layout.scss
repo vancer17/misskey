@@ -1,0 +1,25 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+/**
+ * Twitter 主页面滚动表现边界：只解除主出口与标准页面壳的纵向尺寸隔离。
+ * 不作用于匿名入口、独立页面窗口、弹层、反向聊天列表、文本框或媒体裁剪。
+ * 视口提供 cqh 高度，出口仍提供 inline-size 宽度查询；nitter 宽度与留白不变。
+ */
+[data-twitter-scroll-viewport] [data-twitter-route-outlet] {
+	height: auto;
+	min-height: 100%;
+	overflow: visible;
+	container-type: inline-size;
+	/* 覆盖共享 RouterView 的已有 important，只移除主出口的 size/paint 隔离。 */
+	contain: style !important;
+
+	._pageScrollable {
+		height: auto;
+		min-height: 100%;
+		overflow: visible;
+		overscroll-behavior: auto;
+	}
+}
