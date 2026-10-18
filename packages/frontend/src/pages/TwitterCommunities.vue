@@ -142,7 +142,7 @@ port-fidelity-audit 第九节）；返回头 / tab 行 / 时间线复用既有 t
 				<div :class="$style.manageSection">
 					<MkFoldableSection>
 						<template #header>{{ i18n.ts._channel.owned }}</template>
-						<div :class="$style.manageBody">
+						<div ref="ownedBody" :class="$style.manageBody">
 							<div v-if="canCreateChannel" :class="$style.createRow">
 								<MkButton type="routerLink" primary rounded to="/channels/new"><i class="ti ti-plus"></i> {{ i18n.ts.createNew }}</MkButton>
 							</div>
@@ -155,7 +155,7 @@ port-fidelity-audit 第九节）；返回头 / tab 行 / 时间线复用既有 t
 					</MkFoldableSection>
 					<MkFoldableSection>
 						<template #header>{{ i18n.ts.favorites }}</template>
-						<div :class="$style.manageBody">
+						<div ref="favoritesBody" :class="$style.manageBody">
 							<MkPagination v-slot="{ items }" :paginator="favoritesPaginator">
 								<div :class="$style.manageGrid">
 									<MkChannelPreview v-for="channel in items" :key="channel.id" :channel="channel"/>
@@ -171,6 +171,8 @@ port-fidelity-audit 第九节）；返回头 / tab 行 / 时间线复用既有 t
 </template>
 
 <script lang="ts" setup>
+import { watch } from 'vue';
+import type { Ref } from 'vue';
 import { computed, ref, useTemplateRef } from 'vue';
 import type * as Misskey from 'misskey-js';
 import MkChannelPreview from '@/components/MkChannelPreview.vue';
@@ -213,6 +215,30 @@ const props = defineProps<{
 
 /** 当前选中 tab（页面层 v-model 双向绑定；KeepAlive 回访定向刷新依赖页面层持有）。 */
 const tab = defineModel<string>('tab');
+
+/** 折叠体是否实际显示属于临时 UI 状态，向原分页器所有者报告即可。 */
+const ownedPanelVisible: Ref<boolean> = defineModel<boolean>('ownedPanelVisible', { default: false });
+const favoritesPanelVisible: Ref<boolean> = defineModel<boolean>('favoritesPanelVisible', { default: false });
+const ownedBody: Readonly<Ref<HTMLDivElement | null>> = useTemplateRef<HTMLDivElement>('ownedBody');
+const favoritesBody: Readonly<Ref<HTMLDivElement | null>> = useTemplateRef<HTMLDivElement>('favoritesBody');
+
+/** 只观察业务包裹节点的显示几何，不读取或修改 MkFoldableSection 内部状态。 */
+function observeFoldBody(element: Readonly<Ref<HTMLDivElement | null>>, visible: Ref<boolean>): void {
+	watch(element, /** 父 v-show 折叠或 KeepAlive 停用会使包裹节点尺寸归零。 */ (node: HTMLDivElement | null, _previous: HTMLDivElement | null, cleanup: (dispose: () => void) => void): void => {
+		if (node == null) { visible.value = false; return; }
+
+		/** 可见性只调度 UI 查询，不是环境 readiness 或业务资格。 */
+		function update(): void { visible.value = node != null && node.getClientRects().length > 0 && node.getBoundingClientRect().height > 0; }
+
+		const observer: ResizeObserver = new ResizeObserver(update);
+		observer.observe(node);
+		update();
+		cleanup(/** 解除节点观察，防止缓存驱逐后泄漏。 */ (): void => { observer.disconnect(); });
+	}, { flush: 'post' });
+}
+
+observeFoldBody(ownedBody, ownedPanelVisible);
+observeFoldBody(favoritesBody, favoritesPanelVisible);
 
 const { isMobile } = useTwitterLayout();
 const rootEl = useTemplateRef<HTMLDivElement>('rootEl');

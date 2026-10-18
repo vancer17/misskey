@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：通知与提及页面。
+作用：协调已确认写入与缓存回访，复用原查询及基础组件，不复制业务状态。
+数据链：成功通知／回访 → 页面数据所有者 → 只读显示；不解释环境探测。
+-->
+
 <template>
 <component
 	:is="pageComponent"
@@ -25,16 +31,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 			/>
 		</div>
 		<div v-else-if="tab === 'mentions'">
-			<MkNotesTimeline
+			<MkStreamingNotesTimeline
 				:class="{ [$style.twitterNotifications]: isTwitterUi }"
-				:paginator="mentionsPaginator"
+				src="mentions"
 				:variant="isTwitterUi ? 'twitter' : 'misskey'"
 			/>
 		</div>
 		<div v-else-if="tab === 'directNotes'">
-			<MkNotesTimeline
+			<MkStreamingNotesTimeline
 				:class="{ [$style.twitterNotifications]: isTwitterUi }"
-				:paginator="directNotesPaginator"
+				src="directs"
 				:variant="isTwitterUi ? 'twitter' : 'misskey'"
 			/>
 		</div>
@@ -43,19 +49,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, inject, markRaw, onActivated, ref, useTemplateRef } from 'vue';
+import { computed, inject, ref, useTemplateRef } from 'vue';
 import { notificationTypes } from 'misskey-js';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import MkStreamingNotificationsTimeline from '@/components/MkStreamingNotificationsTimeline.vue';
 import PageWithHeader from '@/components/global/PageWithHeader.vue';
-import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
 import { DI } from '@/di.js';
 import { definePage } from '@/page.js';
 import TwitterNotificationsShell from '@/ui/twitter/NotificationsShell.vue';
-import { Paginator } from '@/utility/paginator.js';
+import MkStreamingNotesTimeline from '@/components/MkStreamingNotesTimeline.vue';
 
 const tab = ref('all');
 const uiStyle = inject(DI.uiStyle, ref('default'));
@@ -65,32 +70,6 @@ const initialUnreadCount = $i?.unreadNotificationsCount ?? 0;
 const notificationsTimeline = useTemplateRef('notificationsTimeline');
 const includeTypes = ref<string[] | null>(null);
 const excludeTypes = computed(() => includeTypes.value ? notificationTypes.filter(t => !includeTypes.value!.includes(t)) : null);
-
-const mentionsPaginator = markRaw(new Paginator('notes/mentions', {
-	limit: 10,
-}));
-
-const directNotesPaginator = markRaw(new Paginator('notes/mentions', {
-	limit: 10,
-	params: {
-		visibility: 'specified',
-	},
-}));
-
-/** KeepAlive 首次激活跳过标志（挂载期已完成首拉，防止双拉）。 */
-let skipNextActivation = true;
-
-/** 回访刷新（K-02）：mentions / directNotes 为静态分页列表，回访重载；
- *  主 tab 为流式组件（未读回补自理），不在刷新范围；仅有条目时执行。 */
-onActivated(() => {
-	if (skipNextActivation) {
-		skipNextActivation = false;
-		return;
-	}
-	for (const paginator of [mentionsPaginator, directNotesPaginator]) {
-		if (paginator.items.value.length > 0) void paginator.reload();
-	}
-});
 
 function setFilter(ev: PointerEvent) {
 	const typeItems = notificationTypes.map(t => ({

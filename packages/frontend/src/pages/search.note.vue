@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：帖子搜索结果。
+作用：协调已确认写入与缓存回访，复用原查询及基础组件，不复制业务状态。
+数据链：成功通知／回访 → 页面数据所有者 → 只读显示；不解释环境探测。
+-->
+
 <template>
 <div :class="{ [$style.twitterRoot]: autoSearch }">
 	<div :class="autoSearch ? undefined : '_gaps'">
@@ -123,7 +129,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, inject, markRaw, onActivated, ref, shallowRef, toRef, watch } from 'vue';
+import { useTwitterPaginatorRefresh } from '@/ui/twitter/index.js';
+import { computed, inject, markRaw, ref, shallowRef, toRef, watch } from 'vue';
 import { host as localHost } from '@@/js/config.js';
 import type * as Misskey from 'misskey-js';
 import { $i } from '@/i.js';
@@ -165,19 +172,8 @@ const router = useRouter();
 const key = ref(0);
 const paginator = shallowRef<Paginator<'notes/search'> | null>(null);
 
-/** KeepAlive 首次激活跳过标志（挂载期已完成首拉，防止双拉）。 */
-let skipNextActivation = true;
-
-/** 回访刷新（K-06：搜索结果快照回访重载；仅已执行过搜索且有条目时执行）。 */
-onActivated(() => {
-	if (skipNextActivation) {
-		skipNextActivation = false;
-		return;
-	}
-	if (paginator.value != null && paginator.value.items.value.length > 0) {
-		void paginator.value.reload();
-	}
-});
+/** 搜索仍是查询快照；回访空结果同样重取，不订阅每次发帖改变排序。 */
+useTwitterPaginatorRefresh(/** 当前已提交搜索的数据源。 */ (): typeof paginator.value => paginator.value);
 
 const searchQuery = ref(toRef(props, 'query').value);
 const hostInput = ref(toRef(props, 'host').value);

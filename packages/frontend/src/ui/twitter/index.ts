@@ -35,3 +35,10 @@ export { useTwitterDisplayUser } from './composables/use-twitter-display-user.js
 
 /** 主视口滚动及独立页面回退的 UI 协调入口。 */
 export { provideTwitterScrollHost, useTwitterScrollPositionKeeper } from './composables/use-twitter-scroll-host.js';
+/** 写入与回访的 UI 调度，业务实体仍归原数据所有者。 */
+export { useTwitterRefresh, useTwitterPaginatorRefresh } from './composables/use-twitter-refresh.js';
+/** 会话级计数展示投影，不参与业务决策。 */
+export { useTwitterNoteCounters } from './store/note-counters.js';
+export type { TwitterNoteCounters } from './domain/note-counters.js';
+/** 用户写入和关注信号的只读失效适配。 */
+export { useTwitterUserEvents, useTwitterRelationshipEvents } from './composables/use-twitter-user-events.js';

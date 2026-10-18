@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：保留的 Clip 实体和成员集合。
+作用：在原命令成功后更新原数据源，回访仍保留当前显示上下文。
+数据链：命令确认 → 原分页器／实体 → 只读组件；不写入第二份业务事实。
+-->
+
 <template>
 <PageWithHeader :actions="headerActions">
 	<div class="_spacer" style="--MI_SPACER-w: 800px;">
@@ -30,6 +36,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import type { Ref } from 'vue';
+import { onBeforeUnmount } from 'vue';
+import { useGlobalEvent } from '@/events.js';
+import { useTwitterRefresh, useTwitterPaginatorRefresh } from '@/ui/twitter/index.js';
 import { computed, watch, provide, ref, markRaw } from 'vue';
 import * as Misskey from 'misskey-js';
 import { url } from '@@/js/config.js';
@@ -68,19 +78,42 @@ const paginator = markRaw(new Paginator('clips/notes', {
 
 const isOwned = computed<boolean | null>(() => $i && clip.value && ($i.id === clip.value.userId));
 
-watch(() => props.clipId, async () => {
-	if (CTX_CLIP && CTX_CLIP.id === props.clipId) {
-		clip.value = CTX_CLIP;
-		return;
+/** 当前 Clip 实体请求归属，不建立第二个缓存。 */
+let clipRequest: AbortController | null = null;
+const clipLoading: Ref<boolean> = ref<boolean>(false);
+
+/** 首拉及回访共用真实读取，成功回填，失败保留最后实体。 */
+async function loadClip(): Promise<boolean> {
+	const clipId: string = props.clipId;
+	clipRequest?.abort();
+	const request: AbortController = new AbortController();
+	clipRequest = request;
+	clipLoading.value = true;
+	try {
+		const fetched: Misskey.entities.Clip = await misskeyApi('clips/show', { clipId }, undefined, request.signal);
+		if (request.signal.aborted || props.clipId !== clipId || clipRequest !== request) return false;
+		clip.value = fetched;
+		favorited.value = fetched.isFavorited ?? false;
+		return true;
+	} catch (error: unknown) {
+		if (!request.signal.aborted) console.error(error);
+		return false;
+	} finally {
+		if (clipRequest === request) { clipRequest = null; clipLoading.value = false; }
 	}
+}
 
-	clip.value = await misskeyApi('clips/show', {
-		clipId: props.clipId,
-	});
-
-	favorited.value = clip.value!.isFavorited ?? false;
-}, {
-	immediate: true,
+watch(/** Clip 路由 ID 切换是实体范围切换。 */ (): string => props.clipId,
+	/** 原匿名上下文仅可用于匹配的首次实体。 */ (): void => {
+		clip.value = CTX_CLIP?.id === props.clipId ? CTX_CLIP : null;
+		void loadClip();
+	}, { immediate: true });
+onBeforeUnmount(/** 取消独立实体请求。 */ (): void => { clipRequest?.abort(); });
+const invalidateClip: () => void = useTwitterRefresh(/** 原实体读取。 */ async (): Promise<boolean> => loadClip(),
+	{ busy: /** 尊重首拉。 */ (): boolean => clipLoading.value });
+const invalidateClipNotes: () => void = useTwitterPaginatorRefresh(/** 原成员集合。 */ (): typeof paginator => paginator);
+useGlobalEvent('clipNotesChanged', /** 只有当前 Clip 的成员变化才重新确认。 */ (id: string): void => {
+	if (id === props.clipId) { invalidateClip(); invalidateClipNotes(); }
 });
 
 provide('currentClip', clip);
@@ -112,6 +145,7 @@ const headerActions = computed<PageHeaderItem[] | null>(() => clip.value && isOw
 	handler: async (): Promise<void> => {
 		if (clip.value == null) return;
 
+		const editedClipId: string = clip.value.id;
 		const { canceled, result } = await os.form(clip.value.name, {
 			name: {
 				type: 'string',
@@ -135,12 +169,16 @@ const headerActions = computed<PageHeaderItem[] | null>(() => clip.value && isOw
 
 		if (canceled) return;
 
-		os.apiWithDialog('clips/update', {
-			clipId: clip.value.id,
+		await os.apiWithDialog('clips/update', {
+			clipId: editedClipId,
 			...result,
-		});
-
-		clipsCache.delete();
+		}).then(
+			/** 保存真实成功后才失效，不能更新已切换的其他 Clip。 */ (): void => {
+				clipsCache.delete();
+				if (props.clipId === editedClipId) invalidateClip();
+			},
+			/** 原对话框已呈现拒绝，保留最后确认的 Clip 实体。 */ (): void => {},
+		);
 	},
 }, ...(clip.value.isPublic ? [{
 	icon: 'ti ti-share',

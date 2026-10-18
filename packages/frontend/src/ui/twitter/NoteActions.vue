@@ -3,8 +3,14 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter 帖子操作栏只读呈现。
+作用：连接成功写入与当前显示，保持原数据所有者和基础组件职责。
+数据链：既有确认事件 → 局部刷新调度 → 原查询结果 → 只读渲染；不探测环境。
+-->
+
 <template>
-<footer :class="$style.root">
+<footer :class="$style.root" data-testid="twitter-note-actions" :data-replies-count="repliesCount" :data-renote-count="renoteCount">
 	<button
 		:class="[$style.action, $style.reply]"
 		class="_button"
@@ -13,7 +19,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		@click.stop="emit('reply')"
 	>
 		<i class="ti ti-message-circle" aria-hidden="true"></i>
-		<span v-if="note.repliesCount > 0" :class="$style.count">{{ number(note.repliesCount) }}</span>
+		<span v-if="repliesCount > 0" :class="$style.count">{{ number(repliesCount) }}</span>
 	</button>
 
 	<button
@@ -26,12 +32,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 		@click.stop="emit('renote')"
 	>
 		<i :class="canRenote ? 'ti ti-repeat' : 'ti ti-ban'" aria-hidden="true"></i>
-		<span v-if="canRenote && note.renoteCount > 0" :class="$style.count">{{ number(note.renoteCount) }}</span>
+		<span v-if="canRenote && renoteCount > 0" :class="$style.count">{{ number(renoteCount) }}</span>
 	</button>
 
 	<button
 		:ref="setReactButton"
-		:class="[$style.action, $style.like, { [$style.active]: note.myReaction != null }]"
+		:class="[$style.action, $style.like, { [$style.active]: myReaction != null }]"
 		class="_button"
 		type="button"
 		:aria-pressed="myReaction != null"
@@ -39,13 +45,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 		@click.stop="emit('react')"
 	>
 		<i
-			:class="note.reactionAcceptance === 'likeOnly'
+			:class="reactionAcceptance === 'likeOnly'
 				? (myReaction != null ? 'ti ti-heart-filled' : 'ti ti-heart')
 				: (myReaction != null ? 'ti ti-heart-filled' : 'ti ti-plus')"
 			aria-hidden="true"
 		></i>
 		<span
-			v-if="(note.reactionAcceptance === 'likeOnly' || prefer.s.showReactionsCount) && reactionCount > 0"
+			v-if="(reactionAcceptance === 'likeOnly' || prefer.s.showReactionsCount) && reactionCount > 0"
 			:class="$style.count"
 		>{{ number(reactionCount) }}</span>
 	</button>
@@ -69,10 +75,16 @@ import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
 import number from '@/filters/number.js';
 
+/** 原组件 ref 回填签名，只连接元素引用。 */
 type ElementRefSetter = (element: Element | ComponentPublicInstance | null) => void;
 
 defineProps<{
-	note: Misskey.entities.Note;
+	/** 回复计数来自只读服务端投影。 */
+	repliesCount: Misskey.entities.Note['repliesCount'];
+	/** 转发计数不由按钮本地加减。 */
+	renoteCount: Misskey.entities.Note['renoteCount'];
+	/** 原帖反应接收设置，保持原行为。 */
+	reactionAcceptance: Misskey.entities.Note['reactionAcceptance'];
 	reactionCount: number;
 	myReaction: string | null | undefined;
 	canRenote: boolean;
