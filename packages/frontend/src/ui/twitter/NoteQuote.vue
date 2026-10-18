@@ -3,21 +3,27 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter 帖子身份展示（NoteQuote）。
+作用：保持帖子模型只读，将作者头像和名称绑定到既有账户／用户展示引用。
+数据链：实际作者标识 → 只读身份展示；不改写帖子事实或动作参数。
+-->
+
 <template>
 <div v-if="note == null" :class="[$style.root, $style.deleted]">
 	{{ i18n.ts.deletedNote }}
 </div>
 <article v-else :class="$style.root" :aria-label="i18n.ts.quote">
-	<header :class="$style.header">
-		<MkAvatar :class="$style.avatar" :user="note.user" link preview/>
+	<header v-if="displayUser" :class="$style.header">
+		<MkAvatar :class="$style.avatar" :user="displayUser" link preview/>
 		<MkA
-			v-user-preview="note.user.id"
+			v-user-preview="displayUser.id"
 			:class="$style.name"
-			:to="userPage(note.user)"
+			:to="userPage(displayUser)"
 		>
-			<MkUserName :user="note.user"/>
+			<MkUserName :user="displayUser"/>
 		</MkA>
-		<span :class="$style.username"><MkAcct :user="note.user"/></span>
+		<span :class="$style.username"><MkAcct :user="displayUser"/></span>
 		<span aria-hidden="true">·</span>
 		<MkTime :time="note.createdAt"/>
 	</header>
@@ -51,13 +57,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import * as Misskey from 'misskey-js';
+import type { ComputedRef } from 'vue';
+import { useTwitterDisplayUser } from './composables/use-twitter-display-user.js';
 import { i18n } from '@/i18n.js';
 import { notePage } from '@/filters/note.js';
 import { userPage } from '@/filters/user.js';
 
-defineProps<{
+/** 既有帖子与展示上下文作为只读输入。 */
+const props = defineProps<{
 	note: Misskey.entities.Note | null;
 }>();
+/** 身份展示与帖子的业务快照分离。 */
+const displayUser: ComputedRef<Readonly<Misskey.entities.UserLite> | null> = useTwitterDisplayUser(
+	/** 提取该组件实际显示的作者，不混淆转发者与原作者。 */
+	(): Misskey.entities.UserLite | null => props.note?.user ?? null,
+);
 </script>
 
 <style lang="scss" module>

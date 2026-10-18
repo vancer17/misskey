@@ -3,8 +3,14 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter 用户主页展示。
+作用：呈现个人资料与时间线，身份区从既有账户派生。
+数据链：输入资料供页面与业务判断使用；本人身份引用单向消费既有账户，不复制业务实体。
+-->
+
 <template>
-<div v-if="user" :class="[$style.root, { [$style.mobile]: isMobile }]" class="_pageScrollable">
+<div v-if="user && displayUser" data-testid="twitter-profile" :class="[$style.root, { [$style.mobile]: isMobile }]" class="_pageScrollable">
 	<header :class="$style.header">
 		<button
 			class="_button"
@@ -17,7 +23,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</button>
 		<div :class="$style.headerMeta">
 			<div :class="$style.headerName">
-				<MkUserName :user="user" :nowrap="true"/>
+				<MkUserName :user="displayUser" :nowrap="true"/>
 			</div>
 			<div :class="$style.headerCount">{{ number(user.notesCount) }} {{ i18n.ts.notes }}</div>
 		</div>
@@ -31,7 +37,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<div :class="$style.identity">
 		<div :class="$style.identityTop">
-			<MkAvatar :class="$style.avatar" :user="user" indicator/>
+			<MkAvatar :class="$style.avatar" :user="displayUser" indicator/>
 			<div :class="$style.actions">
 				<button
 					class="_button"
@@ -64,7 +70,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 		<div :class="$style.identityMain">
 			<div :class="$style.nameRow">
-				<h1 :class="$style.name"><MkUserName :user="user" :nowrap="false"/></h1>
+				<h1 :class="$style.name"><MkUserName :user="displayUser" :nowrap="false"/></h1>
 				<span v-if="user.isLocked" :class="$style.badgeIcon" :aria-label="i18n.ts.private">
 					<i class="ti ti-lock" aria-hidden="true"></i>
 				</span>
@@ -72,7 +78,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<i class="ti ti-robot" aria-hidden="true"></i>
 				</span>
 			</div>
-			<div :class="$style.acct"><MkAcct :user="user" :detail="true"/></div>
+			<div :class="$style.acct"><MkAcct :user="displayUser" :detail="true"/></div>
 			<span v-if="$i && $i.id !== user.id && user.isFollowed" :class="$style.followed">
 				{{ i18n.ts.followsYou }}
 			</span>
@@ -161,6 +167,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed } from 'vue';
+import type { ComputedRef } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkFollowButton from '@/components/MkFollowButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
@@ -168,7 +175,7 @@ import MkRemoteCaution from '@/components/MkRemoteCaution.vue';
 import MkAccountMoved from '@/components/MkAccountMoved.vue';
 import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
 import TwitterPageSkeleton from '@/ui/twitter/components/TwitterPageSkeleton.vue';
-import { twitterUserErrorStateType, useTwitterLayout } from '@/ui/twitter/index.js';
+import { twitterUserErrorStateType, useTwitterDisplayUser, useTwitterLayout } from '@/ui/twitter/index.js';
 import type { TwitterPageStateType } from '@/ui/twitter/index.js';
 import TwitterUserTimeline from './TwitterUserTimeline.vue';
 import number from '@/filters/number.js';
@@ -198,6 +205,12 @@ const { isMobile } = useTwitterLayout();
 
 /** Twitter UI 终态派生：实体不存在 → notFound，其余错误 → error（可重试）。权威派生见 domain/user-state.ts。 */
 const errorStateType = computed<TwitterPageStateType>(() => twitterUserErrorStateType(props.error));
+
+/** 本人身份随既有账户更新；详细主页模型仍归原页面所有。 */
+const displayUser: ComputedRef<Readonly<Misskey.entities.UserLite> | null> = useTwitterDisplayUser(
+	/** 选择当前主页的身份展示对象。 */
+	(): Misskey.entities.UserLite | null => props.user,
+);
 
 const router = useRouter();
 const bannerStyle = computed(() => {
