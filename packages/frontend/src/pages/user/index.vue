@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：用户主页路由页面。
+作用：按账户标识加载既有用户模型，维持错误状态和缓存回访刷新。
+数据链：路由账户 → users/show → 当前实体；失效请求不得覆盖新账户，不解释环境探测。
+-->
+
 <template>
 <TwitterHome
 	v-if="isTwitterUi"
@@ -32,8 +38,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { defineAsyncComponent, computed, inject, watch, ref, onActivated } from 'vue';
+import { defineAsyncComponent, computed, inject, watch, ref, onActivated, onDeactivated, onBeforeUnmount } from 'vue';
 import * as Misskey from 'misskey-js';
+import type { Ref } from 'vue';
 import { acct as getAcct } from '@/filters/user.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { definePage } from '@/page.js';
@@ -70,61 +77,73 @@ const tab = ref(props.page);
 const uiStyle = inject(DI.uiStyle, ref('default'));
 const isTwitterUi = computed(() => uiStyle.value === 'twitter');
 
-const user = ref<null | Misskey.entities.UserDetailed>(CTX_USER);
-const error = ref<any>(null);
+/** 当前路由主页实体沿用 Misskey 既有页面归属，不新增账户副本。 */
+const user: Ref<Misskey.entities.UserDetailed | null> = ref(CTX_USER);
+/** 错误交由既有页面终态映射解释。 */
+const error: Ref<unknown> = ref(null);
+/** 当前有效加载请求，取消与引用比较共同防止迟到响应回写。 */
+let userRequest: AbortController | null = null;
+/** 只在真实停用后产生回访需求，不假定首次 activated 的挂载时序。 */
+let needsRevisitRefresh: boolean = false;
 
-function fetchUser(): void {
-	if (props.acct == null) return;
-
-	const { username, host } = Misskey.acct.parse(props.acct);
-
+/** 加载当前账户；首次/重试清空，回访成功回填，失败保留已有资料。 */
+async function loadUser(clearBeforeLoad: boolean): Promise<void> {
+	const requestedAcct: string = props.acct;
+	if (requestedAcct == null) return;
+	userRequest?.abort();
+	const controller: AbortController = new AbortController();
+	userRequest = controller;
+	const { username, host }: ReturnType<typeof Misskey.acct.parse> = Misskey.acct.parse(requestedAcct);
 	error.value = null;
-
-	if (CTX_USER && CTX_USER.username === username && CTX_USER.host === host) {
+	if (clearBeforeLoad && CTX_USER && CTX_USER.username === username && CTX_USER.host === host) {
 		user.value = CTX_USER;
+		userRequest = null;
 		return;
 	}
-
-	user.value = null;
-	misskeyApi('users/show', {
-		username,
-		host,
-	}).then(u => {
-		user.value = u;
-	}).catch(err => {
-		error.value = err;
-	});
-}
-
-watch(() => props.acct, fetchUser, {
-	immediate: true,
-});
-
-/** KeepAlive 首次激活跳过标志（挂载期 watch immediate 已完成首拉，防止双拉）。 */
-let skipNextActivation = true;
-
-/** 回访软刷新（K-04）：拉取成功才回填、失败保留缓存实体。
- *  不沿用 fetchUser——其先置空 user 再拉取（硬刷新语义），会拆建 TwitterHome 子树并闪空态。 */
-async function refreshUserOnActivation(): Promise<void> {
-	if (props.acct == null) return;
-
-	const { username, host } = Misskey.acct.parse(props.acct);
-	const fetched = await misskeyApi('users/show', {
-		username,
-		host,
-	}).catch(() => null);
-	if (fetched != null) {
+	if (clearBeforeLoad) user.value = null;
+	try {
+		const fetched: Misskey.entities.UserDetailed = await misskeyApi('users/show', { username, host }, undefined, controller.signal);
+		if (userRequest !== controller || controller.signal.aborted || props.acct !== requestedAcct) return;
 		user.value = fetched;
+	} catch (cause: unknown) {
+		if (userRequest !== controller || controller.signal.aborted || props.acct !== requestedAcct) return;
+		if (user.value == null) error.value = cause;
+	} finally {
+		if (userRequest === controller) userRequest = null;
 	}
 }
 
-onActivated(() => {
-	if (skipNextActivation) {
-		skipNextActivation = false;
-		return;
-	}
-	void refreshUserOnActivation();
-});
+/** 首次账户加载和主动重试沿用硬刷新入口。 */
+async function fetchUser(): Promise<void> {
+	await loadUser(true);
+}
+
+watch(
+	/** 账户变化代表实体切换，不与同账户页签导航混淆。 */
+	(): string => props.acct,
+	fetchUser,
+	{ immediate: true },
+);
+onDeactivated(
+	/** 停用时取消在途请求，留下下一次回访需求。 */
+	(): void => {
+		needsRevisitRefresh = true;
+		userRequest?.abort();
+		userRequest = null;
+	},
+);
+onActivated(
+	/** 首挂载不重复请求，仅消费真实停用产生的标记。 */
+	async (): Promise<void> => {
+		if (!needsRevisitRefresh) return;
+		needsRevisitRefresh = false;
+		await loadUser(false);
+	},
+);
+onBeforeUnmount(
+	/** 最终销毁取消请求，防止缓存驱逐后的异步回填。 */
+	(): void => { userRequest?.abort(); userRequest = null; },
+);
 
 const headerActions = computed(() => []);
 
