@@ -123,7 +123,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, inject, markRaw, ref, shallowRef, toRef, watch } from 'vue';
+import { computed, inject, markRaw, onActivated, ref, shallowRef, toRef, watch } from 'vue';
 import { host as localHost } from '@@/js/config.js';
 import type * as Misskey from 'misskey-js';
 import { $i } from '@/i.js';
@@ -164,6 +164,20 @@ const router = useRouter();
 
 const key = ref(0);
 const paginator = shallowRef<Paginator<'notes/search'> | null>(null);
+
+/** KeepAlive 首次激活跳过标志（挂载期已完成首拉，防止双拉）。 */
+let skipNextActivation = true;
+
+/** 回访刷新（K-06：搜索结果快照回访重载；仅已执行过搜索且有条目时执行）。 */
+onActivated(() => {
+	if (skipNextActivation) {
+		skipNextActivation = false;
+		return;
+	}
+	if (paginator.value != null && paginator.value.items.value.length > 0) {
+		void paginator.value.reload();
+	}
+});
 
 const searchQuery = ref(toRef(props, 'query').value);
 const hostInput = ref(toRef(props, 'host').value);

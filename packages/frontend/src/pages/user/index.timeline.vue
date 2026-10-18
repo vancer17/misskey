@@ -24,7 +24,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { inject, ref, computed, markRaw } from 'vue';
+import { inject, ref, computed, markRaw, onActivated } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkTab from '@/components/MkTab.vue';
@@ -58,6 +58,19 @@ const notesPaginator = markRaw(new Paginator('users/notes', {
 		withFiles: tab.value === 'files',
 	})),
 }));
+
+/** KeepAlive 首次激活跳过标志（挂载期已完成首拉，防止双拉）。 */
+let skipNextActivation = true;
+
+/** 回访刷新（K-04：用户新帖后回访时间线不陈旧；按 tab 定向重载，仅有条目时执行）。 */
+onActivated(() => {
+	if (skipNextActivation) {
+		skipNextActivation = false;
+		return;
+	}
+	const paginator = tab.value === 'featured' ? featuredPaginator : notesPaginator;
+	if (paginator.items.value.length > 0) void paginator.reload();
+});
 </script>
 
 <style lang="scss" module>
