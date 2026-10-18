@@ -57,6 +57,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import { useGlobalEvent } from '@/events.js';
 import { computed, markRaw, onActivated, onDeactivated, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { ComputedRef } from 'vue';
@@ -216,6 +217,15 @@ watch(
 		if (!busy && !paginators[activeTab.value].error.value) await refreshActiveTab();
 	},
 );
+
+/** 同一用户集合失效后复用现有调度；每个标签仍由后端决定成员与排序。 */
+function invalidatePostedUser(note: Misskey.entities.Note): void {
+	if (note.userId !== props.user.id) return;
+	for (const tab of tabs) pendingTabs.add(tab.key);
+	void refreshActiveTab();
+}
+
+useGlobalEvent('notePosted', invalidatePostedUser);
 
 </script>
 
