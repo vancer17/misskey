@@ -4,9 +4,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader :actions="headerActions" :tabs="headerTabs">
-	<div class="_spacer" style="--MI_SPACER-w: 700px;">
-		<div v-if="channelId == null || channel != null" class="_gaps_m">
+<component :is="pageContainer.is" v-bind="pageContainer.props">
+	<div :class="isTwitterUi ? $style.twitterBody : '_spacer'" :style="isTwitterUi ? undefined : '--MI_SPACER-w: 700px;'">
+		<div v-if="channelId == null || channel != null" :class="{ '_gaps_m': !isTwitterUi }">
 			<MkInput v-model="name">
 				<template #label>{{ i18n.ts.name }}</template>
 			</MkInput>
@@ -64,19 +64,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 	</div>
-</PageWithHeader>
+</component>
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, inject, ref, watch } from 'vue';
+import type { Component } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkColorInput from '@/components/MkColorInput.vue';
+import PageWithHeader from '@/components/global/PageWithHeader.vue';
 import { selectFile } from '@/utility/drive.js';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { definePage } from '@/page.js';
+import { DI } from '@/di.js';
 import { i18n } from '@/i18n.js';
 import MkFolder from '@/components/MkFolder.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
@@ -131,6 +134,25 @@ async function fetchChannel() {
 
 fetchChannel();
 
+/**
+ * 重置编辑器表单为初始值（K-10）。
+ *
+ * 仅在创建成功回调内调用、router.push 跳转详情页之前执行——/channels/new 页面受
+ * KeepAlive 缓存，回访会恢复本次创建的残留表单；在成功路径清空可消除该缺陷，
+ * 同时保留"填一半切走再回访"的半成品草稿（与 MkPostForm 草稿语义一致）。
+ */
+function resetForm(): void {
+	channel.value = null;
+	name.value = '';
+	description.value = null;
+	bannerUrl.value = null;
+	bannerId.value = null;
+	color.value = '#000';
+	isSensitive.value = false;
+	allowRenoteToExternal.value = true;
+	pinnedNoteIds.value = [];
+}
+
 async function addPinnedNote() {
 	const { canceled, result: value } = await os.inputText({
 		title: i18n.ts.noteIdOrUrl,
@@ -165,6 +187,7 @@ function save() {
 		});
 	} else {
 		os.apiWithDialog('channels/create', params).then(created => {
+			resetForm();
 			router.push('/channels/:channelId', {
 				params: {
 					channelId: created.id,
@@ -209,6 +232,25 @@ const headerActions = computed(() => []);
 
 const headerTabs = computed(() => []);
 
+/** 当前 UI 样式（由 Twitter Shell 注入；非 Twitter 场景回退 'default'）。 */
+const uiStyle = inject(DI.uiStyle, ref('default'));
+const isTwitterUi = computed(() => uiStyle.value === 'twitter');
+
+/** Twitter 设置壳（经 ui/twitter 模块索引暴露；异步加载，default UI 不承担其分包成本）。 */
+const TwitterSettingsShell = defineAsyncComponent(() => import('@/ui/twitter/index.js').then(m => m.TwitterSettingsShell));
+
+/** 编辑器标题（create / edit 二态；与 definePage 元数据共用同一表达式，避免双源漂移）。 */
+const editorTitle = computed(() => props.channelId ? i18n.ts._channel.edit : i18n.ts._channel.create);
+
+/** 页面容器：twitter UI = Twitter 设置壳（紧凑返回头，P-25 Compatible），legacy = PageWithHeader；
+ *  表单体两分支共享同一模板，避免复制表单字段（规范第 9 条）。 */
+const pageContainer = computed<{ is: Component; props: Record<string, unknown> }>(() => {
+	if (isTwitterUi.value) {
+		return { is: TwitterSettingsShell, props: { title: editorTitle.value } };
+	}
+	return { is: PageWithHeader, props: { actions: headerActions.value, tabs: headerTabs.value } };
+});
+
 definePage(() => ({
 	title: props.channelId ? i18n.ts._channel.edit : i18n.ts._channel.create,
 	icon: 'ti ti-device-tv',
@@ -216,6 +258,14 @@ definePage(() => ({
 </script>
 
 <style lang="scss" module>
+/* Twitter UI 表单体容器（P-25 Compatible）：Mk 表单控件基础兼容（U-8 先例），
+ * 容器 token 化并与 P-11 profile 设置页的 twitterCard 同构（nitter profile/card 卡身惯例：12px 内距）。 */
+.twitterBody {
+	display: grid;
+	gap: var(--twitter-space-4);
+	padding: var(--twitter-space-3) var(--twitter-space-4);
+}
+
 .pinnedNote {
 	position: relative;
 	display: block;

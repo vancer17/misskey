@@ -43,7 +43,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, inject, markRaw, ref, useTemplateRef } from 'vue';
+import { computed, inject, markRaw, onActivated, ref, useTemplateRef } from 'vue';
 import { notificationTypes } from 'misskey-js';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import MkStreamingNotificationsTimeline from '@/components/MkStreamingNotificationsTimeline.vue';
@@ -76,6 +76,21 @@ const directNotesPaginator = markRaw(new Paginator('notes/mentions', {
 		visibility: 'specified',
 	},
 }));
+
+/** KeepAlive 首次激活跳过标志（挂载期已完成首拉，防止双拉）。 */
+let skipNextActivation = true;
+
+/** 回访刷新（K-02）：mentions / directNotes 为静态分页列表，回访重载；
+ *  主 tab 为流式组件（未读回补自理），不在刷新范围；仅有条目时执行。 */
+onActivated(() => {
+	if (skipNextActivation) {
+		skipNextActivation = false;
+		return;
+	}
+	for (const paginator of [mentionsPaginator, directNotesPaginator]) {
+		if (paginator.items.value.length > 0) void paginator.reload();
+	}
+});
 
 function setFilter(ev: PointerEvent) {
 	const typeItems = notificationTypes.map(t => ({
