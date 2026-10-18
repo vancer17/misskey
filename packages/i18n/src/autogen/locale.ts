@@ -8843,6 +8843,10 @@ export interface Locale extends ILocale {
          */
         "following": string;
         /**
+         * フォローしているチャンネルはありません
+         */
+        "noFollowing": string;
+        /**
          * {n}人が参加中
          */
         "usersCount": ParameterizedString<"n">;
