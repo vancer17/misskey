@@ -3,9 +3,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * 文件领域：帖子创建与本地持久化一致性。
+ * 作用：先原子提交帖子、投票及关联统计，再调度既有后台通知／投递／索引。
+ * 数据链：已校验创建命令 → 数据库事务 → 成功回执 → 异步分发；不引入前端或运维探测。
+ */
 import { setImmediate } from 'node:timers/promises';
 import * as mfm from 'mfm-js';
 import { In, DataSource, IsNull, LessThan } from 'typeorm';
+import type { EntityManager } from 'typeorm';
 import * as Redis from 'ioredis';
 import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
 import { extractMentions } from '@/misc/extract-mentions.js';
@@ -18,11 +24,12 @@ import type { MiDriveFile } from '@/models/DriveFile.js';
 import type { MiApp } from '@/models/App.js';
 import { concat } from '@/misc/prelude/array.js';
 import { IdService } from '@/core/IdService.js';
-import type { MiUser, MiLocalUser, MiRemoteUser } from '@/models/User.js';
+import { MiUser } from '@/models/User.js';
+import type { MiLocalUser, MiRemoteUser } from '@/models/User.js';
 import type { IPoll } from '@/models/Poll.js';
 import { MiPoll } from '@/models/Poll.js';
 import { isDuplicateKeyValueError } from '@/misc/is-duplicate-key-value-error.js';
-import type { MiChannel } from '@/models/Channel.js';
+import { MiChannel } from '@/models/Channel.js';
 import { normalizeForSearch } from '@/misc/normalize-for-search.js';
 import { RelayService } from '@/core/RelayService.js';
 import { FederatedInstanceService } from '@/core/FederatedInstanceService.js';
@@ -641,9 +648,10 @@ export class NoteCreateService implements OnApplicationShutdown {
 		return note;
 	}
 
+	/** 帖子与本地派生统计在同一事务提交，成功回执之后的查询不再读到提交前计数。 */
 	@bindThis
-	private async insertNote(user: { id: MiUser['id']; host: MiUser['host']; }, data: Option, tags: string[], emojis: string[], mentionedUsers: MinimumUser[]) {
-		const insert = new MiNote({
+	private async insertNote(user: Pick<MiUser, 'id' | 'host' | 'isBot'>, data: Option, tags: string[], emojis: string[], mentionedUsers: MinimumUser[]): Promise<MiNote> {
+		const insert: MiNote = new MiNote({
 			id: this.idService.gen(data.createdAt?.getTime()),
 			fileIds: data.files ? data.files.map(file => file.id) : [],
 			replyId: data.reply ? data.reply.id : null,
@@ -663,7 +671,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 			userId: user.id,
 			localOnly: data.localOnly!,
 			reactionAcceptance: data.reactionAcceptance ?? null,
-			visibility: data.visibility as any,
+			visibility: data.visibility as MiNote['visibility'],
 			visibleUserIds: data.visibility === 'specified'
 				? data.visibleUsers
 					? data.visibleUsers.map(u => u.id)
@@ -702,35 +710,31 @@ export class NoteCreateService implements OnApplicationShutdown {
 
 		// 投稿を作成
 		try {
-			if (insert.hasPoll) {
-				// Start transaction
-				await this.db.transaction(async transactionalEntityManager => {
-					await transactionalEntityManager.insert(MiNote, insert);
-
-					const poll = new MiPoll({
+			await this.db.transaction(/** 仅使用事务管理器，不能混用外部仓储造成部分提交。 */ async (manager: EntityManager): Promise<void> => {
+				await manager.insert(MiNote, insert);
+				if (data.poll != null) {
+					const poll: MiPoll = new MiPoll({
 						noteId: insert.id,
-						choices: data.poll!.choices,
-						expiresAt: data.poll!.expiresAt,
-						multiple: data.poll!.multiple,
-						votes: new Array(data.poll!.choices.length).fill(0),
+						choices: data.poll.choices,
+						expiresAt: data.poll.expiresAt,
+						multiple: data.poll.multiple,
+						votes: new Array<number>(data.poll.choices.length).fill(0),
 						noteVisibility: insert.visibility,
 						userId: user.id,
 						userHost: user.host,
 						channelId: insert.channelId,
 					});
-
-					await transactionalEntityManager.insert(MiPoll, poll);
-				});
-			} else {
-				await this.notesRepository.insert(insert);
-			}
+					await manager.insert(MiPoll, poll);
+				}
+				await this.persistNoteStatistics(manager, user, data);
+			});
 
 			return {
 				...insert,
 				reply: data.reply ?? null,
 				renote: data.renote ?? null,
 			};
-		} catch (e) {
+		} catch (e: unknown) {
 			// duplicate key error
 			if (isDuplicateKeyValueError(e)) {
 				const err = new Error('Duplicated note');
@@ -744,13 +748,44 @@ export class NoteCreateService implements OnApplicationShutdown {
 		}
 	}
 
+	/**
+	 * 提交已存在的本地统计规则，不改变本人转发／机器人排除或频道参与者口径。
+	 * 只等待数据库写入；联邦投递、通知、排行与搜索仍留在原后台链路。
+	 */
+	private async persistNoteStatistics(manager: EntityManager, user: Pick<MiUser, 'id' | 'isBot'>, data: Option): Promise<void> {
+		await manager.createQueryBuilder().update(MiUser).set({
+			updatedAt: new Date(),
+			notesCount: /** 数据库原子累加，不从旧实体值计算。 */ (): string => '"notesCount" + 1',
+		}).where('id = :id', { id: user.id }).execute();
+
+		const replyId: string | null = data.reply?.id ?? null;
+		const renoteId: string | null = data.renote != null && data.renote.userId !== user.id && !user.isBot ? data.renote.id : null;
+		// 引用与回复可能涉及不同父帖，固定 ID 顺序降低交叉写入死锁风险。
+		const parentIds: string[] = [...new Set([replyId, renoteId].filter(/** 排除不存在的关系。 */ (id: string | null): id is string => id != null))].sort();
+		for (const id of parentIds) {
+			if (id === replyId) await manager.increment(MiNote, { id }, 'repliesCount', 1);
+			if (id === renoteId) await manager.increment(MiNote, { id }, 'renoteCount', 1);
+		}
+		if (data.channel != null) {
+			await manager.createQueryBuilder().update(MiChannel).set({
+				notesCount: /** 仍为原有频道发帖累计口径。 */ (): string => '"notesCount" + 1',
+				lastNotedAt: new Date(),
+			}).where('id = :id', { id: data.channel.id }).execute();
+			const count: number = await manager.countBy(MiNote, { userId: user.id, channelId: data.channel.id });
+			// 保留“当前仅一条即首次参与”的存量规则；本次不重建参与者领域。
+			if (count === 1) await manager.increment(MiChannel, { id: data.channel.id }, 'usersCount', 1);
+		}
+	}
+
+	/** 已提交帖子进入原异步分发链；统计已随事务完成，不再在后台重复累加。 */
+
 	@bindThis
 	private async postNoteCreated(note: MiNote, user: {
 		id: MiUser['id'];
 		username: MiUser['username'];
 		host: MiUser['host'];
 		isBot: MiUser['isBot'];
-	}, data: Option, silent: boolean, tags: string[], mentionedUsers: MinimumUser[]) {
+	}, data: Option, silent: boolean, tags: string[], mentionedUsers: MinimumUser[]): Promise<void> {
 		this.notesChart.update(note, true);
 		if (note.visibility !== 'specified' && (this.meta.enableChartsForRemoteUser || (user.host == null))) {
 			this.perUserNotesChart.update(user, note, true);
@@ -773,19 +808,12 @@ export class NoteCreateService implements OnApplicationShutdown {
 			this.hashtagService.updateHashtags(user, tags);
 		}
 
-		// Increment notes count (user)
-		this.incNotesCountOfUser(user);
-
 		this.pushToTl(note, user);
 
 		this.antennaService.addNoteToAntennas({
 			...note,
 			channel: data.channel ?? null,
 		}, user);
-
-		if (data.reply) {
-			this.saveReply(data.reply, note);
-		}
 
 		if (data.reply == null) {
 			// TODO: キャッシュ
@@ -813,7 +841,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 		}
 
 		if (data.renote && data.renote.userId !== user.id && !user.isBot) {
-			this.incRenoteCount(data.renote);
+			this.updateRenoteRanking(data.renote);
 		}
 
 		if (data.poll && data.poll.expiresAt) {
@@ -924,24 +952,6 @@ export class NoteCreateService implements OnApplicationShutdown {
 			//#endregion
 		}
 
-		if (data.channel) {
-			this.channelsRepository.increment({ id: data.channel.id }, 'notesCount', 1);
-			this.channelsRepository.update(data.channel.id, {
-				lastNotedAt: new Date(),
-			});
-
-			this.notesRepository.countBy({
-				userId: user.id,
-				channelId: data.channel.id,
-			}).then(count => {
-				// この処理が行われるのはノート作成後なので、ノートが一つしかなかったら最初の投稿だと判断できる
-				// TODO: とはいえノートを削除して何回も投稿すればその分だけインクリメントされる雑さもあるのでどうにかしたい
-				if (count === 1) {
-					this.channelsRepository.increment({ id: data.channel!.id }, 'usersCount', 1);
-				}
-			});
-		}
-
 		// Register to search database
 		this.index(note);
 	}
@@ -963,15 +973,9 @@ export class NoteCreateService implements OnApplicationShutdown {
 			(note.files != null && note.files.length > 0);
 	}
 
+	/** 保留原转发热度排行副作用；数据库计数已在事务内提交。 */
 	@bindThis
-	private incRenoteCount(renote: MiNote) {
-		this.notesRepository.createQueryBuilder().update()
-			.set({
-				renoteCount: () => '"renoteCount" + 1',
-			})
-			.where('id = :id', { id: renote.id })
-			.execute();
-
+	private updateRenoteRanking(renote: MiNote): void {
 		// 30%の確率、3日以内に投稿されたノートの場合ハイライト用ランキング更新
 		if (Math.random() < 0.3 && (Date.now() - this.idService.parse(renote.id).date.getTime()) < 1000 * 60 * 60 * 24 * 3) {
 			if (renote.channelId != null) {
@@ -1014,11 +1018,6 @@ export class NoteCreateService implements OnApplicationShutdown {
 	}
 
 	@bindThis
-	private saveReply(reply: MiNote, note: MiNote) {
-		this.notesRepository.increment({ id: reply.id }, 'repliesCount', 1);
-	}
-
-	@bindThis
 	private async renderNoteOrRenoteActivity(data: Option, note: MiNote) {
 		if (data.localOnly) return null;
 
@@ -1034,17 +1033,6 @@ export class NoteCreateService implements OnApplicationShutdown {
 		if (note.text == null && note.cw == null) return;
 
 		this.searchService.indexNote(note);
-	}
-
-	@bindThis
-	private incNotesCountOfUser(user: { id: MiUser['id']; }) {
-		this.usersRepository.createQueryBuilder().update()
-			.set({
-				updatedAt: new Date(),
-				notesCount: () => '"notesCount" + 1',
-			})
-			.where('id = :id', { id: user.id })
-			.execute();
 	}
 
 	@bindThis

@@ -79,7 +79,8 @@ Paginator（users/following | users/followers 分页）→ TwitterUserResult（�
 </template>
 
 <script lang="ts" setup>
-import { computed, markRaw, onActivated, useTemplateRef } from 'vue';
+import { useTwitterPaginatorRefresh, useTwitterRelationshipEvents } from '@/ui/twitter/index.js';
+import { computed, markRaw, useTemplateRef } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkPagination from '@/components/MkPagination.vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
@@ -134,17 +135,9 @@ const paginator: Paginator<'users/following'> | Paginator<'users/followers'> = p
 		computedParams: computed(() => ({ userId: props.user?.id ?? '' })),
 	}));
 
-/** KeepAlive 首次激活跳过标志（挂载期已完成首拉，防止双拉）。 */
-let skipNextActivation = true;
-
-/** 回访刷新（K-05：任意界面的 follow / unfollow 后回访列表不陈旧；仅有条目时重载）。 */
-onActivated(() => {
-	if (skipNextActivation) {
-		skipNextActivation = false;
-		return;
-	}
-	if (paginator.items.value.length > 0) void paginator.reload();
-});
+/** 关系列表与用户头部是不同查询，分别接入同一已确认关系信号。 */
+const invalidateRelations: () => void = useTwitterPaginatorRefresh(/** 原关系分页器，空结果也有效。 */ (): typeof paginator => paginator);
+useTwitterRelationshipEvents(/** 当前列表归属。 */ (): string | null => props.user?.id ?? null, invalidateRelations);
 
 /**
  * 将关注关系分页项单向投影为用户行模型（不回写、不复制业务状态）。

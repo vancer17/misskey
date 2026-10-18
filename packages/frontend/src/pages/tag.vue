@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：标签结果页。
+作用：协调已确认写入与缓存回访，复用原查询及基础组件，不复制业务状态。
+数据链：成功通知／回访 → 页面数据所有者 → 只读显示；不解释环境探测。
+-->
+
 <template>
 <TwitterTag
 	v-if="isTwitterUi"
@@ -25,7 +31,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, defineAsyncComponent, inject, markRaw, onActivated, ref } from 'vue';
+import { useGlobalEvent } from '@/events.js';
+import { useTwitterPaginatorRefresh } from '@/ui/twitter/index.js';
+import { computed, defineAsyncComponent, inject, markRaw, ref } from 'vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkButton from '@/components/MkButton.vue';
@@ -52,25 +60,18 @@ const paginator = markRaw(new Paginator('notes/search-by-tag', {
 	})),
 }));
 
-/** KeepAlive 首次激活跳过标志（挂载期已完成首拉，防止双拉）。 */
-let skipNextActivation = true;
+/** 标签查询只负责接收刷新意图；命中与过滤仍由服务端决定。 */
+const invalidateTag: () => void = useTwitterPaginatorRefresh(/** 原标签分页器。 */ (): typeof paginator => paginator);
+useGlobalEvent('notePosted', /** 不依赖具体发帖入口，也不自行解析正文决定成员。 */ (): void => { invalidateTag(); });
 
-/** 回访刷新（K-07：新带该 tag 的帖子出现后回访不陈旧；仅有条目时执行）。 */
-onActivated(() => {
-	if (skipNextActivation) {
-		skipNextActivation = false;
-		return;
-	}
-	if (paginator.items.value.length > 0) void paginator.reload();
-});
-
-async function post() {
+/** 只管理预填生命周期；关闭不是写入成功，不再据此刷新集合。 */
+async function post(): Promise<void> {
 	store.set('postFormHashtags', props.tag);
 	store.set('postFormWithHashtags', true);
-	await os.post();
-	store.set('postFormHashtags', '');
-	store.set('postFormWithHashtags', false);
-	paginator.reload();
+	try { await os.post(); } finally {
+		store.set('postFormHashtags', '');
+		store.set('postFormWithHashtags', false);
+	}
 }
 
 /** 当前 UI 样式（由 Twitter Shell 注入；非 Twitter 场景回退 'default'）。 */
