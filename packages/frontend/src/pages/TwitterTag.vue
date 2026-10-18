@@ -61,7 +61,7 @@ import { useTemplateRef } from 'vue';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
 import { useTwitterLayout } from '@/ui/twitter/index.js';
-import { useScrollPositionKeeper } from '@/composables/use-scroll-position-keeper.js';
+import { useTwitterScrollPositionKeeper } from '@/ui/twitter/index.js';
 import { i18n } from '@/i18n.js';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import type { Paginator } from '@/utility/paginator.js';
@@ -79,7 +79,7 @@ const { isMobile } = useTwitterLayout();
 const rootEl = useTemplateRef<HTMLDivElement>('rootEl');
 
 /** 保留时间线滚动位置（返回导航后恢复）。 */
-useScrollPositionKeeper(rootEl);
+useTwitterScrollPositionKeeper(rootEl);
 
 /** 返回上一页（与 TwitterFollowList / NotificationsHeader 一致的返回行为）。 */
 function goBack(): void {

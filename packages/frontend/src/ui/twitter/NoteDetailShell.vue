@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter 帖子详情页面壳。
+作用：呈现详情头部与内容，主视口统一恢复滚动；窗口内详情保留原位置保存器。
+数据链：页面 DOM → UI 锚点；不修改帖子与回复的业务数据。
+-->
+
 <template>
 <div ref="rootEl" class="_pageScrollable" :class="[$style.root, { [$style.mobile]: isMobile }]">
 	<MkStickyContainer>
@@ -31,7 +37,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { useTemplateRef } from 'vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
-import { useScrollPositionKeeper } from '@/composables/use-scroll-position-keeper.js';
+import { useTwitterScrollPositionKeeper } from '@/ui/twitter/composables/use-twitter-scroll-host.js';
 import { i18n } from '@/i18n.js';
 import { useTwitterLayout } from './composables/use-twitter-layout.js';
 
@@ -39,7 +45,7 @@ const { isMobile } = useTwitterLayout();
 
 const rootEl = useTemplateRef('rootEl');
 
-useScrollPositionKeeper(rootEl);
+useTwitterScrollPositionKeeper(rootEl);
 
 function goBack() {
 	window.history.back();
