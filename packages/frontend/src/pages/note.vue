@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：帖子详情路由实体与前后文。
+作用：原数据所有者处理写入与回访，不移动基础组件内部逻辑。
+数据链：确认信号 → 原查询 → 当前实体／分页集合；无环境探测。
+-->
+
 <template>
 <component :is="detailComponent">
 	<div
@@ -62,7 +68,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, watch, ref, markRaw, inject, onActivated } from 'vue';
+import type { Ref } from 'vue';
+import { onBeforeUnmount } from 'vue';
+import { useGlobalEvent } from '@/events.js';
+import { useTwitterRefresh, useTwitterPaginatorRefresh } from '@/ui/twitter/index.js';
+import { computed, watch, ref, markRaw, inject } from 'vue';
 import * as Misskey from 'misskey-js';
 import { host } from '@@/js/config.js';
 import PageWithHeader from '@/components/global/PageWithHeader.vue';
@@ -159,79 +169,64 @@ const nextChannelPaginator = markRaw(new Paginator('channels/timeline', {
 	}) : undefined),
 }));
 
-function fetchNote() {
-	showPrev.value = false;
-	showNext.value = false;
-	note.value = null;
+/** 当前主帖请求归属，防止快速切帖后的迟到回填。 */
+let noteRequest: AbortController | null = null;
+const noteLoading: Ref<boolean> = ref<boolean>(false);
 
-	if (CTX_NOTE && CTX_NOTE.id === props.noteId) {
-		note.value = CTX_NOTE;
-		return;
+/** 主帖与前后文独立加载；成功回填保留原展开状态。 */
+async function loadNote(clear: boolean): Promise<boolean> {
+	const noteId: string = props.noteId;
+	noteRequest?.abort();
+	const request: AbortController = new AbortController();
+	noteRequest = request;
+	noteLoading.value = true;
+	if (clear) { showPrev.value = false; showNext.value = false; note.value = null; clips.value = undefined; error.value = null; }
+	if (clear && CTX_NOTE?.id === noteId) {
+		// 保留原匿名上下文的短路，不扩大旧 Clip 查询兼容消费者。
+		note.value = CTX_NOTE; noteRequest = null; noteLoading.value = false; return true;
 	}
-
-	misskeyApi('notes/show', {
-		noteId: props.noteId,
-	}).then(res => {
-		note.value = res;
-		const appearNote = getAppearNote(res) ?? res;
-		// 古いノートは被クリップ数をカウントしていないので、2023-10-01以前のものは強制的にnotes/clipsを叩く
-		if ((appearNote.clippedCount ?? 0) > 0 || new Date(appearNote.createdAt).getTime() < new Date('2023-10-01').getTime()) {
-			misskeyApi('notes/clips', {
-				noteId: appearNote.id,
-			}).then((_clips) => {
-				clips.value = _clips;
+	try {
+		const fetched: Misskey.entities.Note = await misskeyApi('notes/show', { noteId }, undefined, request.signal);
+		if (request.signal.aborted || noteRequest !== request || props.noteId !== noteId) return false;
+		note.value = fetched;
+		const appeared: Misskey.entities.Note = getAppearNote(fetched) ?? fetched;
+		// 保留原存量帖的 Clip 查询兼容范围，不扩大消费者。
+		if ((appeared.clippedCount ?? 0) > 0 || new Date(appeared.createdAt).getTime() < new Date('2023-10-01').getTime()) {
+			const fetchedClips: Misskey.entities.Clip[] = await misskeyApi('notes/clips', { noteId: appeared.id }, undefined, request.signal);
+			if (!request.signal.aborted && props.noteId === noteId) clips.value = fetchedClips;
+		}
+		return true;
+	} catch (cause: unknown) {
+		if (request.signal.aborted || props.noteId !== noteId) return false;
+		const failureId: string | null = typeof cause === 'object' && cause != null && 'id' in cause && typeof cause.id === 'string' ? cause.id : null;
+		if (failureId && ['fbcc002d-37d9-4944-a6b0-d9e29f2d33ab', '145f88d2-b03d-4087-8143-a78928883c4b'].includes(failureId)) {
+			void pleaseLogin({ path: '/',
+				message: failureId === 'fbcc002d-37d9-4944-a6b0-d9e29f2d33ab' ? i18n.ts.thisContentsAreMarkedAsSigninRequiredByAuthor : i18n.ts.signinOrContinueOnRemote,
+				openOnRemote: { type: 'lookup', url: `https://${host}/notes/${noteId}` },
 			});
 		}
-	}).catch(err => {
-		if (['fbcc002d-37d9-4944-a6b0-d9e29f2d33ab', '145f88d2-b03d-4087-8143-a78928883c4b'].includes(err.id)) {
-			pleaseLogin({
-				path: '/',
-				message: err.id === 'fbcc002d-37d9-4944-a6b0-d9e29f2d33ab' ? i18n.ts.thisContentsAreMarkedAsSigninRequiredByAuthor : i18n.ts.signinOrContinueOnRemote,
-				openOnRemote: {
-					type: 'lookup',
-					url: `https://${host}/notes/${props.noteId}`,
-				},
-			});
-		}
-		error.value = err;
-	});
-}
-
-watch(() => props.noteId, fetchNote, {
-	immediate: true,
-});
-
-/** KeepAlive 首次激活跳过标志（挂载期 watch immediate 已完成首拉，防止双拉）。 */
-let skipNextActivation = true;
-
-/**
- * 回访刷新（K-03）：重取主帖使编辑 / 删除生效（拉取失败保留缓存内容，不强转错误终态），
- * 并仅重载已展开的线程段（保留 showPrev / showNext 展开状态，不整体收起）。
- */
-async function refreshNoteOnActivation(): Promise<void> {
-	const fetched = await misskeyApi('notes/show', {
-		noteId: props.noteId,
-	}).catch(() => null);
-	if (fetched == null) return;
-
-	note.value = fetched;
-
-	if (showPrev.value !== false) {
-		const prevPaginator = showPrev.value === 'channel' ? prevChannelPaginator : prevUserPaginator;
-		if (prevPaginator.items.value.length > 0) void prevPaginator.reload();
-	}
-	if (showNext.value !== false) {
-		const nextPaginator = showNext.value === 'channel' ? nextChannelPaginator : nextUserPaginator;
-		if (nextPaginator.items.value.length > 0) void nextPaginator.reload();
+		if (note.value == null) error.value = cause;
+		return false;
+	} finally {
+		if (noteRequest === request) { noteRequest = null; noteLoading.value = false; }
 	}
 }
 
-onActivated(() => {
-	if (skipNextActivation) {
-		skipNextActivation = false;
-		return;
-	}
-	void refreshNoteOnActivation();
+/** 首拉和手动错误重试沿用原页面入口。 */
+async function fetchNote(): Promise<void> { await loadNote(true); }
+
+watch(/** 仅实体标识切换触发首拉。 */ (): string => props.noteId, fetchNote, { immediate: true });
+onBeforeUnmount(/** 取消当前页面独立实体请求。 */ (): void => { noteRequest?.abort(); });
+useTwitterRefresh(/** 真实回访才重取主帖，不重建详情或清除展开态。 */ async (): Promise<boolean> => loadNote(false),
+	{ busy: /** 不与首拉并发。 */ (): boolean => noteLoading.value });
+/** 已展开的前后文集合分别刷新；空集合也是已执行查询。 */
+const invalidatePrevUser: () => void = useTwitterPaginatorRefresh(/** 原用户前文。 */ (): typeof prevUserPaginator => prevUserPaginator, /** 用户前文已显示。 */ (): boolean => showPrev.value === 'user');
+const invalidateNextUser: () => void = useTwitterPaginatorRefresh(/** 原用户后文。 */ (): typeof nextUserPaginator => nextUserPaginator, /** 用户后文已显示。 */ (): boolean => showNext.value === 'user');
+const invalidatePrevChannel: () => void = useTwitterPaginatorRefresh(/** 原频道前文。 */ (): typeof prevChannelPaginator => prevChannelPaginator, /** 频道前文已显示。 */ (): boolean => showPrev.value === 'channel');
+const invalidateNextChannel: () => void = useTwitterPaginatorRefresh(/** 原频道后文。 */ (): typeof nextChannelPaginator => nextChannelPaginator, /** 频道后文已显示。 */ (): boolean => showNext.value === 'channel');
+useGlobalEvent('notePosted', /** 只路由失效意图，时间范围仍由前后文查询裁定。 */ (created: Misskey.entities.Note): void => {
+	if (created.userId === note.value?.userId) { invalidatePrevUser(); invalidateNextUser(); }
+	if (created.channelId != null && created.channelId === note.value?.channelId) { invalidatePrevChannel(); invalidateNextChannel(); }
 });
 
 definePage(() => ({
