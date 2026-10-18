@@ -25,7 +25,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div :class="$style.headerName">
 				<MkUserName :user="displayUser" :nowrap="true"/>
 			</div>
-			<div :class="$style.headerCount">{{ number(user.notesCount) }} {{ i18n.ts.notes }}</div>
+			<div :class="$style.headerCount" data-testid="twitter-profile-note-count">{{ number(user.notesCount) }} {{ i18n.ts.notes }}</div>
 		</div>
 	</header>
 
@@ -159,7 +159,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkInfo v-if="user.isSilenced">{{ i18n.ts.userSilenced }}</MkInfo>
 	</div>
 
-	<TwitterUserTimeline :user="user" :page="page"/>
+	<TwitterUserTimeline :key="user.id" :user="user" :page="page"/>
 </div>
 <TwitterPageState v-else-if="error" :type="errorStateType" @retry="emit('retry')"/>
 <TwitterPageSkeleton v-else variant="profile"/>
