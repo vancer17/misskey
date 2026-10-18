@@ -38,7 +38,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { defineAsyncComponent, computed, inject, watch, ref, onActivated, onDeactivated, onBeforeUnmount } from 'vue';
+import { useTwitterRefresh, useTwitterUserEvents } from '@/ui/twitter/index.js';
+import { defineAsyncComponent, computed, inject, watch, ref, onDeactivated, onBeforeUnmount } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { Ref } from 'vue';
 import { acct as getAcct } from '@/filters/user.js';
@@ -83,33 +84,37 @@ const user: Ref<Misskey.entities.UserDetailed | null> = ref(CTX_USER);
 const error: Ref<unknown> = ref(null);
 /** 当前有效加载请求，取消与引用比较共同防止迟到响应回写。 */
 let userRequest: AbortController | null = null;
-/** 只在真实停用后产生回访需求，不假定首次 activated 的挂载时序。 */
-let needsRevisitRefresh: boolean = false;
+/** 原实体加载的请求占用，不以是否已有实体判断。 */
+const userLoading: Ref<boolean> = ref(false);
 
 /** 加载当前账户；首次/重试清空，回访成功回填，失败保留已有资料。 */
-async function loadUser(clearBeforeLoad: boolean): Promise<void> {
+async function loadUser(clearBeforeLoad: boolean): Promise<boolean> {
 	const requestedAcct: string = props.acct;
-	if (requestedAcct == null) return;
+	if (requestedAcct == null) return false;
 	userRequest?.abort();
 	const controller: AbortController = new AbortController();
 	userRequest = controller;
+	userLoading.value = true;
 	const { username, host }: ReturnType<typeof Misskey.acct.parse> = Misskey.acct.parse(requestedAcct);
 	error.value = null;
 	if (clearBeforeLoad && CTX_USER && CTX_USER.username === username && CTX_USER.host === host) {
 		user.value = CTX_USER;
 		userRequest = null;
-		return;
+		userLoading.value = false;
+		return true;
 	}
 	if (clearBeforeLoad) user.value = null;
 	try {
 		const fetched: Misskey.entities.UserDetailed = await misskeyApi('users/show', { username, host }, undefined, controller.signal);
-		if (userRequest !== controller || controller.signal.aborted || props.acct !== requestedAcct) return;
+		if (userRequest !== controller || controller.signal.aborted || props.acct !== requestedAcct) return false;
 		user.value = fetched;
+		return true;
 	} catch (cause: unknown) {
-		if (userRequest !== controller || controller.signal.aborted || props.acct !== requestedAcct) return;
+		if (userRequest !== controller || controller.signal.aborted || props.acct !== requestedAcct) return false;
 		if (user.value == null) error.value = cause;
+		return false;
 	} finally {
-		if (userRequest === controller) userRequest = null;
+		if (userRequest === controller) { userRequest = null; userLoading.value = false; }
 	}
 }
 
@@ -127,19 +132,17 @@ watch(
 onDeactivated(
 	/** 停用时取消在途请求，留下下一次回访需求。 */
 	(): void => {
-		needsRevisitRefresh = true;
 		userRequest?.abort();
 		userRequest = null;
+		userLoading.value = false;
 	},
 );
-onActivated(
-	/** 首挂载不重复请求，仅消费真实停用产生的标记。 */
-	async (): Promise<void> => {
-		if (!needsRevisitRefresh) return;
-		needsRevisitRefresh = false;
-		await loadUser(false);
-	},
+/** 回访和写入共享原实体加载入口；不让组件猜测帖子／关系总数。 */
+const invalidateUser: () => void = useTwitterRefresh(
+	/** 成功才回填，原请求归属校验继续生效。 */ async (): Promise<boolean> => loadUser(false),
+	{ busy: /** 尊重首次资料请求。 */ (): boolean => userLoading.value },
 );
+useTwitterUserEvents(/** 当前资料归属，不额外解析账户身份。 */ (): string | null => user.value?.id ?? null, invalidateUser);
 onBeforeUnmount(
 	/** 最终销毁取消请求，防止缓存驱逐后的异步回填。 */
 	(): void => { userRequest?.abort(); userRequest = null; },
