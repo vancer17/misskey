@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Compatible 屏蔽与拉黑设置。
+作用：在原命令成功后更新原数据源，回访仍保留当前显示上下文。
+数据链：命令确认 → 原分页器／实体 → 只读组件；不写入第二份业务事实。
+-->
+
 <template>
 <SearchMarker path="/settings/mute-block" :label="i18n.ts.muteAndBlock" icon="ti ti-ban" :keywords="['mute', 'block']">
 	<div class="_gaps_m">
@@ -172,6 +178,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import { useTwitterPaginatorRefresh } from '@/ui/twitter/index.js';
 import { ref, computed, watch, markRaw } from 'vue';
 import * as Misskey from 'misskey-js';
 import XEmojiMute from './mute-block.emoji-mute.vue';
@@ -207,6 +214,11 @@ const blockingPaginator = markRaw(new Paginator('blocking/list', {
 	limit: 10,
 }));
 
+/** 关系集合各自拥有成功后的刷新入口，不根据用户 ID 猜测关系记录 ID。 */
+const invalidateRenoteMutes: () => void = useTwitterPaginatorRefresh(/** 转发屏蔽集合。 */ (): typeof renoteMutingPaginator => renoteMutingPaginator);
+const invalidateMutes: () => void = useTwitterPaginatorRefresh(/** 屏蔽集合。 */ (): typeof mutingPaginator => mutingPaginator);
+const invalidateBlocks: () => void = useTwitterPaginatorRefresh(/** 拉黑集合。 */ (): typeof blockingPaginator => blockingPaginator);
+
 const expandedRenoteMuteItems = ref<string[]>([]);
 const expandedMuteItems = ref<string[]>([]);
 const expandedBlockItems = ref<string[]>([]);
@@ -219,35 +231,44 @@ watch([
 	suggestReload();
 });
 
-async function unrenoteMute(user: Misskey.entities.UserDetailed, ev: PointerEvent) {
+/** 解除关系确认后重取原集合，失败不删除当前显示项。 */
+async function unrenoteMute(user: Misskey.entities.UserDetailed, ev: PointerEvent): Promise<void> {
 	os.popupMenu([{
 		text: i18n.ts.renoteUnmute,
 		icon: 'ti ti-x',
-		action: async () => {
-			await os.apiWithDialog('renote-mute/delete', { userId: user.id });
-			//role.users = role.users.filter(u => u.id !== user.id);
+		action: /** 提交服务端命令，成功才产生刷新意图。 */ async (): Promise<void> => {
+			await os.apiWithDialog('renote-mute/delete', { userId: user.id }).then(
+				/** 确认解除后才更新原集合。 */ (): void => { invalidateRenoteMutes(); },
+				/** 原对话框已显示错误；失败不移除关系，也不产生未处理拒绝。 */ (): void => {},
+			);
 		},
 	}], ev.currentTarget ?? ev.target);
 }
 
-async function unmute(user: Misskey.entities.UserDetailed, ev: PointerEvent) {
+/** 解除关系确认后重取原集合，失败不删除当前显示项。 */
+async function unmute(user: Misskey.entities.UserDetailed, ev: PointerEvent): Promise<void> {
 	os.popupMenu([{
 		text: i18n.ts.unmute,
 		icon: 'ti ti-x',
-		action: async () => {
-			await os.apiWithDialog('mute/delete', { userId: user.id });
-			//role.users = role.users.filter(u => u.id !== user.id);
+		action: /** 提交服务端命令，成功才产生刷新意图。 */ async (): Promise<void> => {
+			await os.apiWithDialog('mute/delete', { userId: user.id }).then(
+				/** 确认解除后才更新原集合。 */ (): void => { invalidateMutes(); },
+				/** 原对话框已显示错误；失败不移除关系，也不产生未处理拒绝。 */ (): void => {},
+			);
 		},
 	}], ev.currentTarget ?? ev.target);
 }
 
-async function unblock(user: Misskey.entities.UserDetailed, ev: PointerEvent) {
+/** 解除关系确认后重取原集合，失败不删除当前显示项。 */
+async function unblock(user: Misskey.entities.UserDetailed, ev: PointerEvent): Promise<void> {
 	os.popupMenu([{
 		text: i18n.ts.unblock,
 		icon: 'ti ti-x',
-		action: async () => {
-			await os.apiWithDialog('blocking/delete', { userId: user.id });
-			//role.users = role.users.filter(u => u.id !== user.id);
+		action: /** 提交服务端命令，成功才产生刷新意图。 */ async (): Promise<void> => {
+			await os.apiWithDialog('blocking/delete', { userId: user.id }).then(
+				/** 确认解除后才更新原集合。 */ (): void => { invalidateBlocks(); },
+				/** 原对话框已显示错误；失败不移除关系，也不产生未处理拒绝。 */ (): void => {},
+			);
 		},
 	}], ev.currentTarget ?? ev.target);
 }

@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：频道详情与统计。
+作用：协调已确认写入与缓存回访，复用原查询及基础组件，不复制业务状态。
+数据链：成功通知／回访 → 页面数据所有者 → 只读显示；不解释环境探测。
+-->
+
 <template>
 <TwitterChannel
 	v-if="isTwitterUi"
@@ -88,7 +94,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, watch, ref, markRaw, shallowRef, defineAsyncComponent, inject, onActivated } from 'vue';
+import type { Ref } from 'vue';
+import { onBeforeUnmount } from 'vue';
+import { useGlobalEvent } from '@/events.js';
+import { useTwitterRefresh, useTwitterPaginatorRefresh } from '@/ui/twitter/index.js';
+import { computed, watch, ref, markRaw, shallowRef, defineAsyncComponent, inject } from 'vue';
 import * as Misskey from 'misskey-js';
 import { url } from '@@/js/config.js';
 import { useInterval } from '@@/js/use-interval.js';
@@ -155,10 +165,18 @@ useInterval(() => {
 	afterMounted: true,
 });
 
-watch(() => props.channelId, async () => {
-	const _channel = await misskeyApi('channels/show', {
-		channelId: props.channelId,
-	});
+/** 首次频道请求仍归本页；新范围取消旧请求。 */
+let initialChannelRequest: AbortController | null = null;
+const channelLoading: Ref<boolean> = ref<boolean>(false);
+watch(/** 路由频道 ID 只用于选择查询范围。 */ (): string => props.channelId,
+	/** 首次进入应用原有默认标签和已读处理，回访不重复这些副作用。 */ async (channelId: string): Promise<void> => {
+	initialChannelRequest?.abort();
+	const request: AbortController = new AbortController();
+	initialChannelRequest = request;
+	channelLoading.value = true;
+	try {
+		const _channel: Misskey.entities.Channel = await misskeyApi('channels/show', { channelId }, undefined, request.signal);
+		if (request.signal.aborted || props.channelId !== channelId || initialChannelRequest !== request) return;
 
 	favorited.value = _channel.isFavorited ?? false;
 	if (favorited.value || _channel.isFollowing) {
@@ -179,42 +197,39 @@ watch(() => props.channelId, async () => {
 	}
 
 	channel.value = _channel;
+	} catch (error: unknown) {
+		if (!request.signal.aborted) console.error(error);
+	} finally {
+		if (initialChannelRequest === request) { initialChannelRequest = null; channelLoading.value = false; }
+	}
 }, { immediate: true });
+onBeforeUnmount(/** 不让首次查询写入销毁的频道页面。 */ (): void => { initialChannelRequest?.abort(); });
 
-/** KeepAlive 首次激活跳过标志（挂载期 watch immediate 已完成首拉，防止双拉）。 */
-let skipNextActivation = true;
-
-/**
- * 重取频道实体并回填（软刷新语义：失败保留缓存）。
- *
- * join / leave / 回访刷新共用；不沿用 watch 体（其含已读时刻回写副作用）。
- */
-async function refetchChannel(): Promise<void> {
-	const fetched = await misskeyApi('channels/show', {
-		channelId: props.channelId,
-	}).catch(() => null);
-	if (fetched == null) return;
-
-	channel.value = fetched;
-	favorited.value = fetched.isFavorited ?? false;
-
-	if (featuredPaginator.items.value.length > 0) {
-		void featuredPaginator.reload();
+/** 频道实体只成功回填；归属与取消保证迟到请求不覆盖其他频道。 */
+async function refetchChannel(signal: AbortSignal): Promise<boolean> {
+	const channelId: string = props.channelId;
+	try {
+		const fetched: Misskey.entities.Channel = await misskeyApi('channels/show', { channelId }, undefined, signal);
+		if (signal.aborted || props.channelId !== channelId) return false;
+		channel.value = fetched;
+		favorited.value = fetched.isFavorited ?? false;
+		return true;
+	} catch (error: unknown) {
+		if (!signal.aborted) console.error(error);
+		return false;
 	}
 }
 
-/** 回访时重取频道实体与收藏态（K-09）。 */
-async function refreshChannelOnActivation(): Promise<void> {
-	await refetchChannel();
-}
-
-onActivated(() => {
-	if (skipNextActivation) {
-		skipNextActivation = false;
-		return;
-	}
-	void refreshChannelOnActivation();
+/** 不触碰 Home 的既有流式分页器，避免相同新帖重复取数。 */
+const invalidateChannel: () => void = useTwitterRefresh(refetchChannel, { busy: /** 等待首次查询，避免旧实体覆盖新统计。 */ (): boolean => channelLoading.value });
+useGlobalEvent('notePosted', /** 实际发布到本频道才更新统计。 */ (note: Misskey.entities.Note): void => {
+	if (note.channelId === props.channelId) invalidateChannel();
 });
+useGlobalEvent('noteDeleted', /** 删除只携带 ID，当前频道统计交回服务端确认。 */ (): void => { invalidateChannel(); });
+useTwitterPaginatorRefresh(/** 热门集合仍只在回访／手动时刷新。 */ (): typeof featuredPaginator => featuredPaginator,
+	/** 与当前 UI 的实际标签保持一致。 */ (): boolean => isTwitterUi.value ? tab.value === 'explore' : tab.value === 'featured');
+useTwitterPaginatorRefresh(/** 已提交搜索不因发帖自动重排。 */ (): typeof searchPaginator.value => searchPaginator.value,
+	/** 原搜索面板的回访范围。 */ (): boolean => tab.value === 'search');
 
 /** Twitter 变体 Join（P-26 join-gate）：关注频道并回填实体（变体据 isFollowing 翻转落ホーム）。 */
 function joinChannel(): void {
@@ -222,9 +237,10 @@ function joinChannel(): void {
 
 	os.apiWithDialog('channels/follow', {
 		channelId: channel.value.id,
-	}).then(() => {
-		void refetchChannel();
-	});
+	}).then(
+		/** 关系命令成功后重新确认频道。 */ (): void => { invalidateChannel(); },
+		/** 原对话框已呈现错误，拒绝不刷新或改变关系。 */ (): void => {},
+	);
 }
 
 /** Twitter 变体 Leave：取关频道并回填实体。 */
@@ -233,9 +249,10 @@ function leaveChannel(): void {
 
 	os.apiWithDialog('channels/unfollow', {
 		channelId: channel.value.id,
-	}).then(() => {
-		void refetchChannel();
-	});
+	}).then(
+		/** 关系命令成功后重新确认频道。 */ (): void => { invalidateChannel(); },
+		/** 原对话框已呈现错误，拒绝不刷新或改变关系。 */ (): void => {},
+	);
 }
 
 function edit() {

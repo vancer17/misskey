@@ -3,10 +3,18 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：社区与频道集合。
+作用：协调已确认写入与缓存回访，复用原查询及基础组件，不复制业务状态。
+数据链：成功通知／回访 → 页面数据所有者 → 只读显示；不解释环境探测。
+-->
+
 <template>
 <TwitterCommunities
 	v-if="isTwitterUi"
 	v-model:tab="twitterTab"
+	v-model:ownedPanelVisible="ownedPanelVisible"
+	v-model:favoritesPanelVisible="favoritesPanelVisible"
 	:followedTimelinePaginator="followedTimelinePaginator"
 	:globalTimelinePaginator="globalTimelinePaginator"
 	:followedChannelsPaginator="followedChannelsPaginator"
@@ -76,7 +84,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, defineAsyncComponent, inject, markRaw, onActivated, onMounted, ref, shallowRef } from 'vue';
+import type { Ref } from 'vue';
+import { useTwitterPaginatorRefresh } from '@/ui/twitter/index.js';
+import { computed, defineAsyncComponent, inject, markRaw, onMounted, ref, shallowRef } from 'vue';
 import type { Endpoints } from 'misskey-js';
 import MkChannelPreview from '@/components/MkChannelPreview.vue';
 import MkChannelList from '@/components/MkChannelList.vue';
@@ -110,6 +120,9 @@ const key = ref('');
 const tab = ref('featured');
 /** Twitter Communities 双 tab 状态（home / explore；P-26，页面层持有以支持回访定向刷新）。 */
 const twitterTab = ref<'home' | 'explore'>('home');
+/** 折叠体显示由业务包裹节点报告，不持有频道实体副本。 */
+const ownedPanelVisible: Ref<boolean> = ref<boolean>(false);
+const favoritesPanelVisible: Ref<boolean> = ref<boolean>(false);
 const searchQuery = ref('');
 const searchType = ref<SearchType>('nameAndDescription');
 
@@ -155,53 +168,21 @@ const followedChannelsPaginator = markRaw(new Paginator('channels/followed', {
 	limit: 20,
 }));
 
-/** legacy 当前 tab 对应的频道列表分页器（K-08 回访定向刷新目标；search tab 由用户提交驱动，不自动刷新）。 */
-function activeListPaginator(): Paginator<'channels/featured'> | Paginator<'channels/my-favorites'> | Paginator<'channels/followed'> | Paginator<'channels/owned'> | null {
-	switch (tab.value) {
-		case 'featured': return featuredPaginator;
-		case 'favorites': return favoritesPaginator;
-		case 'following': return followingPaginator;
-		case 'owned': return ownedPaginator;
-		default: return null;
-	}
-}
-
-/** Twitter Communities 当前 tab 对应的聚合流分页器（回访定向刷新目标）。 */
-function activeCommunitiesPaginator(): Paginator<'channels/followed-timeline'> | Paginator<'channels/global-timeline'> | null {
-	switch (twitterTab.value) {
-		case 'home': return followedTimelinePaginator;
-		case 'explore': return globalTimelinePaginator;
-		default: return null;
-	}
-}
-
-/** 条件重载：仅对已加载（有条目）的分页器执行；未加载过的由 MkPagination / MkNotesTimeline 首次渲染自然拉取，避免 API 风暴。 */
-function reloadConditionally(paginator: Paginator<'channels/featured'> | Paginator<'channels/my-favorites'> | Paginator<'channels/followed'> | Paginator<'channels/owned'> | Paginator<'channels/followed-timeline'> | Paginator<'channels/global-timeline'> | null): void {
-	if (paginator == null || paginator.items.value.length === 0) return;
-	void paginator.reload();
-}
-
-/** KeepAlive 首次激活跳过标志（挂载期已完成首拉，防止双拉）。 */
-let skipNextActivation = true;
-
-/** 回访刷新（K-08：创建 / 关注 / 收藏频道后回访不陈旧）。
- *  注：tab 切换不需要在此刷新——tab 面板为 v-if 链，目标面板的分页组件重挂载时
- *  onMounted 自带 paginator.init()；若此处再 watch(tab) reload 会与其并发双 init，
- *  两个响应先后 pushItems 产生重复项（回归教训，见 keepalive-freshness-audit）。
- *  Twitter Communities 双 tab 同理（聚合流为 MkNotesTimeline，同为挂载期 init）。 */
-onActivated(() => {
-	if (skipNextActivation) {
-		skipNextActivation = false;
-		return;
-	}
-	if (isTwitterUi.value) {
-		reloadConditionally(activeCommunitiesPaginator());
-		/* Home 横条跟随关注态变化，回访时一并刷新 */
-		reloadConditionally(followedChannelsPaginator);
-	} else {
-		reloadConditionally(activeListPaginator());
-	}
-});
+/** 独立集合分别处理回访；不以非空判断是否初始化，不订阅聚合实时流。 */
+useTwitterPaginatorRefresh(/** 已关注频道聚合流。 */ (): typeof followedTimelinePaginator => followedTimelinePaginator,
+	/** 仅 Twitter Home 存在此面板。 */ (): boolean => isTwitterUi.value && twitterTab.value === 'home');
+useTwitterPaginatorRefresh(/** 全频道聚合流。 */ (): typeof globalTimelinePaginator => globalTimelinePaginator,
+	/** 聚合流保持 ADR-0005 的手动／回访刷新边界。 */ (): boolean => isTwitterUi.value && twitterTab.value === 'explore');
+useTwitterPaginatorRefresh(/** 空关注横条也需要回访更新。 */ (): typeof followedChannelsPaginator => followedChannelsPaginator,
+	/** 不在 Explore 后台预取横条。 */ (): boolean => isTwitterUi.value && twitterTab.value === 'home');
+useTwitterPaginatorRefresh(/** 推荐频道集合。 */ (): typeof featuredPaginator => featuredPaginator,
+	/** 当前 UI 的推荐面板。 */ (): boolean => isTwitterUi.value ? twitterTab.value === 'explore' : tab.value === 'featured');
+useTwitterPaginatorRefresh(/** 收藏频道集合独立于菜单缓存。 */ (): typeof favoritesPaginator => favoritesPaginator,
+	/** 已挂载管理区随 Explore 回访；折叠不创建新业务副本。 */ (): boolean => isTwitterUi.value ? twitterTab.value === 'explore' && favoritesPanelVisible.value : tab.value === 'favorites');
+useTwitterPaginatorRefresh(/** 管理频道列表。 */ (): typeof ownedPaginator => ownedPaginator,
+	/** 创建频道后回访也更新原空集合。 */ (): boolean => isTwitterUi.value ? twitterTab.value === 'explore' && ownedPanelVisible.value : tab.value === 'owned');
+useTwitterPaginatorRefresh(/** 默认界面原关注列表。 */ (): typeof followingPaginator => followingPaginator,
+	/** 不为未挂载的默认分支发请求。 */ (): boolean => !isTwitterUi.value && tab.value === 'following');
 
 async function search() {
 	const query = searchQuery.value.toString().trim();

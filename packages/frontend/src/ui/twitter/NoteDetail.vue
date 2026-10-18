@@ -3,8 +3,14 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter 帖子展示与动作边界。
+作用：连接成功写入与当前显示，保持原数据所有者和基础组件职责。
+数据链：既有确认事件 → 局部刷新调度 → 原查询结果 → 只读渲染；不探测环境。
+-->
+
 <template>
-<div v-if="muted === false && !hideByPlugin && !isDeleted" :class="[$style.root, { [$style.mobile]: isMobile }]">
+<div v-if="muted === false && !hideByPlugin && !isDeleted" data-testid="twitter-note-detail" :data-note-id="appearNote.id" :class="[$style.root, { [$style.mobile]: isMobile }]">
 	<div v-if="conversationLoading" :class="$style.contextLoading"><MkLoading mini/></div>
 	<div v-else-if="conversationError" :class="$style.contextError">
 		<span>{{ i18n.ts.error }}</span>
@@ -200,25 +206,25 @@ SPDX-License-Identifier: AGPL-3.0-only
 				class="_button"
 				:class="$style.stat"
 				type="button"
-				:aria-current="tab === 'replies' ? 'true' : undefined"
+				data-testid="detail-tab-replies" :aria-current="tab === 'replies' ? 'true' : undefined"
 				@click="tab = 'replies'"
 			>
-				<strong>{{ number(appearNote.repliesCount) }}</strong>{{ i18n.ts.replies }}
+				<strong>{{ number(noteCounters.repliesCount) }}</strong>{{ i18n.ts.replies }}
 			</button>
 			<button
 				class="_button"
 				:class="$style.stat"
 				type="button"
-				:aria-current="tab === 'renotes' ? 'true' : undefined"
+				data-testid="detail-tab-renotes" :aria-current="tab === 'renotes' ? 'true' : undefined"
 				@click="tab = 'renotes'"
 			>
-				<strong>{{ number(appearNote.renoteCount) }}</strong>{{ i18n.ts.renotes }}
+				<strong>{{ number(noteCounters.renoteCount) }}</strong>{{ i18n.ts.renotes }}
 			</button>
 			<button
 				class="_button"
 				:class="$style.stat"
 				type="button"
-				:aria-current="tab === 'reactions' ? 'true' : undefined"
+				data-testid="detail-tab-reactions" :aria-current="tab === 'reactions' ? 'true' : undefined"
 				@click="tab = 'reactions'"
 			>
 				<strong>{{ number($appearNote.reactionCount) }}</strong>{{ i18n.ts.reactions }}
@@ -240,7 +246,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</MkReactionsViewer>
 
 		<TwitterNoteActions
-			:note="appearNote"
+			:repliesCount="noteCounters.repliesCount"
+			:renoteCount="noteCounters.renoteCount"
+			:reactionAcceptance="appearNote.reactionAcceptance"
 			:reactionCount="$appearNote.reactionCount"
 			:myReaction="$appearNote.myReaction"
 			:canRenote="canRenote"
@@ -332,6 +340,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import { useInterval } from '@@/js/use-interval.js';
+import { store } from '@/store.js';
+import { prefer } from '@/preferences.js';
+import type { ComputedRef } from 'vue';
+import type { TwitterNoteCounters } from '@/ui/twitter/index.js';
+import { noteEvents } from '@/composables/use-note-capture.js';
+import { onBeforeUnmount } from 'vue';
+import { useGlobalEvent } from '@/events.js';
+import { useTwitterRefresh, useTwitterPaginatorRefresh } from '@/ui/twitter/index.js';
+import { useTwitterNoteCounters } from '@/ui/twitter/index.js';
+import { getAppearNote } from '@/utility/get-appear-note.js';
 import type { ComponentPublicInstance } from 'vue';
 import { computed, inject, markRaw, onMounted, provide, ref, shallowRef, useTemplateRef, watch } from 'vue';
 import * as Misskey from 'misskey-js';
@@ -480,25 +499,39 @@ async function loadConversation() {
 	}
 }
 
-async function loadReplies() {
-	if (repliesLoading.value) return;
+/** 当前回复请求归属，不允许卸载或资源切换后回填。 */
+let repliesRequest: AbortController | null = null;
 
+/** 使用真实查询更新既有集合；失败保留旧回复，错误由页面原重试入口呈现。 */
+async function loadReplies(): Promise<void> {
+	if (repliesLoading.value) return;
+	const id: string = (getAppearNote(props.note) ?? props.note).id;
+	const controller: AbortController = new AbortController();
+	repliesRequest = controller;
 	repliesLoading.value = true;
 	repliesError.value = false;
-
 	try {
-		replies.value = await misskeyApi('notes/children', {
-			noteId: appearNote.id,
-			limit: 30,
-		});
+		const fetched: Misskey.entities.Note[] = await misskeyApi('notes/children', { noteId: id, limit: 30 }, undefined, controller.signal);
+		if (controller.signal.aborted || (getAppearNote(props.note) ?? props.note).id !== id || repliesRequest !== controller) return;
+		replies.value = fetched;
 		repliesLoaded.value = true;
-	} catch (error) {
-		console.error(error);
-		repliesError.value = true;
+	} catch (error: unknown) {
+		if (!controller.signal.aborted) { console.error(error); repliesError.value = true; }
 	} finally {
-		repliesLoading.value = false;
+		if (repliesRequest === controller) { repliesRequest = null; repliesLoading.value = false; }
 	}
 }
+
+onBeforeUnmount(/** 回复请求只属于当前节点，不取消全局业务。 */ (): void => { repliesRequest?.abort(); });
+
+/** 复用现有回复集合，不建立另一份线程缓存。 */
+const invalidateReplies: () => void = useTwitterRefresh(
+	/** 加载失败不冒充成功，不在后台循环重试。 */ async (): Promise<boolean> => { await loadReplies(); return !repliesError.value; },
+	{
+		busy: /** 首拉和手动重试也是同一请求占用。 */ (): boolean => repliesLoading.value,
+		visible: /** 隐藏标签只保留意图。 */ (): boolean => tab.value === 'replies',
+	},
+);
 
 function setRenoteButton(element: Element | ComponentPublicInstance | null) {
 	renoteButton.value = element as HTMLElement | null;
@@ -522,6 +555,47 @@ const keymap = {
 		callback: () => blur(),
 	},
 } as const satisfies Keymap;
+/** 仅渲染服务端计数；共享 useNote 的动作与权限输入不被展示投影改写。 */
+const noteCounters: ComputedRef<TwitterNoteCounters> = useTwitterNoteCounters(
+	/** 纯转发显示原帖计数，而不是转发外壳计数。 */ (): Misskey.entities.Note => getAppearNote(props.note) ?? props.note,
+	/** 样本继承既有 DI，不额外启用真实请求。 */ (): boolean => false,
+	/** 外壳身份与显示原帖身份分开，不复制实体。 */ (): Misskey.entities.Note => props.note,
+);
+
+/** 人员名单与统计分别失效；v-if 原生初始化仍由 MkPagination 负责。 */
+const invalidateRenotes: () => void = useTwitterPaginatorRefresh(
+	/** 转发名单的唯一分页器。 */ (): typeof renotesPaginator => renotesPaginator,
+	/** 仅显示转发标签时取数。 */ (): boolean => tab.value === 'renotes',
+);
+const invalidateReactions: () => void = useTwitterPaginatorRefresh(
+	/** 反应名单的唯一分页器。 */ (): typeof reactionsPaginator => reactionsPaginator,
+	/** 同一反应类型的人员变化也需要更新。 */ (): boolean => tab.value === 'reactions' && reactionTabType.value != null,
+);
+useGlobalEvent('notePosted', /** 回执只定位受影响原帖，不插入未经过滤的回复或名单。 */ (created: Misskey.entities.Note): void => {
+	if (created.replyId === appearNote.id) invalidateReplies();
+	if (created.renoteId === appearNote.id) invalidateRenotes();
+});
+useGlobalEvent('noteDeleted', /** 删除已有直接回复／转发时分别重取集合。 */ (id: string): void => {
+	if (replies.value.some(/** 直接回复归属。 */ (child: Misskey.entities.Note): boolean => child.id === id)) invalidateReplies();
+	if (renotesPaginator.items.value.some(/** 已载入转发归属。 */ (item: Misskey.entities.Note): boolean => item.id === id)) invalidateRenotes();
+});
+/** 非实时模式的人员名单沿用既有轮询档位；不能用总数未变证明成员未变。 */
+const peoplePollingInterval: number = 10_000 * (prefer.s.pollingInterval === 1 ? 2.25 : prefer.s.pollingInterval === 2 ? 1.5 : 1);
+if (!store.s.realtimeMode) {
+	useInterval(/** 只更新实际显示的名单，不为每张卡或隐藏标签建立轮询。 */ (): void => {
+		if (tab.value === 'reactions') invalidateReactions();
+		if (tab.value === 'renotes') invalidateRenotes();
+	}, peoplePollingInterval, { immediate: false, afterMounted: true });
+}
+noteEvents.on(`reacted:${appearNote.id}`, invalidateReactions);
+noteEvents.on(`unreacted:${appearNote.id}`, invalidateReactions);
+onBeforeUnmount(/** 页面销毁后不保留名单监听。 */ (): void => {
+	noteEvents.off(`reacted:${appearNote.id}`, invalidateReactions);
+	noteEvents.off(`unreacted:${appearNote.id}`, invalidateReactions);
+});
+watch(/** 非实时轮询改变的反应数量也使当前名单失效。 */ (): number => $appearNote.reactionCount,
+	/** 仅用于显示新鲜度，不由总数推断人员。 */ (): void => { invalidateReactions(); });
+
 </script>
 
 <style lang="scss" module>
