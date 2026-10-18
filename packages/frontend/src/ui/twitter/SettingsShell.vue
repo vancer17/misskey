@@ -45,7 +45,7 @@ PageWithHeader + SuperMenu 布局。
 import { useTemplateRef } from 'vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
 import { useTwitterLayout } from './composables/use-twitter-layout.js';
-import { useScrollPositionKeeper } from '@/composables/use-scroll-position-keeper.js';
+import { useTwitterScrollPositionKeeper } from '@/ui/twitter/composables/use-twitter-scroll-host.js';
 import { i18n } from '@/i18n.js';
 
 defineProps<{
@@ -57,7 +57,7 @@ const { isMobile } = useTwitterLayout();
 const rootEl = useTemplateRef<HTMLDivElement>('rootEl');
 
 /** 保留子页滚动位置（返回导航后恢复）。 */
-useScrollPositionKeeper(rootEl);
+useTwitterScrollPositionKeeper(rootEl);
 
 /** 返回上一页（与 TwitterFollowList / TwitterTag 一致的返回行为）。 */
 function goBack(): void {
