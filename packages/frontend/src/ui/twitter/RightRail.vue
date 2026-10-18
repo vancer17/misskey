@@ -3,8 +3,14 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter Shell 右侧信息栏。
+作用：保持搜索、趋势和推荐内容，按实际内容高度在主视口内吸顶或吸底。
+数据链：实际元素高度 → 局部吸顶偏移；不持有业务状态，不建立第二条主滚动链。
+-->
+
 <template>
-<aside :class="$style.root">
+<aside ref="rootEl" :class="$style.root" :style="{ '--twitter-rail-height': `${railHeight}px` }">
 	<TwitterSearchBox :class="$style.search"/>
 	<TwitterTrending/>
 	<TwitterWhoToFollow/>
@@ -23,24 +29,44 @@ SPDX-License-Identifier: AGPL-3.0-only
  * 数据链角色：Shell（twitter.vue）按视口与 needWideArea 决定本容器
  * 挂载 → 三张内容卡各自经 composables 层取数；本容器不持有业务状态。
  */
+import { onMounted, onBeforeUnmount, ref, useTemplateRef } from 'vue';
+import type { Ref, ShallowRef } from 'vue';
 import TwitterSearchBox from './SearchBox.vue';
 import TwitterTrending from './components/TwitterTrending.vue';
 import TwitterWhoToFollow from './components/TwitterWhoToFollow.vue';
+/** 只测量右栏实际内容高度；长栏随主视口滚到末尾后吸底，短栏吸顶。 */
+const rootEl: Readonly<ShallowRef<HTMLElement | null>> = useTemplateRef<HTMLElement>('rootEl');
+const railHeight: Ref<number> = ref(0);
+let observer: ResizeObserver | null = null;
+onMounted(
+	/** 元素尺寸是展示参数，不属于环境 readiness 或业务事实。 */
+	(): void => {
+		observer = new ResizeObserver(
+			/** 保持吸顶偏移与实际内容同步，不添加滚动方向状态机。 */
+			(): void => { railHeight.value = rootEl.value?.offsetHeight ?? 0; },
+		);
+		if (rootEl.value != null) observer.observe(rootEl.value);
+	},
+);
+onBeforeUnmount(
+	/** 右栏移除时释放观察。 */
+	(): void => { observer?.disconnect(); },
+);
 </script>
 
 <style lang="scss" module>
 .root {
 	position: sticky;
-	top: 0;
+	top: min(0px, calc(100cqh - var(--twitter-rail-height)));
+	align-self: start;
 	display: flex;
 	flex-direction: column;
 	gap: var(--twitter-space-4);
-	height: 100%;
+	height: auto;
 	min-height: 0;
 	box-sizing: border-box;
 	padding: 0 var(--twitter-space-4);
-	overflow-y: auto;
-	overscroll-behavior: contain;
+	overflow: visible;
 	background: var(--twitter-bg);
 }
 

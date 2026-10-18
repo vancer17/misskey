@@ -3,63 +3,70 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
-<!-- Twitter UI 根宿主：维持路由、主题与全局弹层上下文；匿名入口与内容 Shell 互斥挂载。 -->
+<!--
+文件领域：Twitter UI 根宿主与主滚动视口。
+作用：维持路由、主题、三栏及全局弹层；主内容在全宽原生视口滚动，页内不再占用滚动条宽度。
+数据链：既有路由 → 页面出口 → UI 位置记录；匿名入口和实验叠层保留各自容器，不解释业务事实。
+-->
 <template>
-<div :class="$style.root" data-testid="twitter-root">
+<div ref="shellEl" :class="$style.root" data-testid="twitter-root">
 	<XTitlebar v-if="$i && prefer.r.showTitlebar.value" :class="$style.titlebar"/>
 
 	<main v-if="isEntrance" :class="$style.entrance" data-testid="twitter-entry-layout">
 		<RouterView :class="$style.entranceContent"/>
 	</main>
-	<div
-		v-else
-		:class="[$style.body, {
-			[$style.mobile]: isMobile,
-			[$style.guest]: !$i,
-			[$style.withRightRail]: $i && showRightRail && !pageMetadata?.needWideArea,
-		}]"
-		data-testid="twitter-content-layout"
-	>
-		<TwitterSidebar
-			v-if="$i && showSidebar"
-			:class="$style.sidebar"
-			:iconOnly="sidebarIconOnly"
-			data-testid="twitter-sidebar"
-		/>
-		<main :class="$style.main" @contextmenu.stop="onContextmenu">
-			<header v-if="!$i" :class="$style.guestHeader" data-testid="twitter-guest-header">
-				<MkA to="/?ui=twitter" :aria-label="instanceName">
-					<img :src="instance.iconUrl || '/favicon.ico'" :class="$style.guestLogo" alt=""/>
-				</MkA>
-				<TwitterAuthButtons compact/>
-			</header>
-			<div v-if="$i" :class="$style.systemChrome">
-				<XReloadSuggestion v-if="shouldSuggestReload"/>
-				<XPreferenceRestore v-if="shouldSuggestRestoreBackup"/>
-				<XThemePreviewing v-if="isThemePreviewMode"/>
-				<XAnnouncements/>
-				<XStatusBars :class="$style.statusbars"/>
+	<div v-else :class="$style.viewportFrame">
+		<div ref="viewportEl" :class="[$style.viewport, { [$style.stackedViewport]: isStacked }]" data-twitter-scroll-viewport data-testid="twitter-scroll-viewport" tabindex="0" role="region" :aria-label="pageMetadata?.title ?? instanceName">
+			<div
+				:class="[$style.body, {
+					[$style.mobile]: isMobile,
+					[$style.guest]: !$i,
+					[$style.withRightRail]: $i && showRightRail && !pageMetadata?.needWideArea,
+				}]"
+				data-testid="twitter-content-layout"
+			>
+				<TwitterSidebar
+					v-if="$i && showSidebar"
+					:class="$style.sidebar"
+					:iconOnly="sidebarIconOnly"
+					data-testid="twitter-sidebar"
+				/>
+				<main ref="mainEl" :class="$style.main" @contextmenu.stop="onContextmenu">
+					<header v-if="!$i" :class="$style.guestHeader" data-testid="twitter-guest-header">
+						<MkA to="/?ui=twitter" :aria-label="instanceName">
+							<img :src="instance.iconUrl || '/favicon.ico'" :class="$style.guestLogo" alt=""/>
+						</MkA>
+						<TwitterAuthButtons compact/>
+					</header>
+					<div v-if="$i" :class="$style.systemChrome">
+						<XReloadSuggestion v-if="shouldSuggestReload"/>
+						<XPreferenceRestore v-if="shouldSuggestRestoreBackup"/>
+						<XThemePreviewing v-if="isThemePreviewMode"/>
+						<XAnnouncements/>
+						<XStatusBars :class="$style.statusbars"/>
+					</div>
+					<StackingRouterView v-if="isStacked" :class="$style.content"/>
+					<RouterView v-else :class="[$style.content, $style.flowOutlet]" data-twitter-route-outlet/>
+				</main>
+				<TwitterRightRail
+					v-if="$i && showRightRail && !pageMetadata?.needWideArea"
+					:class="$style.rightRail"
+					data-testid="twitter-right-rail"
+				/>
 			</div>
-			<StackingRouterView v-if="prefer.s['experimental.stackingRouterView']" :class="$style.content"/>
-			<RouterView v-else :class="$style.content"/>
-			<template v-if="$i && isMobile">
-				<TwitterMobileBar :class="$style.mobileBar" data-testid="twitter-mobile-bar"/>
-				<TwitterComposeFab/>
-			</template>
-		</main>
-		<TwitterRightRail
-			v-if="$i && showRightRail && !pageMetadata?.needWideArea"
-			:class="$style.rightRail"
-			data-testid="twitter-right-rail"
-		/>
+		</div>
 	</div>
+	<template v-if="!isEntrance && $i && isMobile">
+		<TwitterMobileBar :class="$style.mobileBar" data-testid="twitter-mobile-bar"/>
+		<TwitterComposeFab/>
+	</template>
 	<XCommon/>
 </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, defineAsyncComponent, onBeforeUnmount, provide, ref } from 'vue';
-import type { Component, ComputedRef, Ref } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, provide, ref, useTemplateRef } from 'vue';
+import type { Component, ComputedRef, Ref, ShallowRef } from 'vue';
 import { instanceName } from '@@/js/config.js';
 import { isLink } from '@@/js/is-link.js';
 import XCommon from './_common_/common.vue';
@@ -71,7 +78,7 @@ import XPreferenceRestore from './_common_/PreferenceRestore.vue';
 import XReloadSuggestion from './_common_/ReloadSuggestion.vue';
 import XThemePreviewing from './_common_/ThemePreviewing.vue';
 import XTitlebar from './_common_/titlebar.vue';
-import { TwitterAuthButtons, useTwitterLayout } from './twitter/index.js';
+import { TwitterAuthButtons, provideTwitterScrollHost, useTwitterLayout } from './twitter/index.js';
 import type { PageMetadata } from '@/page.js';
 import { isPreviewMode as isThemePreviewMode } from '@/theme.js';
 import * as os from '@/os.js';
@@ -107,6 +114,20 @@ const isEntrance: ComputedRef<boolean> = computed(
 	(): boolean => $i === null && isRoot.value,
 );
 const pageMetadata: Ref<PageMetadata | null> = ref(null);
+
+/** 主滚动宿主与内容测量节点；弹层始终位于视口之外。 */
+const viewportEl: Readonly<ShallowRef<HTMLDivElement | null>> = useTemplateRef<HTMLDivElement>('viewportEl');
+const mainEl: Readonly<ShallowRef<HTMLElement | null>> = useTemplateRef<HTMLElement>('mainEl');
+const shellEl: Readonly<ShallowRef<HTMLDivElement | null>> = useTemplateRef<HTMLDivElement>('shellEl');
+/** 既有实验叠层使用自己的有界面板，不把绝对定位卡片误当作普通流页面。 */
+const isStacked: ComputedRef<boolean> = computed(
+	/** 不新增架构开关，也不改写用户已有偏好。 */
+	(): boolean => prefer.r['experimental.stackingRouterView'].value,
+);
+provideTwitterScrollHost(viewportEl, mainEl, shellEl, mainRouter, computed(
+	/** 只有当前主内容出口参与统一位置恢复。 */
+	(): boolean => !isEntrance.value && !isStacked.value,
+));
 
 provide(DI.uiStyle, computed(/** 风格上下文独立于业务 Shell，弹层在入口页仍消费 Twitter 变体。 */ (): string => 'twitter'));
 provide(DI.router, mainRouter);
@@ -150,6 +171,7 @@ function onContextmenu(ev: PointerEvent): void {
 <style lang="scss">
 @use './twitter/tokens.scss';
 @use './twitter/overlay.scss';
+@use './twitter/scroll-layout.scss';
 </style>
 
 <style lang="scss" module>
@@ -192,14 +214,37 @@ function onContextmenu(ev: PointerEvent): void {
 	object-fit: contain;
 }
 
+/* 建立局部坐标原点：有应用标题栏时，既有滚动工具仍以宿主 offsetTop=0 工作。 */
+.viewportFrame {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+	min-width: 0;
+}
+
+/* 只有本视口固定一屏；原生滚动条始终位于可用窗口右缘。 */
+.viewport {
+	position: absolute;
+	inset: 0;
+	min-height: 0;
+	min-width: 0;
+	width: 100%;
+	container-type: size;
+	overflow-x: hidden;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	overscroll-behavior: contain;
+	background: var(--twitter-bg);
+}
+
 .body {
 	display: grid;
+	align-items: start;
 	grid-template-columns:
 		var(--twitter-sidebar-icon-width)
 		minmax(0, var(--twitter-main-width));
 	justify-content: center;
-	flex: 1;
-	min-height: 0;
+	min-height: 100cqh;
 	background: var(--twitter-bg);
 
 	/* 移动断点不写媒体查询：由 useTwitterLayout 基于权威断点切换本 class（规范第 10 条） */
@@ -226,11 +271,16 @@ function onContextmenu(ev: PointerEvent): void {
 }
 
 .sidebar {
+	position: sticky;
+	top: 0;
+	align-self: start;
+	height: 100cqh;
 	min-width: 0;
 	min-height: 0;
 }
 
 .main {
+	align-self: stretch;
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
@@ -256,14 +306,30 @@ function onContextmenu(ev: PointerEvent): void {
 	min-height: 0;
 }
 
+.flowOutlet {
+	height: auto;
+	flex: 1 0 auto;
+}
+
 .mobileBar {
 	flex-shrink: 0;
+	z-index: 100;
 }
 
 .rightRail {
 	min-width: 0;
 	min-height: 0;
 	border-right: solid 1px var(--twitter-border);
+}
+
+/* 真实存量叠层偏好：保留其卡片边界及原生内部滚动，不受流式规则影响。 */
+.stackedViewport {
+	overflow: clip;
+	scrollbar-gutter: auto;
+
+	.body { height: 100%; }
+	.content { height: 100%; }
+	.rightRail { height: 100cqh; overflow-y: auto; top: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
