@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter 用户时间线页签。
+作用：使用既有分页器加载帖子，以局部停用与待刷新标记协调回访和隐藏面板。
+数据链：用户标识 → Paginator → 帖子组件；身份展示更新不依赖列表重载。
+-->
+
 <template>
 <div :class="{ [$style.mobile]: isMobile }">
 	<nav :class="$style.tabs" :aria-label="i18n.ts.timeline">
@@ -51,8 +57,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, markRaw, onActivated } from 'vue';
+import { computed, markRaw, onActivated, onDeactivated, watch } from 'vue';
 import * as Misskey from 'misskey-js';
+import type { ComputedRef } from 'vue';
+import type { IPaginator } from '@/utility/paginator.js';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import TwitterNote from '@/ui/twitter/Note.vue';
 import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
@@ -71,18 +79,24 @@ const props = withDefaults(defineProps<{
 /** Twitter 布局状态（移动端 class 驱动，ADR-0001 决策 4）。 */
 const { isMobile } = useTwitterLayout();
 
+/** 本页既有展示标签的联合，不定义新的领域状态。 */
 type TimelineTab = 'notes' | 'replies' | 'files' | 'featured';
 
-const tabs = [{
+/** 标签文案与路由段，仅用于本页展示。 */
+const tabs: ReadonlyArray<{ key: TimelineTab; title: string }> = [{
+	/** 用户帖子标签。 */
 	key: 'notes',
 	title: i18n.ts.notes,
 }, {
+	/** 回复标签。 */
 	key: 'replies',
 	title: i18n.ts.replies,
 }, {
+	/** 带附件的帖子标签。 */
 	key: 'files',
 	title: i18n.ts.withFiles,
 }, {
+	/** 热门帖子标签。 */
 	key: 'featured',
 	title: i18n.ts.featured,
 }] as const satisfies ReadonlyArray<{
@@ -90,7 +104,10 @@ const tabs = [{
 	title: string;
 }>;
 
-const activeTab = computed<TimelineTab>(() => {
+/** 由路由页签派生当前面板。 */
+const activeTab: ComputedRef<TimelineTab> = computed(
+	/** home 与 notes 共用帖子面板。 */
+	(): TimelineTab => {
 	switch (props.page) {
 		case 'replies':
 		case 'files':
@@ -103,7 +120,9 @@ const activeTab = computed<TimelineTab>(() => {
 	}
 });
 
-const paginators = {
+/** 首次初始化由既有 MkPagination 负责，不额外创建列表副本。 */
+const paginators: Record<TimelineTab, IPaginator<Misskey.entities.Note>> = {
+	/** notes 面板的既有分页器。 */
 	notes: markRaw(new Paginator('users/notes', {
 		limit: 20,
 		params: {
@@ -113,6 +132,7 @@ const paginators = {
 			withChannelNotes: true,
 		},
 	})),
+	/** replies 面板的既有分页器。 */
 	replies: markRaw(new Paginator('users/notes', {
 		limit: 20,
 		params: {
@@ -122,16 +142,19 @@ const paginators = {
 			withChannelNotes: false,
 		},
 	})),
+	/** files 面板的既有分页器。 */
 	files: markRaw(new Paginator('users/notes', {
 		limit: 20,
 		params: {
 			userId: props.user.id,
 			withRenotes: false,
-			withReplies: true,
+			// users/notes 不支持同时开启 withFiles 与 withReplies。
+			withReplies: false,
 			withChannelNotes: true,
 			withFiles: true,
 		},
 	})),
+	/** featured 面板的既有分页器。 */
 	featured: markRaw(new Paginator('users/featured-notes', {
 		limit: 20,
 		params: {
@@ -140,18 +163,59 @@ const paginators = {
 	})),
 };
 
-/** KeepAlive 首次激活跳过标志（挂载期已完成首拉，防止双拉）。 */
-let skipNextActivation = true;
+/** 待消费的 UI 刷新意图；不作为业务数据成功/失败的第二份事实。 */
+const pendingTabs: Set<TimelineTab> = new Set();
+/** 本组件发起的刷新占用，避免与首拉、翻页、标签切换并发 init。 */
+const refreshingTabs: Set<TimelineTab> = new Set();
+/** 晚挂载子组件默认可见，实际停用后暂停调度。 */
+let active: boolean = true;
 
-/** 回访刷新（K-04：用户新帖后回访时间线不陈旧；按 activeTab 定向重载，仅有条目时执行）。 */
-onActivated(() => {
-	if (skipNextActivation) {
-		skipNextActivation = false;
-		return;
+/** 使用分页器公开状态判断占用，不以条目数量推断是否加载过。 */
+function isBusy(paginator: IPaginator): boolean {
+	return paginator.fetching.value || paginator.fetchingOlder.value || paginator.fetchingNewer.value;
+}
+
+/** 每次消费一个活动面板刷新意图，错误与手动重试仍归既有分页器。 */
+async function refreshActiveTab(): Promise<void> {
+	const tab: TimelineTab = activeTab.value;
+	const paginator: IPaginator = paginators[tab];
+	if (!active || !pendingTabs.has(tab) || refreshingTabs.has(tab) || isBusy(paginator)) return;
+	pendingTabs.delete(tab);
+	refreshingTabs.add(tab);
+	try {
+		await paginator.reload();
+	} finally {
+		refreshingTabs.delete(tab);
 	}
-	const paginator = paginators[activeTab.value];
-	if (paginator.items.value.length > 0) void paginator.reload();
-});
+	// 新的回访可能在请求期间排队；错误不被视为成功，也不形成自动重试循环。
+	if (!paginator.error.value) void refreshActiveTab();
+}
+
+onDeactivated(
+	/** 标记所有已挂载面板；隐藏面板留待真正显示时刷新。 */
+	(): void => {
+		active = false;
+		for (const tab of tabs) pendingTabs.add(tab.key);
+	},
+);
+onActivated(
+	/** 不跳过首次 activated；没有实际停用标记时自然无额外请求。 */
+	async (): Promise<void> => { active = true; await refreshActiveTab(); },
+);
+watch(activeTab,
+	/** v-show 不重新挂载；消费待刷新意图，或重试用户重新访问的错误面板。 */
+	async (tab: TimelineTab): Promise<void> => {
+		if (paginators[tab].error.value) pendingTabs.add(tab);
+		await refreshActiveTab();
+	},
+);
+watch(
+	/** 初始加载或翻页结束后处理回访期间排队的请求。 */
+	(): boolean => isBusy(paginators[activeTab.value]),
+	async (busy: boolean): Promise<void> => {
+		if (!busy && !paginators[activeTab.value].error.value) await refreshActiveTab();
+	},
+);
 
 </script>
 
