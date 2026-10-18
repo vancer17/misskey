@@ -241,7 +241,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<TwitterNoteActions
 				v-if="actionsVisible"
-				:note="appearNote"
+				:repliesCount="noteCounters.repliesCount"
+				:renoteCount="noteCounters.renoteCount"
+				:reactionAcceptance="appearNote.reactionAcceptance"
 				:reactionCount="$appearNote.reactionCount"
 				:myReaction="$appearNote.myReaction"
 				:canRenote="canRenote"
@@ -287,6 +289,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import type { TwitterNoteCounters } from '@/ui/twitter/index.js';
+import { useTwitterNoteCounters } from '@/ui/twitter/index.js';
+import { getAppearNote } from '@/utility/get-appear-note.js';
 import type { ComponentPublicInstance } from 'vue';
 import { computed, inject, provide, ref, shallowRef, useTemplateRef } from 'vue';
 import type { ComputedRef, Ref } from 'vue';
@@ -468,6 +473,13 @@ const keymap = {
 		callback: () => focusNext(rootEl.value),
 	},
 } as const satisfies Keymap;
+/** 仅渲染服务端计数；共享 useNote 的动作与权限输入不被展示投影改写。 */
+const noteCounters: ComputedRef<TwitterNoteCounters> = useTwitterNoteCounters(
+	/** 纯转发显示原帖计数，而不是转发外壳计数。 */ (): Misskey.entities.Note => getAppearNote(props.note) ?? props.note,
+	/** 样本不请求真实数据。 */ (): boolean => props.mock,
+	/** 保留转发外壳原引用，仅用于删除时定位被转发原帖。 */ (): Misskey.entities.Note => props.note,
+);
+
 </script>
 
 <style lang="scss" module>

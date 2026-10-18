@@ -3,11 +3,19 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter 帖子展示与动作边界。
+作用：连接成功写入与当前显示，保持原数据所有者和基础组件职责。
+数据链：既有确认事件 → 局部刷新调度 → 原查询结果 → 只读渲染；不探测环境。
+-->
+
 <template>
 <article
 	v-if="muted === false && !hideByPlugin && !isDeleted"
 	ref="rootEl"
 	v-hotkey="keymap"
+	data-testid="twitter-thread-note"
+	:data-note-id="appearNote.id"
 	:class="[$style.root, { [$style.mobile]: isMobile }]"
 	tabindex="0"
 >
@@ -62,7 +70,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 		<TwitterNoteActions
 			v-if="actionsVisible"
-			:note="appearNote"
+			:repliesCount="noteCounters.repliesCount"
+			:renoteCount="noteCounters.renoteCount"
+			:reactionAcceptance="appearNote.reactionAcceptance"
 			:reactionCount="$appearNote.reactionCount"
 			:myReaction="$appearNote.myReaction"
 			:canRenote="canRenote"
@@ -75,18 +85,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 		/>
 
 		<button
-			v-if="canExpand && replies.length === 0 && !repliesLoading && !repliesError"
+			v-if="canExpand && !repliesExpanded && !repliesLoading && !repliesError"
 			:class="$style.showReplies"
 			class="_button"
 			type="button"
-			@click="loadReplies"
+			@click="expandReplies"
 		>
 			<i class="ti ti-message-circle" aria-hidden="true"></i>{{ i18n.ts.loadReplies }}
 		</button>
 		<MkLoading v-else-if="repliesLoading" mini :class="$style.loading"/>
 		<div v-else-if="repliesError" :class="$style.repliesError">
 			<span>{{ i18n.ts.error }}</span>
-			<button class="_button" type="button" @click="loadReplies">{{ i18n.ts.retry }}</button>
+			<button class="_button" type="button" @click="expandReplies">{{ i18n.ts.retry }}</button>
 		</div>
 
 		<div v-if="replies.length > 0" :class="$style.children">
@@ -99,7 +109,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:depth="depth + 1"
 			/>
 		</div>
-		<div v-else-if="depth >= maxDepth && appearNote.repliesCount > 0" :class="$style.more">
+		<div v-else-if="depth >= maxDepth && noteCounters.repliesCount > 0" :class="$style.more">
 			<MkA :to="notePage(appearNote)">{{ i18n.ts.continueThread }} <i class="ti ti-chevron-double-right" aria-hidden="true"></i></MkA>
 		</div>
 	</div>
@@ -116,6 +126,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import type { ComputedRef } from 'vue';
+import type { TwitterNoteCounters } from '@/ui/twitter/index.js';
+import type { Ref } from 'vue';
+import { onBeforeUnmount } from 'vue';
+import { useGlobalEvent } from '@/events.js';
+import { useTwitterRefresh } from '@/ui/twitter/index.js';
+import { useTwitterNoteCounters } from '@/ui/twitter/index.js';
+import { getAppearNote } from '@/utility/get-appear-note.js';
 import type { ComponentPublicInstance } from 'vue';
 import { computed, provide, ref, shallowRef, useTemplateRef } from 'vue';
 import * as Misskey from 'misskey-js';
@@ -155,6 +173,8 @@ const reactButton = shallowRef<HTMLElement | null>(null);
 const replies = ref<Misskey.entities.Note[]>([]);
 const repliesLoading = ref(false);
 const repliesError = ref(false);
+/** 保留展开意图，不以返回条目数量代表是否展开。 */
+const repliesExpanded: Ref<boolean> = ref<boolean>(false);
 const maxDepth = 3;
 
 const {
@@ -180,25 +200,41 @@ const {
 
 provide(DI.mfmEmojiReactCallback, reactViaMfmEmoji);
 
-const canExpand = computed(() => props.depth < maxDepth && props.note.repliesCount > 0);
+/** 只由深度展示限制与已确认计数决定展开入口，不建立回复事实副本。 */
+const canExpand: ComputedRef<boolean> = computed(/** 只读 UI 可展开状态。 */ (): boolean => props.depth < maxDepth && noteCounters.value.repliesCount > 0);
 
-async function loadReplies() {
+/** 当前回复请求归属，不允许卸载或资源切换后回填。 */
+let repliesRequest: AbortController | null = null;
+
+/** 使用真实查询更新既有集合；失败保留旧回复，错误由页面原重试入口呈现。 */
+async function loadReplies(): Promise<void> {
 	if (repliesLoading.value) return;
+	const id: string = (getAppearNote(props.note) ?? props.note).id;
+	const controller: AbortController = new AbortController();
+	repliesRequest = controller;
 	repliesLoading.value = true;
 	repliesError.value = false;
-
 	try {
-		replies.value = await misskeyApi('notes/children', {
-			noteId: props.note.id,
-			limit: 10,
-		});
-	} catch (error) {
-		console.error(error);
-		repliesError.value = true;
+		const fetched: Misskey.entities.Note[] = await misskeyApi('notes/children', { noteId: id, limit: 10 }, undefined, controller.signal);
+		if (controller.signal.aborted || (getAppearNote(props.note) ?? props.note).id !== id || repliesRequest !== controller) return;
+		replies.value = fetched;
+	} catch (error: unknown) {
+		if (!controller.signal.aborted) { console.error(error); repliesError.value = true; }
 	} finally {
-		repliesLoading.value = false;
+		if (repliesRequest === controller) { repliesRequest = null; repliesLoading.value = false; }
 	}
 }
+
+onBeforeUnmount(/** 回复请求只属于当前节点，不取消全局业务。 */ (): void => { repliesRequest?.abort(); });
+
+/** 复用现有回复集合，不建立另一份线程缓存。 */
+const invalidateReplies: () => void = useTwitterRefresh(
+	/** 加载失败不冒充成功，不在后台循环重试。 */ async (): Promise<boolean> => { await loadReplies(); return !repliesError.value; },
+	{
+		busy: /** 首拉和手动重试也是同一请求占用。 */ (): boolean => repliesLoading.value,
+		visible: /** 未展开的线程不预取；已展开的空集合仍应更新。 */ (): boolean => repliesExpanded.value && props.depth < maxDepth,
+	},
+);
 
 function setRenoteButton(element: Element | ComponentPublicInstance | null) {
 	renoteButton.value = element as HTMLElement | null;
@@ -218,6 +254,25 @@ const keymap = {
 		callback: () => blur?.(),
 	},
 } as const satisfies Keymap;
+/** 仅渲染服务端计数；共享 useNote 的动作与权限输入不被展示投影改写。 */
+const noteCounters: ComputedRef<TwitterNoteCounters> = useTwitterNoteCounters(
+	/** 纯转发显示原帖计数，而不是转发外壳计数。 */ (): Misskey.entities.Note => getAppearNote(props.note) ?? props.note,
+	/** 样本继承既有 DI，不额外启用真实请求。 */ (): boolean => false,
+	/** 外壳身份与显示原帖身份分开，不复制实体。 */ (): Misskey.entities.Note => props.note,
+);
+
+/** 用户主动展开只加载此节点，不扩大递归深度。 */
+function expandReplies(): void { repliesExpanded.value = true; invalidateReplies(); }
+
+useGlobalEvent('notePosted', /** 本人原地回复时打开对应父节点，其余节点不受影响。 */ (created: Misskey.entities.Note): void => {
+	if (created.replyId !== appearNote.id) return;
+	if (props.depth < maxDepth) repliesExpanded.value = true;
+	invalidateReplies();
+});
+useGlobalEvent('noteDeleted', /** 已有直接子回复删除后更新该集合。 */ (id: string): void => {
+	if (replies.value.some(/** 只定位当前集合成员。 */ (child: Misskey.entities.Note): boolean => child.id === id)) invalidateReplies();
+});
+
 </script>
 
 <style lang="scss" module>
