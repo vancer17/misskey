@@ -4,7 +4,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="tab" :actions="headerActions" :tabs="headerTabs" :swipable="true">
+<TwitterChannel
+	v-if="isTwitterUi"
+	v-model:tab="tab"
+	:channelId="channelId"
+	:channel="channel"
+	:favorited="favorited"
+	:featuredPaginator="featuredPaginator"
+	:notesSearchAvailable="notesSearchAvailable"
+	:searchPaginator="searchPaginator"
+	:searchKey="searchKey"
+	:actions="twitterActions"
+	:onJoin="joinChannel"
+	:onLeave="leaveChannel"
+	:onFavorite="favorite"
+	:onUnfavorite="unfavorite"
+	:onSearch="searchFromTwitter"
+/>
+<PageWithHeader v-else v-model:tab="tab" :actions="headerActions" :tabs="headerTabs" :swipable="true">
 	<div class="_spacer" style="--MI_SPACER-w: 700px;">
 		<div v-if="channel && tab === 'overview'" class="_gaps">
 			<div class="_panel" :class="$style.bannerContainer">
@@ -71,7 +88,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, watch, ref, markRaw, shallowRef } from 'vue';
+import { computed, watch, ref, markRaw, shallowRef, defineAsyncComponent, inject, onActivated } from 'vue';
 import * as Misskey from 'misskey-js';
 import { url } from '@@/js/config.js';
 import { useInterval } from '@@/js/use-interval.js';
@@ -99,6 +116,10 @@ import { notesSearchAvailable } from '@/utility/check-permissions.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { useRouter } from '@/router.js';
 import { Paginator } from '@/utility/paginator.js';
+import { DI } from '@/di.js';
+
+/** Twitter UI 页面变体（异步加载，default UI 不承担其分包成本）。 */
+const TwitterChannel = defineAsyncComponent(() => import('./TwitterChannel.vue'));
 
 const router = useRouter();
 
@@ -111,8 +132,14 @@ const tab = ref('overview');
 const channel = ref<Misskey.entities.Channel | null>(null);
 const favorited = ref(false);
 const searchQuery = ref('');
-const searchPaginator = shallowRef();
+
+/** 频道内笔记搜索结果分页器（null = 尚未搜索；Twitter 变体经 prop 消费）。 */
+const searchPaginator = shallowRef<Paginator<'notes/search'> | null>(null);
 const searchKey = ref('');
+
+/** 当前 UI 样式（由 Twitter Shell 注入；非 Twitter 场景回退 'default'）。 */
+const uiStyle = inject(DI.uiStyle, ref('default'));
+const isTwitterUi = computed(() => uiStyle.value === 'twitter');
 const featuredPaginator = markRaw(new Paginator('notes/featured', {
 	limit: 10,
 	computedParams: computed(() => ({
@@ -135,7 +162,11 @@ watch(() => props.channelId, async () => {
 
 	favorited.value = _channel.isFavorited ?? false;
 	if (favorited.value || _channel.isFollowing) {
-		tab.value = 'timeline';
+		/* 初始 tab 按 UI 分派：legacy 落 timeline；Twitter Communities 落ホーム（P-26） */
+		tab.value = isTwitterUi.value ? 'home' : 'timeline';
+	} else if (isTwitterUi.value) {
+		/* join-gate：未关注默认みつける（ADR-0005 D7） */
+		tab.value = 'explore';
 	}
 
 	if ((favorited.value || _channel.isFollowing) && _channel.lastNotedAt) {
@@ -149,6 +180,63 @@ watch(() => props.channelId, async () => {
 
 	channel.value = _channel;
 }, { immediate: true });
+
+/** KeepAlive 首次激活跳过标志（挂载期 watch immediate 已完成首拉，防止双拉）。 */
+let skipNextActivation = true;
+
+/**
+ * 重取频道实体并回填（软刷新语义：失败保留缓存）。
+ *
+ * join / leave / 回访刷新共用；不沿用 watch 体（其含已读时刻回写副作用）。
+ */
+async function refetchChannel(): Promise<void> {
+	const fetched = await misskeyApi('channels/show', {
+		channelId: props.channelId,
+	}).catch(() => null);
+	if (fetched == null) return;
+
+	channel.value = fetched;
+	favorited.value = fetched.isFavorited ?? false;
+
+	if (featuredPaginator.items.value.length > 0) {
+		void featuredPaginator.reload();
+	}
+}
+
+/** 回访时重取频道实体与收藏态（K-09）。 */
+async function refreshChannelOnActivation(): Promise<void> {
+	await refetchChannel();
+}
+
+onActivated(() => {
+	if (skipNextActivation) {
+		skipNextActivation = false;
+		return;
+	}
+	void refreshChannelOnActivation();
+});
+
+/** Twitter 变体 Join（P-26 join-gate）：关注频道并回填实体（变体据 isFollowing 翻转落ホーム）。 */
+function joinChannel(): void {
+	if (channel.value == null) return;
+
+	os.apiWithDialog('channels/follow', {
+		channelId: channel.value.id,
+	}).then(() => {
+		void refetchChannel();
+	});
+}
+
+/** Twitter 变体 Leave：取关频道并回填实体。 */
+function leaveChannel(): void {
+	if (channel.value == null) return;
+
+	os.apiWithDialog('channels/unfollow', {
+		channelId: channel.value.id,
+	}).then(() => {
+		void refetchChannel();
+	});
+}
 
 function edit() {
 	router.push('/channels/:channelId/edit', {
@@ -245,6 +333,14 @@ async function search() {
 
 	if (query == null) return;
 
+	/* 重复提交相同 query 时 key 不变 → 结果组件不重挂载 → 新建 Paginator 无人
+	 * 调用 init()，fetching 停留在初始 true 造成无限加载（K-14，同 channels.vue）。
+	 * 同参重复搜索改为刷新既有分页器。 */
+	if (searchKey.value === query && searchPaginator.value != null) {
+		void searchPaginator.value.reload();
+		return;
+	}
+
 	searchPaginator.value = markRaw(new Paginator('notes/search', {
 		limit: 10,
 		params: {
@@ -254,6 +350,13 @@ async function search() {
 	}));
 
 	searchKey.value = query;
+}
+
+/** Twitter 变体搜索回调：同步页面层搜索状态后走统一 search 流程
+ *  （业务 funnel 单点；变体只持临时输入状态，规范第 12 条）。 */
+function searchFromTwitter(query: string): void {
+	searchQuery.value = query;
+	void search();
 }
 
 const headerActions = computed(() => {
@@ -340,6 +443,19 @@ const headerTabs = computed(() => [{
 	title: i18n.ts.search,
 	icon: 'ti ti-search',
 }]);
+
+/** Twitter 变体头部动作：发帖预填（O-3 裁决延伸：替代内联表单与 legacy 页脚按钮）
+ *  + legacy 头部动作复用；业务 handler 均留在此层（规范第 12 条）。 */
+const twitterActions = computed<PageHeaderItem[]>(() => [
+	{
+		icon: 'ti ti-pencil',
+		text: i18n.ts.postToTheChannel,
+		handler: () => {
+			openPostForm();
+		},
+	},
+	...(headerActions.value ?? []),
+]);
 
 definePage(() => ({
 	title: channel.value ? channel.value.name : i18n.ts.channel,

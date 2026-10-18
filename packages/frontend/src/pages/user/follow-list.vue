@@ -14,7 +14,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, markRaw } from 'vue';
+import { computed, markRaw, onActivated } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkUserInfo from '@/components/MkUserInfo.vue';
 import MkPagination from '@/components/MkPagination.vue';
@@ -38,6 +38,20 @@ const followersPaginator = markRaw(new Paginator('users/followers', {
 		userId: props.user.id,
 	})),
 }));
+
+/** KeepAlive 首次激活跳过标志（挂载期已完成首拉，防止双拉）。 */
+let skipNextActivation = true;
+
+/** 回访刷新（K-05：任意界面的 follow / unfollow 后回访列表不陈旧；
+ *  仅重载当前 type 对应的活跃分页器，且仅有条目时执行）。 */
+onActivated(() => {
+	if (skipNextActivation) {
+		skipNextActivation = false;
+		return;
+	}
+	const paginator = props.type === 'following' ? followingPaginator : followersPaginator;
+	if (paginator.items.value.length > 0) void paginator.reload();
+});
 </script>
 
 <style lang="scss" module>
