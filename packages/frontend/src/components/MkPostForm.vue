@@ -267,7 +267,7 @@ import { formatTimeString } from '@/utility/format-time-string.js';
 import { Autocomplete } from '@/utility/autocomplete.js';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
-import { chooseDriveFile } from '@/utility/drive.js';
+import { chooseDriveFile, UploadAbortedError } from '@/utility/drive.js';
 import { store } from '@/store.js';
 import MkInfo from '@/components/MkInfo.vue';
 import { i18n } from '@/i18n.js';
@@ -1079,16 +1079,25 @@ function isAnnoying(text: string): boolean {
 		text.includes('$[position');
 }
 
-async function uploadFiles() {
-	await uploader.upload();
+/** 将共享上传结果接入发帖流程；已提示的失败或取消中止提交，未知异常继续传播。 */
+async function uploadFiles(): Promise<boolean> {
+	try {
+		await uploader.upload();
+	} catch (error: unknown) {
+		// 既有上传接口显示错误后以 undefined 拒绝，用户取消使用专门的异常类型。
+		if (error === undefined || error instanceof UploadAbortedError) return false;
+		throw error;
+	}
 
 	for (const uploadedItem of uploader.items.value.filter(x => x.uploaded != null)) {
 		files.value.push(uploadedItem.uploaded!);
 		uploader.removeItem(uploadedItem);
 	}
+	return true;
 }
 
-async function post(ev?: PointerEvent) {
+/** 沿用既有发布流程，在本次附件上传未完成时退出，保留表单供用户处理。 */
+async function post(ev?: PointerEvent): Promise<void> {
 	if (ev != null) {
 		const el = (ev.currentTarget ?? ev.target) as HTMLElement | null;
 
@@ -1104,7 +1113,7 @@ async function post(ev?: PointerEvent) {
 
 	if (scheduledAt.value != null) {
 		if (uploader.items.value.some(x => x.uploaded == null)) {
-			await uploadFiles();
+			if (!(await uploadFiles())) return;
 
 			// アップロード失敗したものがあったら中止
 			if (uploader.items.value.some(x => x.uploaded == null)) {
@@ -1147,7 +1156,7 @@ async function post(ev?: PointerEvent) {
 	}
 
 	if (uploader.items.value.some(x => x.uploaded == null)) {
-		await uploadFiles();
+		if (!(await uploadFiles())) return;
 
 		// アップロード失敗したものがあったら中止
 		if (uploader.items.value.some(x => x.uploaded == null)) {
