@@ -1,4 +1,5 @@
 /*
+ * 语言构建领域：识别前端语言访问与资源加载表达式，为生产语言内联生成精确替换范围。
  * SPDX-FileCopyrightText: syuilo and misskey-project
  * SPDX-License-Identifier: AGPL-3.0-only
  */
@@ -370,33 +371,46 @@ function isLocalStorageGetItemLang(getItemCall: ESTree.Node): boolean {
 	return true;
 }
 
-// await window.fetch(`/assets/locales/${d}.${x}.json`).then(u => u.json(), ....)
+/** 识别可安全内联的语言请求，仅额外允许无副作用的缓存重新验证选项。 */
 function isAwaitFetchLocaleThenJson(awaitNode: ESTree.Node): boolean {
 	if (awaitNode.type !== 'AwaitExpression') return false;
 
-	const thenCall = awaitNode.argument;
+	const thenCall: ESTree.AwaitExpression['argument'] = awaitNode.argument;
 	if (thenCall.type !== 'CallExpression') return false;
 	if (thenCall.arguments.length < 1) return false;
 
-	const arrowFunction = thenCall.arguments[0];
+	const arrowFunction: ESTree.CallExpression['arguments'][number] = thenCall.arguments[0];
 	if (arrowFunction.type !== 'ArrowFunctionExpression') return false;
 	if (arrowFunction.params.length !== 1) return false;
 
-	const arrowBodyCall = arrowFunction.body;
+	const arrowBodyCall: ESTree.ArrowFunctionExpression['body'] = arrowFunction.body;
 	if (arrowBodyCall.type !== 'CallExpression') return false;
 
-	const jsonFunction = arrowBodyCall.callee;
+	const jsonFunction: ESTree.CallExpression['callee'] = arrowBodyCall.callee;
 	if (!isMemberExpression(jsonFunction, 'json')) return false;
 
-	const thenFunction = thenCall.callee;
+	const thenFunction: ESTree.CallExpression['callee'] = thenCall.callee;
 	if (!isMemberExpression(thenFunction, 'then')) return false;
 
-	const fetchCall = thenFunction.object;
+	const fetchCall: ESTree.MemberExpression['object'] = thenFunction.object;
 	if (fetchCall.type !== 'CallExpression') return false;
-	if (fetchCall.arguments.length !== 1) return false;
+	if (fetchCall.arguments.length !== 1 && fetchCall.arguments.length !== 2) return false;
+	if (fetchCall.arguments.length === 2) {
+		const requestOptions: ESTree.CallExpression['arguments'][number] = fetchCall.arguments[1];
+		if (requestOptions.type !== 'ObjectExpression' || requestOptions.properties.length !== 1) return false;
+		const cacheOption: ESTree.ObjectExpression['properties'][number] = requestOptions.properties[0];
+		if (cacheOption.type !== 'Property' || cacheOption.computed || cacheOption.method || cacheOption.kind !== 'init') return false;
+		if (!isIdentifier(cacheOption.key, 'cache') && !isStringLiteral(cacheOption.key, 'cache')) return false;
+		if (!isStringLiteral(cacheOption.value, 'no-cache')) {
+			// Rolldown 可将字符串压缩为模板常量；只接受值完全相同且不执行插值的形式。
+			const cacheTemplate: typeof cacheOption.value = cacheOption.value;
+			if (cacheTemplate.type !== 'TemplateLiteral' || cacheTemplate.expressions.length !== 0 || cacheTemplate.quasis.length !== 1) return false;
+			if (cacheTemplate.quasis[0].value.cooked !== 'no-cache') return false;
+		}
+	}
 
 	// `/assets/locales/${d}.${x}.json`
-	const assetLocaleTemplate = fetchCall.arguments[0];
+	const assetLocaleTemplate: ESTree.CallExpression['arguments'][number] = fetchCall.arguments[0];
 	if (assetLocaleTemplate.type !== 'TemplateLiteral') return false;
 	if (assetLocaleTemplate.quasis.length !== 3) return false;
 	if (assetLocaleTemplate.expressions.length !== 2) return false;
@@ -404,9 +418,9 @@ function isAwaitFetchLocaleThenJson(awaitNode: ESTree.Node): boolean {
 	if (assetLocaleTemplate.quasis[1].value.cooked !== '.') return false;
 	if (assetLocaleTemplate.quasis[2].value.cooked !== '.json') return false;
 
-	const fetchFunction = fetchCall.callee;
+	const fetchFunction: ESTree.CallExpression['callee'] = fetchCall.callee;
 	if (!isMemberExpression(fetchFunction, 'fetch')) return false;
-	const windowObject = fetchFunction.object;
+	const windowObject: ESTree.MemberExpression['object'] = fetchFunction.object;
 	if (!isIdentifier(windowObject, 'window')) return false;
 
 	return true;
