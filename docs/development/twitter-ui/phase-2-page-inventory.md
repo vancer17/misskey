@@ -28,7 +28,7 @@
 | **P-12** | 正在关注列表 | `/@:acct/following` | `pages/user/following.vue`；`pages/user/follow-list.vue` | Full | P-04 ✅ | 泄漏 A1 转正；与 P-13 共享锚点，宜同 PR |
 | **P-13** | 关注者列表 | `/@:acct/followers` | `pages/user/followers.vue`；`pages/user/follow-list.vue` | Full | P-04 ✅ | 泄漏 A2 转正 |
 | **P-15** | Hashtag 结果页 | `/tags/:tag` | `pages/tag.vue` | Full | P-07 ✅ | 泄漏 A3 转正；消费 P-09 状态件 |
-| **P-11** | 个人资料设置 | `/settings/profile` | `pages/settings/profile.vue` | Core | P-00 ✅ | 泄漏 A4 转正 |
+| **P-11** | 个人资料设置与二维码入口 | `/settings/profile`、`/qr` | `pages/settings/profile.vue`；`pages/qr{,.show,.read}.vue`；`utility/qr-camera.ts` | Core（二维码 Compatible） | P-00 ✅ | 资料设置、本人菜单与导航中的二维码入口共用 `/qr`，展示和扫描均消费 Twitter 表现层；见 [qr.md](./qr.md)。 |
 | **P-23** | 右栏固定内容：趋势 + 推荐关注 | RightRail 整体替换 | `ui/twitter/RightRail.vue`（移除 widgets 挂载）；新增 `ui/twitter/components/TwitterTrending.vue`、`TwitterWhoToFollow.vue`；数据源 `hashtags/trend`、`users/recommendation` | 新功能件 | 决策 D2；R-1 | `MkWidgets` 本体不动（其他 UI 继续使用）；推荐数据源实现前先 spike，fallback：meta.pinnedUsers / explore featured；权威类型入 `ui/twitter/domain/` |
 | **P-25** | Channels 页 | `/channels`、`/channels/:id` | `pages/channels.vue`；`pages/channel.vue`；`pages/channel-editor.vue` | Compatible | 决策 D4；P-00 ✅ | 修正第一阶段"Hide/延后"处置；帖子卡频道链接（A5）保留 |
 | **P-20** | Compatible 面：设置首页、About、公告、Drive | `/settings`、`/about*`、`/announcements*`、`/drive*` | `pages/settings/*`；`pages/about*.vue`；`pages/announcements.vue`、`announcement.vue`；`pages/drive*.vue` | Compatible | P-00 ✅ | 复用 Shell/Token/header/按钮，不重做信息架构；含审计 A6（`/notes/:id/reactions` 为 note.vue 的 `initialTab` 标签，作详情页标签复核而非独立页面） |
