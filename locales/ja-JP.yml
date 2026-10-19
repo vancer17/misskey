@@ -3437,6 +3437,7 @@ _serverSetupWizard:
 
 _uploader:
   editImage: "画像の編集"
+  videoCompressionFallback: "「{name}」の動画を安全に圧縮できなかったため、元のファイルを使用します。"
   compressedToX: "{x}に圧縮"
   savedXPercent: "{x}%節約"
   abortConfirm: "アップロードされていないファイルがありますが、中止しますか？"
