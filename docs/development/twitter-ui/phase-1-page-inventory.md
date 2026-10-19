@@ -42,7 +42,7 @@
 
 | ID | 页面 / 界面 | 路由 / 范围 | 当前代码锚点 | 等级 | 依赖 | 纳入条件 |
 | --- | --- | --- | --- | --- | --- | --- |
-| **P-11** | 个人资料设置 | `/settings/profile` | `packages/frontend/src/pages/settings/profile.vue` | Core | P-00 | 需要演示或完成账号身份配置时。 |
+| **P-11** | 个人资料设置与二维码入口 | `/settings/profile`、`/qr` | `packages/frontend/src/pages/settings/profile.vue`；`packages/frontend/src/pages/qr{,.show,.read}.vue` | Core（二维码 Compatible） | P-00 | 个人资料配置及可见的二维码子路径一并纳入；二维码状态与设备边界见 [qr.md](./qr.md)。 |
 | **P-12** | 正在关注列表 | `/@:acct/following` | `packages/frontend/src/pages/user/following.vue`；`packages/frontend/src/pages/user/follow-list.vue` | Full | P-04 | 用户主页完成后纳入。 |
 | **P-13** | 关注者列表 | `/@:acct/followers` | `packages/frontend/src/pages/user/followers.vue`；`packages/frontend/src/pages/user/follow-list.vue` | Full | P-04 | 用户主页完成后纳入。 |
 | **P-14** | 探索 | `/explore` | `packages/frontend/src/pages/explore.vue`；`packages/frontend/src/pages/explore.featured.vue`；`packages/frontend/src/pages/explore.users.vue`；`packages/frontend/src/pages/explore.roles.vue` | Full 或 Core | P-00、P-02 | 第一阶段左侧导航暴露 Explore 入口时。 |
