@@ -1,13 +1,16 @@
 /*
  * SPDX-FileCopyrightText: syuilo and misskey-project
  * SPDX-License-Identifier: AGPL-3.0-only
+ *
+ * 共享附件上传领域：管理原文件、预处理候选结果与上传任务。
+ * 仅允许当前附件的有效任务提交媒体结果，保证取消、重试与移除不会复用失效产物。
  */
 
 import * as Misskey from 'misskey-js';
 import { readAndCompressImage } from '@misskey-dev/browser-image-resizer';
 import isAnimated from 'is-file-animated';
 import { EventEmitter } from 'eventemitter3';
-import { computed, markRaw, onMounted, onUnmounted, ref, triggerRef } from 'vue';
+import { computed, markRaw, onUnmounted, ref, triggerRef } from 'vue';
 import type { MenuItem } from '@/types/menu.js';
 import type { WatermarkLayers, WatermarkPreset } from '@/utility/watermark/WatermarkRenderer.js';
 import type { ImageFrameParams, ImageFramePreset } from '@/utility/image-frame-renderer/ImageFrameRenderer.js';
@@ -20,6 +23,7 @@ import type { Content } from '@/components/MkLightbox.item.vue';
 import * as os from '@/os.js';
 import { isPreviewable, getType } from '@/utility/lightbox.js';
 import { ensureSignin } from '@/i.js';
+import { compressVideo } from '@/utility/video-preprocessing/index.js';
 
 export type UploaderFeatures = {
 	imageEditing?: boolean;
@@ -86,6 +90,12 @@ export type UploaderItem = {
 	abortPreprocess?: (() => void) | null;
 };
 
+/** 附件操作的临时执行上下文；对象身份用于隔离同一附件的不同尝试。 */
+type UploaderTask = {
+	controller: AbortController;
+	promise: Promise<void>;
+};
+
 export function getUploadName(item: UploaderItem): string {
 	return item.name + (item.name.endsWith(item.suffix) ? '' : item.suffix);
 }
@@ -111,6 +121,7 @@ function getCompressionSettings(level: 0 | 1 | 2 | 3) {
 	}
 }
 
+/** 创建共享上传器，由现有附件状态承载界面数据，由私有任务上下文控制异步提交。 */
 export function useUploader(options: {
 	folderId?: string | null;
 	multiple?: boolean;
@@ -130,6 +141,50 @@ export function useUploader(options: {
 	});
 
 	const items = ref<UploaderItem[]>([]);
+	const preprocessTasks: Map<UploaderItem['id'], UploaderTask> = new Map();
+	const uploadTasks: Map<UploaderItem['id'], UploaderTask> = new Map();
+	let uploadBatch: UploaderTask | null = null;
+	let disposed: boolean = false;
+
+	/** 检查回调仍属于未销毁上传器中的同一个附件和同一次尝试。 */
+	function isCurrentTask(item: UploaderItem, task: UploaderTask, tasks: Map<UploaderItem['id'], UploaderTask>): boolean {
+		return !disposed && !task.controller.signal.aborted && tasks.get(item.id) === task && items.value.includes(item);
+	}
+
+	/** 先使预处理失效，再请求取消，防止旧任务在清理期间回写状态。 */
+	function invalidatePreprocess(item: UploaderItem): void {
+		const task: UploaderTask | undefined = preprocessTasks.get(item.id);
+		preprocessTasks.delete(item.id);
+		task?.controller.abort();
+		item.abortPreprocess = null;
+		item.preprocessing = false;
+		item.preprocessProgress = null;
+	}
+
+	/** 丢弃压缩产物并恢复原文件的名称、大小与预览来源。 */
+	function restoreOriginal(item: UploaderItem): void {
+		item.preprocessedFile = null;
+		item.compressedSize = null;
+		item.suffix = '';
+		updateItemObjectUrls(item, item.file);
+	}
+
+	/** 取消附件及其所在上传批次；原文件只在下一次明确上传时重新处理。 */
+	function cancelItem(item: UploaderItem): void {
+		if (item.uploaded != null) return;
+		invalidatePreprocess(item);
+		const task: UploaderTask | undefined = uploadTasks.get(item.id);
+		uploadTasks.delete(item.id);
+		task?.controller.abort();
+		uploadBatch?.controller.abort();
+		uploadBatch = null;
+		item.abort = null;
+		item.uploading = false;
+		item.aborted = true;
+		item.uploadFailed = true;
+		item.progress = null;
+		if (items.value.includes(item)) restoreOriginal(item);
+	}
 
 	function initializeFile(file: File) {
 		const id = genId();
@@ -162,7 +217,9 @@ export function useUploader(options: {
 		});
 	}
 
-	function addFiles(newFiles: File[]) {
+	/** 将新文件交给当前上传器；已释放实例不再接收附件。 */
+	function addFiles(newFiles: File[]): void {
+		if (disposed) return;
 		for (const file of newFiles) {
 			initializeFile(file);
 		}
@@ -184,9 +241,14 @@ export function useUploader(options: {
 		item.thumbnail = THUMBNAIL_SUPPORTED_TYPES.includes(file.type) ? newObjectUrl : null;
 	}
 
-	function removeItem(item: UploaderItem) {
-		revokeItemObjectUrls(item);
-		items.value.splice(items.value.indexOf(item), 1);
+	/** 按既有附件标识移除当前项，先取消任务，避免迟到回调及重复移除误删其他附件。 */
+	function removeItem(item: UploaderItem): void {
+		const index: number = items.value.findIndex(/** 找到当前数组中的权威附件。 */ (current: UploaderItem): boolean => current.id === item.id);
+		if (index < 0) return;
+		const current: UploaderItem = items.value[index];
+		cancelItem(current);
+		revokeItemObjectUrls(current);
+		items.value.splice(index, 1);
 	}
 
 	function getMenu(item: UploaderItem): MenuItem[] {
@@ -282,17 +344,12 @@ export function useUploader(options: {
 				children: [{
 					icon: 'ti ti-crop',
 					text: i18n.ts.cropImage,
-					action: async () => {
-						const cropped = await os.cropImageFile(item.file, { aspectRatio: null });
-						const newObjectUrl = createItemObjectUrl(item, cropped);
-						items.value.splice(items.value.indexOf(item), 1, {
-							...item,
-							file: markRaw(cropped),
-							thumbnail: THUMBNAIL_SUPPORTED_TYPES.includes(cropped.type) ? newObjectUrl : null,
-							objectUrl: newObjectUrl,
-						});
-						const reactiveItem = items.value.find(x => x.id === item.id)!;
-						preprocess(reactiveItem).then(() => {
+					/** 仅向仍在上传器中的可编辑附件提交裁剪结果。 */
+					action: async (): Promise<void> => {
+						const cropped: File = await os.cropImageFile(item.file, { aspectRatio: null });
+						if (disposed || !items.value.includes(item) || item.uploading || item.uploaded != null) return;
+						item.file = markRaw(cropped);
+						preprocess(item).then(/** 通知既有附件视图刷新处理结果。 */ (): void => {
 							triggerRef(items);
 						});
 					},
@@ -309,16 +366,11 @@ export function useUploader(options: {
 						const { dispose } = await os.popupAsyncWithDialog(import('@/components/MkImageEffectorDialog.vue').then(x => x.default), {
 							image: item.file,
 						}, {
-							ok: (file) => {
-									const newObjectUrl = createItemObjectUrl(item, file);
-								items.value.splice(items.value.indexOf(item), 1, {
-									...item,
-									file: markRaw(file),
-									thumbnail: THUMBNAIL_SUPPORTED_TYPES.includes(file.type) ? newObjectUrl : null,
-									objectUrl: newObjectUrl,
-								});
-								const reactiveItem = items.value.find(x => x.id === item.id)!;
-								preprocess(reactiveItem).then(() => {
+							/** 仅向仍可编辑的原附件提交图片效果，保持附件身份不变。 */
+							ok: (file: File): void => {
+								if (disposed || !items.value.includes(item) || item.uploading || item.uploaded != null) return;
+								item.file = markRaw(file);
+								preprocess(item).then(/** 通知既有附件视图刷新处理结果。 */ (): void => {
 									triggerRef(items);
 								});
 							},
@@ -554,111 +606,181 @@ export function useUploader(options: {
 		return menu;
 	}
 
-	async function uploadOne(item: UploaderItem): Promise<void> {
+	/** 处理同一附件的重复上传请求，保留原对象并在显式重试时重新准备文件。 */
+	function uploadOne(item: UploaderItem): Promise<void> {
+		if (disposed || !items.value.includes(item)) return Promise.reject(new UploadAbortedError());
+		if (item.uploaded != null) return Promise.resolve();
+		const existing: UploaderTask | undefined = uploadTasks.get(item.id);
+		if (existing != null) return existing.promise;
+
+		const retry: boolean = item.aborted || item.uploadFailed;
+		const task: UploaderTask = { controller: new AbortController(), promise: Promise.resolve() };
+		uploadTasks.set(item.id, task);
+		item.aborted = false;
 		item.uploadFailed = false;
-		item.uploading = true;
+		item.progress = null;
+		task.promise = executeUpload(item, task, retry);
+		// 菜单和通用上传弹窗允许不等待；保留原 Promise 的拒绝供发帖调用方中止提交。
+		void task.promise.catch(/** 消费无人等待的失败，不改变调用方收到的原 Promise。 */ (): void => {});
+		return task.promise;
+	}
 
-		const { filePromise, abort } = uploadFile(item.preprocessedFile ?? item.file, {
-			name: getUploadName(item),
-			folderId: options.folderId === undefined ? prefer.s.uploadFolder : options.folderId,
-			isSensitive: item.isSensitive ?? false,
-			caption: item.caption ?? null,
-			onProgress: (progress) => {
-				if (item.progress == null) {
+	/** 等待当前预处理完成后上传，并以任务身份保护所有网络回调。 */
+	async function executeUpload(item: UploaderItem, task: UploaderTask, retry: boolean): Promise<void> {
+		let abortNetwork: (() => void) | null = null;
+		try {
+			if (retry || (item.preprocessedFile == null && !preprocessTasks.has(item.id))) {
+				await preprocess(item);
+			}
+			while (preprocessTasks.has(item.id)) {
+				if (!isCurrentTask(item, task, uploadTasks)) throw new UploadAbortedError();
+				await preprocessTasks.get(item.id)!.promise;
+			}
+			if (!isCurrentTask(item, task, uploadTasks) || item.aborted) throw new UploadAbortedError();
+
+			item.uploading = true;
+			const uploadResult: ReturnType<typeof uploadFile> = uploadFile(item.preprocessedFile ?? item.file, {
+				name: getUploadName(item),
+				folderId: options.folderId === undefined ? prefer.s.uploadFolder : options.folderId,
+				isSensitive: item.isSensitive ?? false,
+				caption: item.caption ?? null,
+				/** 仅把当前请求的传输进度写入附件。 */
+				onProgress: (progress: { total: number; loaded: number }): void => {
+					if (!isCurrentTask(item, task, uploadTasks)) return;
 					item.progress = { max: progress.total, value: progress.loaded };
-				} else {
-					item.progress.value = progress.loaded;
-					item.progress.max = progress.total;
-				}
-			},
-		});
+				},
+			});
+			abortNetwork = uploadResult.abort;
+			task.controller.signal.addEventListener('abort', abortNetwork, { once: true });
+			/** 用户取消同步失效该请求，迟到响应不能提交。 */
+			item.abort = (): void => {
+				if (isCurrentTask(item, task, uploadTasks)) cancelItem(item);
+			};
 
-		item.abort = () => {
-			item.abort = null;
-			abort();
-			item.uploading = false;
-			item.uploadFailed = true;
-		};
-
-		await filePromise.then((file) => {
+			const file: Misskey.entities.DriveFile = await uploadResult.filePromise;
+			if (!isCurrentTask(item, task, uploadTasks)) throw new UploadAbortedError();
 			item.uploaded = file;
 			item.abort = null;
-			events.emit('itemUploaded', { item });
-		}).catch(err => {
-			item.uploadFailed = true;
-			item.progress = null;
-			if (!(err instanceof UploadAbortedError)) {
-				throw err;
-			}
-		}).finally(() => {
 			item.uploading = false;
-		});
-	}
-
-	async function upload() { // エラーハンドリングなどを考慮してシーケンシャルにやる
-		items.value = items.value.map(item => ({
-			...item,
-			aborted: false,
-			uploadFailed: false,
-			uploading: false,
-		}));
-
-		for (const item of items.value.filter(item => item.uploaded == null)) {
-			// アップロード処理途中で値が変わる場合（途中で全キャンセルされたりなど）もあるので、Array filterではなくここでチェック
-			if (item.aborted) {
-				continue;
+			uploadTasks.delete(item.id);
+			// 消费者可能在事件中立即移除已上传项，成功事实必须先提交。
+			events.emit('itemUploaded', { item });
+		} catch (err: unknown) {
+			if (isCurrentTask(item, task, uploadTasks)) {
+				item.uploadFailed = true;
+				item.progress = null;
 			}
-
-			await uploadOne(item);
+			if (task.controller.signal.aborted) throw new UploadAbortedError();
+			throw err;
+		} finally {
+			if (abortNetwork != null) task.controller.signal.removeEventListener('abort', abortNetwork);
+			if (uploadTasks.get(item.id) === task) {
+				uploadTasks.delete(item.id);
+				if (items.value.includes(item)) {
+					item.uploading = false;
+					item.abort = null;
+				}
+			}
 		}
 	}
 
-	function abortAll() {
-		for (const item of items.value) {
-			if (item.uploaded != null) {
-				continue;
-			}
+	/** 复用正在执行的批次，逐项上传；取消或缺少附件时拒绝，阻止缺附件发帖。 */
+	function upload(): Promise<void> {
+		if (disposed) return Promise.reject(new UploadAbortedError());
+		if (uploadBatch != null) return uploadBatch.promise;
+		const task: UploaderTask = { controller: new AbortController(), promise: Promise.resolve() };
+		const pending: UploaderItem[] = items.value.filter(/** 仅选择本次需要上传的附件。 */ (item: UploaderItem): boolean => item.uploaded == null);
+		uploadBatch = task;
+		task.promise = executeBatch(pending, task);
+		void task.promise.catch(/** 保留拒绝语义，同时兼容不等待结果的既有上传入口。 */ (): void => {});
+		return task.promise;
+	}
 
-			if (item.abortPreprocess != null) {
-				item.abortPreprocess();
+	/** 执行固定附件集合，旧批次取消后不得继续上传后续附件。 */
+	async function executeBatch(pending: UploaderItem[], task: UploaderTask): Promise<void> {
+		try {
+			for (const item of pending) {
+				if (item.uploaded != null) continue;
+				if (disposed || task.controller.signal.aborted) throw new UploadAbortedError();
+				if (!items.value.includes(item)) throw new UploadAbortedError();
+				await uploadOne(item);
 			}
-
-			if (item.abort != null) {
-				item.abort();
+			// 上传期间追加的附件必须留给下一次明确上传，不能把当前批次作为全部成功返回。
+			if (items.value.some(/** 检查仍在上传器中等待提交的附件。 */ (item: UploaderItem): boolean => item.uploaded == null)) {
+				throw new UploadAbortedError();
 			}
-			item.aborted = true;
-			item.uploadFailed = true;
+		} finally {
+			if (uploadBatch === task) uploadBatch = null;
 		}
 	}
 
-	async function preprocess(item: UploaderItem): Promise<void> {
+	/** 同步取消整个批次和所有未上传附件，不把取消解释为原文件回退。 */
+	function abortAll(): void {
+		uploadBatch?.controller.abort();
+		uploadBatch = null;
+		for (const item of items.value) cancelItem(item);
+	}
+
+	/** 为附件创建新预处理尝试；清除旧产物后只在本地候选对象中计算结果。 */
+	function preprocess(item: UploaderItem): Promise<void> {
+		if (disposed || !items.value.includes(item) || item.uploading || item.uploaded != null) return Promise.resolve();
+		invalidatePreprocess(item);
+		restoreOriginal(item);
+		item.aborted = false;
+		item.uploadFailed = false;
 		item.preprocessing = true;
-		item.preprocessProgress = null;
-
-		if (IMAGE_PREPROCESS_NEEDED_TYPES.includes(item.file.type)) {
-			try {
-				await preprocessForImage(item);
-			} catch (err) {
-				console.error('Failed to preprocess image', err);
-
-			// nop
-			}
-		}
-
-		if (VIDEO_PREPROCESS_NEEDED_TYPES.includes(item.file.type)) {
-			try {
-				await preprocessForVideo(item);
-			} catch (err) {
-				console.error('Failed to preprocess video', err);
-
-				// nop
-			}
-		}
-
-		item.preprocessing = false;
-		item.preprocessProgress = null;
+		const task: UploaderTask = { controller: new AbortController(), promise: Promise.resolve() };
+		const candidate: UploaderItem = { ...item };
+		preprocessTasks.set(item.id, task);
+		/** 取消入口只失效当前任务，由下次明确上传重新预处理。 */
+		item.abortPreprocess = (): void => {
+			if (isCurrentTask(item, task, preprocessTasks)) cancelItem(item);
+		};
+		task.promise = executePreprocess(item, candidate, task);
+		return task.promise;
 	}
 
+	/** 分离候选计算和最终提交；失败回退原文件，过期任务不更新数据或预览 URL。 */
+	async function executePreprocess(item: UploaderItem, candidate: UploaderItem, task: UploaderTask): Promise<void> {
+		try {
+			try {
+				if (IMAGE_PREPROCESS_NEEDED_TYPES.includes(candidate.file.type)) {
+					await preprocessForImage(candidate);
+				} else if (VIDEO_PREPROCESS_NEEDED_TYPES.includes(candidate.file.type)) {
+					await preprocessForVideo(candidate, task.controller.signal,
+						/** 进度只属于仍然有效的预处理尝试。 */
+						(progress: number): void => {
+							if (isCurrentTask(item, task, preprocessTasks)) item.preprocessProgress = progress;
+						});
+				}
+			} catch (err: unknown) {
+				if (!isCurrentTask(item, task, preprocessTasks)) return;
+				candidate.preprocessedFile = null;
+				candidate.compressedSize = null;
+				candidate.suffix = '';
+				console.error('Failed to preprocess attachment; keeping original file', err);
+				if (VIDEO_PREPROCESS_NEEDED_TYPES.includes(candidate.file.type)) {
+					os.toast(i18n.tsx._uploader.videoCompressionFallback({ name: item.name }));
+				}
+			}
+
+			if (!isCurrentTask(item, task, preprocessTasks)) return;
+			const file: Blob = candidate.preprocessedFile ?? candidate.file;
+			updateItemObjectUrls(item, file);
+			item.preprocessedFile = markRaw(file);
+			item.compressedSize = candidate.compressedSize;
+			item.suffix = candidate.suffix;
+		} finally {
+			if (isCurrentTask(item, task, preprocessTasks)) {
+				preprocessTasks.delete(item.id);
+				item.preprocessing = false;
+				item.preprocessProgress = null;
+				item.abortPreprocess = null;
+			}
+		}
+	}
+
+	/** 在未提交的候选附件上完成既有图片处理，预览 URL 由公共入口统一提交。 */
 	async function preprocessForImage(item: UploaderItem): Promise<void> {
 		const imageBitmap = await window.createImageBitmap(item.file);
 
@@ -745,79 +867,39 @@ export function useUploader(options: {
 
 		imageBitmap.close();
 
-		updateItemObjectUrls(item, preprocessedFile);
 		item.preprocessedFile = markRaw(preprocessedFile);
 	}
 
-	async function preprocessForVideo(item: UploaderItem): Promise<void> {
-		let preprocessedFile: Blob | File = item.file;
-
-		const needsCompress = item.compressionLevel !== 0 && VIDEO_COMPRESSION_SUPPORTED_TYPES.includes(preprocessedFile.type);
-
-		if (needsCompress) {
-			const mediabunny = await import('mediabunny');
-
-			const source = new mediabunny.BlobSource(preprocessedFile);
-
-			const input = new mediabunny.Input({
-				source,
-				formats: mediabunny.ALL_FORMATS,
-			});
-
-			const output = new mediabunny.Output({
-				target: new mediabunny.BufferTarget(),
-				format: new mediabunny.Mp4OutputFormat(),
-			});
-
-			const currentConversion = await mediabunny.Conversion.init({
-				input,
-				output,
-				video: {
-					//width: 320, // Height will be deduced automatically to retain aspect ratio
-					bitrate: item.compressionLevel === 1 ? mediabunny.QUALITY_VERY_HIGH : item.compressionLevel === 2 ? mediabunny.QUALITY_MEDIUM : mediabunny.QUALITY_VERY_LOW,
-				},
-				audio: {
-					// Explicitly keep audio (don't discard) and copy it if possible
-					// without re-encoding to avoid WebCodecs limitations on iOS Safari
-					discard: false,
-				},
-			});
-
-			currentConversion.onProgress = newProgress => item.preprocessProgress = newProgress;
-
-			item.abortPreprocess = () => {
-				item.abortPreprocess = null;
-				currentConversion.cancel();
-				item.preprocessing = false;
-				item.preprocessProgress = null;
-			};
-
-			await currentConversion.execute();
-
-			item.abortPreprocess = null;
-
-			preprocessedFile = new Blob([output.target.buffer!], { type: output.format.mimeType });
-			item.compressedSize = output.target.buffer!.byteLength;
-			item.suffix = '.mp4';
-		} else {
-			item.compressedSize = null;
-			item.suffix = '';
+	/** 调用共享媒体适配器，仅向候选对象写入完整压缩结果。 */
+	async function preprocessForVideo(item: UploaderItem, signal: AbortSignal, onProgress: (progress: number) => void): Promise<void> {
+		if (item.compressionLevel === 0) {
+			item.preprocessedFile = item.file;
+			return;
 		}
 
-		updateItemObjectUrls(item, preprocessedFile);
-		item.preprocessedFile = markRaw(preprocessedFile);
+		const mediabunny: typeof import('mediabunny') = await import('mediabunny');
+		signal.throwIfAborted();
+		const file: Blob = await compressVideo(item.file, {
+			bitrate: item.compressionLevel === 1 ? mediabunny.QUALITY_VERY_HIGH : item.compressionLevel === 2 ? mediabunny.QUALITY_MEDIUM : mediabunny.QUALITY_VERY_LOW,
+			signal,
+			onProgress,
+		});
+		item.preprocessedFile = markRaw(file);
+		item.compressedSize = file.size;
+		item.suffix = '.mp4';
 	}
 
-	function reset() {
-		for (const item of items.value) {
-			revokeItemObjectUrls(item);
-		}
-
+	/** 清空当前附件和任务，保留上传器供下一次使用。 */
+	function reset(): void {
 		abortAll();
+		for (const item of items.value) revokeItemObjectUrls(item);
 		items.value = [];
 	}
 
-	function dispose() {
+	/** 永久关闭上传器；显式释放与卸载钩子重复调用时保持幂等。 */
+	function dispose(): void {
+		if (disposed) return;
+		disposed = true;
 		reset();
 	}
 
