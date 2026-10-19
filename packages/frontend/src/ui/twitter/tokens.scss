@@ -131,6 +131,10 @@ body[data-ui='twitter'] {
 	/* Tooltip 深色 pill（X 明暗两模式均为深底白字） */
 	--twitter-tooltip-bg: rgba(0, 0, 0, 0.85);
 	--twitter-tooltip-fg: #FFFFFF;
+	/* 二维码码点固定使用 nitter 明色主文字色，Canvas 消费解析值，不随暗色主题反转。 */
+	--twitter-qr-fg: #0F0F0F;
+	/* 二维码静区固定使用 nitter 明色面板底，维持深色码点与浅底的识别对比度。 */
+	--twitter-qr-bg: #FFFFFF;
 
 	/* ——— 共享页面状态（X-behavior 来源，见 ADR-0001）——— */
 	/* 骨架屏底块色（收敛原 NotificationSkeleton 的硬编码 color-mix） */
