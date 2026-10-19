@@ -3324,6 +3324,7 @@ _serverSetupWizard:
     text3: "也有面向支援者的特典！"
 _uploader:
   editImage: "编辑图像"
+  videoCompressionFallback: "视频“{name}”无法安全压缩，已改用原文件。"
   compressedToX: "压缩 {x}"
   savedXPercent: "节省了 {x}% 的空间"
   abortConfirm: "还有未上传的文件，要中止吗？"

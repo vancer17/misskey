@@ -12846,6 +12846,10 @@ export interface Locale extends ILocale {
          */
         "editImage": string;
         /**
+         * 「{name}」の動画を安全に圧縮できなかったため、元のファイルを使用します。
+         */
+        "videoCompressionFallback": ParameterizedString<"name">;
+        /**
          * {x}に圧縮
          */
         "compressedToX": ParameterizedString<"x">;
