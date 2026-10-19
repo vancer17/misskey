@@ -13364,6 +13364,110 @@ export interface Locale extends ILocale {
          */
         "readTabTitle": string;
         /**
+         * このコードを読み取ると、私のプロフィールを開けます。
+         */
+        "showDescription": string;
+        /**
+         * 二次元コードをカメラに映すか、端末の画像を選ぶと、読み取り結果がここに表示されます。
+         */
+        "scanDescription": string;
+        /**
+         * カメラを起動しています。必要に応じてブラウザーのカメラへのアクセスを許可してください。
+         */
+        "cameraStarting": string;
+        /**
+         * カメラは停止しています。再開するか、端末の画像からコードを読み取れます。
+         */
+        "cameraStopped": string;
+        /**
+         * このアクセス先ではカメラを使用できません。HTTPS で開くか、画像からコードを読み取ってください。
+         */
+        "cameraInsecure": string;
+        /**
+         * このブラウザーではカメラを使用できません。画像からコードを読み取れます。
+         */
+        "cameraUnavailable": string;
+        /**
+         * カメラへのアクセスが許可されていません。ブラウザーのカメラ権限を確認してから再試行してください。
+         */
+        "cameraPermissionDenied": string;
+        /**
+         * 使用できるカメラが見つかりません。カメラを接続して再試行するか、画像から読み取ってください。
+         */
+        "cameraNotFound": string;
+        /**
+         * カメラの映像を取得できません。ほかのアプリで使用中でないか確認してから再試行してください。
+         */
+        "cameraNotReadable": string;
+        /**
+         * 選択したカメラを使用できません。別のカメラを選択してから再試行してください。
+         */
+        "cameraConstraints": string;
+        /**
+         * カメラを起動できませんでした。再試行するか、画像から読み取ってください。
+         */
+        "cameraUnknown": string;
+        /**
+         * カメラ {number}
+         */
+        "cameraNumber": ParameterizedString<"number">;
+        /**
+         * ライトを切り替えられませんでした。カメラでの読み取りは引き続き使用できます。
+         */
+        "flashFailed": string;
+        /**
+         * コードを読み取れませんでした。別の画像を選ぶか、もう一度お試しください。
+         */
+        "scanFailed": string;
+        /**
+         * 現在カメラを使用できません
+         */
+        "cameraUnavailableTitle": string;
+        /**
+         * カメラは停止しています
+         */
+        "cameraPausedTitle": string;
+        /**
+         * カメラを起動しています
+         */
+        "cameraStartingTitle": string;
+        /**
+         * 現在選択できるカメラは1台だけです。
+         */
+        "cameraSingle": string;
+        /**
+         * カメラの一覧を取得できません。デバイスを再検出してください。
+         */
+        "cameraListUnavailable": string;
+        /**
+         * カメラを検出しています…
+         */
+        "cameraDetecting": string;
+        /**
+         * デバイスを再検出
+         */
+        "refreshCameras": string;
+        /**
+         * カメラを再試行
+         */
+        "retryCamera": string;
+        /**
+         * 画像のコードを読み取っています…
+         */
+        "imageProcessing": string;
+        /**
+         * コードの内容を取得しています…
+         */
+        "resultProcessing": string;
+        /**
+         * ユーザーのコードはまだ読み取られていません。
+         */
+        "noUsers": string;
+        /**
+         * ノートのコードはまだ読み取られていません。
+         */
+        "noNotes": string;
+        /**
          * {name} {acct}
          */
         "shareTitle": ParameterizedString<"name" | "acct">;
