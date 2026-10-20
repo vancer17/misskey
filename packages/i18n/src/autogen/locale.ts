@@ -13550,4 +13550,146 @@ export interface Locale extends ILocale {
          */
         "scheduleTimeIsInThePast": string;
     };
+    "_avatarDecorationSettings": {
+        /**
+         * 現在のアバター
+         */
+        "currentAvatar": string;
+        /**
+         * 装着中 {count} / {max}
+         */
+        "wearingCount": ParameterizedString<"count" | "max">;
+        /**
+         * デコレーションを選んで、アバターを飾りましょう。
+         */
+        "intro": string;
+        /**
+         * 装着中のデコレーション
+         */
+        "wearing": string;
+        /**
+         * デコレーションを選ぶ
+         */
+        "choose": string;
+        /**
+         * デコレーションはまだありません
+         */
+        "empty": string;
+        /**
+         * このサーバーにはまだデコレーションがありません。管理者が追加すると、ここで選んで試せます。
+         */
+        "emptyDescription": string;
+        /**
+         * このサーバーにはまだデコレーションがありません。管理画面から追加できます。
+         */
+        "emptyForManager": string;
+        /**
+         * デコレーションを管理
+         */
+        "manage": string;
+        /**
+         * デコレーションを読み込めませんでした
+         */
+        "loadFailed": string;
+        /**
+         * 現在の装着状態は保持されています。再試行してください。
+         */
+        "loadFailedDescription": string;
+        /**
+         * 更新できませんでした。最後に読み込んだ一覧を表示しています。
+         */
+        "refreshFailed": string;
+        /**
+         * 装着中のデコレーション
+         */
+        "directoryPending": string;
+        /**
+         * 利用できなくなったデコレーション
+         */
+        "unavailable": string;
+        /**
+         * 一覧に見つかりません。必要に応じて取り外せます。
+         */
+        "unavailableDescription": string;
+        /**
+         * 調整
+         */
+        "adjust": string;
+        /**
+         * 「{name}」を試す
+         */
+        "previewName": ParameterizedString<"name">;
+        /**
+         * ロール限定
+         */
+        "roleRequired": string;
+        /**
+         * このデコレーションを装着するには、対象のロールが必要です。
+         */
+        "roleRequiredDescription": string;
+        /**
+         * 装着数の上限です。追加するには先に装着中のものを外してください。
+         */
+        "limitReached": string;
+        /**
+         * 現在の装着数が上限を超えています。すべて取り外すか、上限内まで減らしてください。
+         */
+        "overLimit": string;
+        /**
+         * プレビュー画像を読み込めませんでした
+         */
+        "imageFailed": string;
+        /**
+         * 試着
+         */
+        "tryOn": string;
+        /**
+         * プレビュー中です。保存するまでアバターは変更されません。
+         */
+        "previewOnly": string;
+        /**
+         * 横位置
+         */
+        "horizontalPosition": string;
+        /**
+         * 縦位置
+         */
+        "verticalPosition": string;
+        /**
+         * 左右反転
+         */
+        "horizontalFlip": string;
+        /**
+         * 位置をリセット
+         */
+        "resetPosition": string;
+        /**
+         * 保存中…
+         */
+        "saving": string;
+        /**
+         * デコレーションを保存しました。
+         */
+        "saved": string;
+        /**
+         * 保存できませんでした。試着内容は保持されています。通信状態や権限、装着数を確認して再試行してください。
+         */
+        "saveFailed": string;
+        /**
+         * 装着状態が変更されています。閉じてからもう一度開いてください。
+         */
+        "changedElsewhere": string;
+        /**
+         * デコレーションまたは権限が変更されました。サーバーの結果を反映しました。閉じて一覧を更新してください。
+         */
+        "adjustedByServer": string;
+        /**
+         * このデコレーションを取り外しますか？
+         */
+        "removeConfirm": string;
+        /**
+         * すべてのデコレーションを取り外しますか？
+         */
+        "removeAllConfirm": string;
+    };
 }
