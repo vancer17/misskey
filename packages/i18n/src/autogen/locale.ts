@@ -13766,15 +13766,87 @@ export interface Locale extends ILocale {
          */
         "editTitle": string;
         /**
-         * ライト背景
+         * デコレーション画像
+         */
+        "materialTitle": string;
+        /**
+         * 背景が透明な画像を推奨します。アップロードした画像はドライブに保存されます。
+         */
+        "materialHint": string;
+        /**
+         * 画像をアップロード
+         */
+        "uploadMaterial": string;
+        /**
+         * 画像を再アップロード
+         */
+        "replaceMaterial": string;
+        /**
+         * ドライブから選択
+         */
+        "chooseFromDrive": string;
+        /**
+         * 画像のアドレスを使用
+         */
+        "useImageUrl": string;
+        /**
+         * 画像をアップロード中…
+         */
+        "uploadingMaterial": string;
+        /**
+         * アップロードをキャンセル
+         */
+        "cancelUpload": string;
+        /**
+         * 画像をアップロードしました。追加または保存するとデコレーション一覧に反映されます。
+         */
+        "materialUploaded": string;
+        /**
+         * ドライブの画像を選択しました。追加または保存するとデコレーション一覧に反映されます。
+         */
+        "materialSelected": string;
+        /**
+         * アップロードをキャンセルしました。元の画像と入力内容は保持されています。
+         */
+        "uploadCanceled": string;
+        /**
+         * 画像のアップロードに失敗しました。元の画像と入力内容は保持されています。再試行してください。
+         */
+        "uploadFailed": string;
+        /**
+         * 画像ファイルを選択してください。
+         */
+        "imageOnly": string;
+        /**
+         * 画像の選択画面を開けませんでした。再試行してください。
+         */
+        "materialSelectionFailed": string;
+        /**
+         * 着用プレビュー
+         */
+        "previewTitle": string;
+        /**
+         * 現在のアバターで、同じデコレーションを二つの背景で確認できます。
+         */
+        "previewDescription": string;
+        /**
+         * 画像が選択されていません。アップロードまたは選択すると、ここで着用イメージを確認できます。
+         */
+        "previewEmpty": string;
+        /**
+         * デコレーションを追加
+         */
+        "addDecoration": string;
+        /**
+         * ライト背景のプレビュー
          */
         "lightPreview": string;
         /**
-         * ダーク背景
+         * ダーク背景のプレビュー
          */
         "darkPreview": string;
         /**
-         * 画像を読み込めませんでした。アドレスを確認して再試行してください。
+         * プレビューを読み込めませんでした。画像またはアドレスを確認して再試行してください。
          */
         "imageFailed": string;
         /**
@@ -13794,7 +13866,7 @@ export interface Locale extends ILocale {
          */
         "noAvailableRoles": string;
         /**
-         * 名前と画像のアドレスを入力してください。
+         * 名前を入力し、画像をアップロード・選択するか、画像のアドレスを入力してください。
          */
         "requiredFields": string;
         /**
