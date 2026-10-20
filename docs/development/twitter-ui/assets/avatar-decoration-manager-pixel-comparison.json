@@ -1,0 +1,24 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 1050
+  },
+  "beforePageHead": "406d94a608e1896d23404baf75b721094d8cd672",
+  "conditions": "Same browser, viewport, zh-CN, dark scheme, username, empty directory and uploaded avatar pixels; distinct real test accounts after isolated backend reset.",
+  "routeOutlet": {
+    "left": 378.5,
+    "right": 976.5,
+    "top": 2,
+    "bottom": 1054
+  },
+  "comparisonRule": "Exact RGB comparison, no threshold or hidden regions; count outside the floor/ceil-clamped route outlet.",
+  "changedPixels": 626704,
+  "changedInsideRoute": 626704,
+  "changedOutsideRoute": 0,
+  "changedBoundingBox": [
+    379,
+    2,
+    977,
+    1050
+  ]
+}
