@@ -117,6 +117,16 @@ body[data-ui='twitter'] {
 	/* 右侧信息栏宽度 */
 	--twitter-right-rail-width: 350px;
 
+	/* 头像挂件为 Misskey 专属能力，无 Nitter 编辑器。下列尺寸保留原组件尺度，见 ADR-0011。 */
+	/* 设置页原有 72px 头像。 */
+	--twitter-decoration-avatar-size: 72px;
+	/* 目录卡片原有 60px 头像，实际还受卡片可用宽度约束。 */
+	--twitter-decoration-card-avatar-size: 60px;
+	/* 试戴弹窗原有 64px 头像，外部预留完整变换空间。 */
+	--twitter-decoration-editor-avatar-size: 64px;
+	/* 沿用原挂件网格 140px 的最小卡宽。 */
+	--twitter-decoration-card-min: 140px;
+
 	/* ——— 覆盖层（X-behavior 来源：nitter 为服务端渲染查看器，无菜单/对话框体系，见 ADR-0001）——— */
 	/* 模态背板遮罩（覆写全局 ._modalBg） */
 	--twitter-overlay-backdrop: light-dark(rgba(0, 0, 0, 0.45), rgba(91, 112, 131, 0.4));
