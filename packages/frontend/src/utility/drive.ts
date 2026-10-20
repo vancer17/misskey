@@ -1,6 +1,10 @@
 /*
  * SPDX-FileCopyrightText: syuilo and misskey-project
  * SPDX-License-Identifier: AGPL-3.0-only
+ *
+ * 文件领域：网盘文件传输与选择工具。
+ * 作用：复用既有网盘接口上传素材，并交付文件回执或明确的失败／取消结果。
+ * 数据链：本地 File／Blob → 网盘上传协议 → DriveFile；业务保存由调用方独立完成。
  */
 
 import { defineAsyncComponent } from 'vue';
@@ -18,17 +22,21 @@ import { globalEvents } from '@/events.js';
 import { getProxiedImageUrl } from '@/utility/media-proxy.js';
 import { genId } from '@/utility/id.js';
 
+/** 上传传输句柄；文件回执与主动取消共享同一次请求。 */
 type UploadReturnType = {
 	filePromise: Promise<Misskey.entities.DriveFile>;
 	abort: () => void;
 };
 
+/** 保留既有取消错误类型，供调用方区分用户取消与上传故障。 */
 export class UploadAbortedError extends Error {
+	/** 建立上传取消回执，不代表已经保存的网盘文件被删除。 */
 	constructor() {
 		super('Upload aborted');
 	}
 }
 
+/** 原样提交文件及既有上传参数，所有传输终态均结束文件 Promise。 */
 export function uploadFile(file: File | Blob, options: {
 	name?: string;
 	folderId?: string | null;
@@ -36,120 +44,156 @@ export function uploadFile(file: File | Blob, options: {
 	caption?: string | null;
 	onProgress?: (ctx: { total: number; loaded: number; }) => void;
 } = {}): UploadReturnType {
-	const xhr = new XMLHttpRequest();
-	const abortController = new AbortController();
-	const { signal } = abortController;
+	const xhr: XMLHttpRequest = new XMLHttpRequest();
+	const abortController: AbortController = new AbortController();
+	const signal: AbortSignal = abortController.signal;
 
-	const filePromise = new Promise<Misskey.entities.DriveFile>((resolve, reject) => {
-		if ($i == null) return reject();
+	const filePromise: Promise<Misskey.entities.DriveFile> = new Promise<Misskey.entities.DriveFile>(
+		/** 将 XHR 回调收敛为一次性上传回执，迟到事件不得重复发布文件。 */
+		(resolve: (value: Misskey.entities.DriveFile | PromiseLike<Misskey.entities.DriveFile>) => void, reject: (reason?: unknown) => void): void => {
+			let settled: boolean = false;
 
-		// こっち側で検出するMIME typeとサーバーで検出するMIME typeは異なる場合があるため、こっち側ではやらないことにする
-		// https://github.com/misskey-dev/misskey/issues/16091
-		//const allowedMimeTypes = $i.policies.uploadableFileTypes;
-		//const isAllowedMimeType = allowedMimeTypes.some(mimeType => {
-		//	if (mimeType === '*' || mimeType === '*/*') return true;
-		//	if (mimeType.endsWith('/*')) return file.type.startsWith(mimeType.slice(0, -1));
-		//	return file.type === mimeType;
-		//});
-		//if (!isAllowedMimeType) {
-		//	os.alert({
-		//		type: 'error',
-		//		title: i18n.ts.failedToUpload,
-		//		text: i18n.ts.cannotUploadBecauseUnallowedFileType,
-		//	});
-		//	return reject();
-		//}
-
-		if ((file.size > instance.maxFileSize) || (file.size > ($i.policies.maxFileSizeMb * 1024 * 1024))) {
-			os.alert({
-				type: 'error',
-				title: i18n.ts.failedToUpload,
-				text: i18n.ts.cannotUploadBecauseExceedsFileSizeLimit,
-			});
-			return reject();
-		}
-
-		signal.addEventListener('abort', () => {
-			reject(new UploadAbortedError());
-		}, { once: true });
-
-		xhr.open('POST', apiUrl + '/drive/files/create', true);
-		xhr.onload = ((ev: ProgressEvent<XMLHttpRequest>) => {
-			if (xhr.status !== 200 || ev.target == null || ev.target.response == null) {
-				if (xhr.status === 413) {
-					os.alert({
-						type: 'error',
-						title: i18n.ts.failedToUpload,
-						text: i18n.ts.cannotUploadBecauseExceedsFileSizeLimit,
-					});
-				} else if (ev.target?.response) {
-					const res = JSON.parse(ev.target.response);
-					if (res.error?.id === 'bec5bd69-fba3-43c9-b4fb-2894b66ad5d2') {
-						os.alert({
-							type: 'error',
-							title: i18n.ts.failedToUpload,
-							text: i18n.ts.cannotUploadBecauseInappropriate,
-						});
-					} else if (res.error?.id === 'd08dbc37-a6a9-463a-8c47-96c32ab5f064') {
-						os.alert({
-							type: 'error',
-							title: i18n.ts.failedToUpload,
-							text: i18n.ts.cannotUploadBecauseNoFreeSpace,
-						});
-					} else if (res.error?.id === '4becd248-7f2c-48c4-a9f0-75edc4f9a1ea') {
-						os.alert({
-							type: 'error',
-							title: i18n.ts.failedToUpload,
-							text: i18n.ts.cannotUploadBecauseUnallowedFileType,
-						});
-					} else {
-						os.alert({
-							type: 'error',
-							title: i18n.ts.failedToUpload,
-							text: `${res.error?.message}\n${res.error?.code}\n${res.error?.id}`,
-						});
-					}
-				} else {
-					os.alert({
-						type: 'error',
-						title: 'Failed to upload',
-						text: `${JSON.stringify(ev.target?.response)}, ${JSON.stringify(xhr.response)}`,
-					});
-				}
-
-				reject();
-				return;
+			/** 释放本次请求的回调；终态后不再发布进度或文件事件。 */
+			function finish(): boolean {
+				if (settled) return false;
+				settled = true;
+				signal.removeEventListener('abort', onAbort);
+				xhr.onload = null;
+				xhr.onerror = null;
+				xhr.onabort = null;
+				xhr.ontimeout = null;
+				xhr.upload.onprogress = null;
+				return true;
 			}
 
-			const driveFile = JSON.parse(ev.target.response);
-			globalEvents.emit('driveFileCreated', driveFile);
-			resolve(driveFile);
-		}) as (ev: ProgressEvent<EventTarget>) => void;
+			/** 失败只结束传输，由既有提示及调用方负责呈现可恢复状态。 */
+			function fail(reason?: unknown): void {
+				if (finish()) reject(reason);
+			}
 
-		if (options.onProgress) {
-			xhr.upload.onprogress = ev => {
-				if (ev.lengthComputable && options.onProgress != null) {
-					options.onProgress({
-						total: ev.total,
-						loaded: ev.loaded,
-					});
+			/** 主动取消及浏览器中止事件都沿用既有取消错误。 */
+			function onAbort(): void { fail(new UploadAbortedError()); }
+
+			if ($i == null) return fail();
+
+			// こっち側で検出するMIME typeとサーバーで検出するMIME typeは異なる場合があるため、こっち側ではやらないことにする
+			// https://github.com/misskey-dev/misskey/issues/16091
+			//const allowedMimeTypes = $i.policies.uploadableFileTypes;
+			//const isAllowedMimeType = allowedMimeTypes.some(mimeType => {
+			//	if (mimeType === '*' || mimeType === '*/*') return true;
+			//	if (mimeType.endsWith('/*')) return file.type.startsWith(mimeType.slice(0, -1));
+			//	return file.type === mimeType;
+			//});
+			//if (!isAllowedMimeType) {
+			//	os.alert({
+			//		type: 'error',
+			//		title: i18n.ts.failedToUpload,
+			//		text: i18n.ts.cannotUploadBecauseUnallowedFileType,
+			//	});
+			//	return reject();
+			//}
+
+			if ((file.size > instance.maxFileSize) || (file.size > ($i.policies.maxFileSizeMb * 1024 * 1024))) {
+				os.alert({
+					type: 'error',
+					title: i18n.ts.failedToUpload,
+					text: i18n.ts.cannotUploadBecauseExceedsFileSizeLimit,
+				});
+				return fail();
+			}
+
+			signal.addEventListener('abort', onAbort, { once: true });
+
+			xhr.open('POST', apiUrl + '/drive/files/create', true);
+			xhr.onerror = /** 网络错误必须交付拒绝，避免调用方永久等待上传。 */ (): void => { fail(new Error('Upload network error')); };
+			xhr.onabort = onAbort;
+			xhr.ontimeout = /** 收敛浏览器超时事件；不新增超时时长或运行配置。 */ (): void => { fail(new Error('Upload timed out')); };
+			xhr.onload = /** 解析既有上传协议，异常响应也必须结束当前传输。 */ (): void => {
+				if (settled) return;
+				let driveFile: Misskey.entities.DriveFile;
+				try {
+					if (xhr.status !== 200 || xhr.response == null) {
+						if (xhr.status === 413) {
+							os.alert({
+								type: 'error',
+								title: i18n.ts.failedToUpload,
+								text: i18n.ts.cannotUploadBecauseExceedsFileSizeLimit,
+							});
+						} else if (xhr.responseText) {
+							const res: { error?: Partial<Misskey.api.APIError> } = JSON.parse(xhr.responseText) as { error?: Partial<Misskey.api.APIError> };
+							if (res.error?.id === 'bec5bd69-fba3-43c9-b4fb-2894b66ad5d2') {
+								os.alert({
+									type: 'error',
+									title: i18n.ts.failedToUpload,
+									text: i18n.ts.cannotUploadBecauseInappropriate,
+								});
+							} else if (res.error?.id === 'd08dbc37-a6a9-463a-8c47-96c32ab5f064') {
+								os.alert({
+									type: 'error',
+									title: i18n.ts.failedToUpload,
+									text: i18n.ts.cannotUploadBecauseNoFreeSpace,
+								});
+							} else if (res.error?.id === '4becd248-7f2c-48c4-a9f0-75edc4f9a1ea') {
+								os.alert({
+									type: 'error',
+									title: i18n.ts.failedToUpload,
+									text: i18n.ts.cannotUploadBecauseUnallowedFileType,
+								});
+							} else {
+								os.alert({
+									type: 'error',
+									title: i18n.ts.failedToUpload,
+									text: `${res.error?.message}\n${res.error?.code}\n${res.error?.id}`,
+								});
+							}
+						} else {
+							os.alert({
+								type: 'error',
+								title: 'Failed to upload',
+								text: JSON.stringify(xhr.response),
+							});
+						}
+
+						fail();
+						return;
+					}
+
+					driveFile = JSON.parse(xhr.responseText) as Misskey.entities.DriveFile;
+				} catch (error: unknown) {
+					fail(error);
+					return;
 				}
+				if (!finish()) return;
+				resolve(driveFile);
+				globalEvents.emit('driveFileCreated', driveFile);
 			};
-		}
 
-		const formData = new FormData();
-		formData.append('i', $i.token);
-		formData.append('force', 'true');
-		formData.append('file', file);
-		formData.append('name', options.name ?? (file instanceof File ? file.name : 'untitled'));
-		formData.append('isSensitive', options.isSensitive ? 'true' : 'false');
-		if (options.caption != null) formData.append('comment', options.caption);
-		if (options.folderId) formData.append('folderId', options.folderId);
+			if (options.onProgress) {
+				xhr.upload.onprogress = /** 只交付当前传输仍有效的真实字节进度。 */ (ev: ProgressEvent<EventTarget>): void => {
+					if (!settled && ev.lengthComputable && options.onProgress != null) {
+						options.onProgress({
+							total: ev.total,
+							loaded: ev.loaded,
+						});
+					}
+				};
+			}
 
-		xhr.send(formData);
-	});
+			const formData: FormData = new FormData();
+			formData.append('i', $i.token);
+			formData.append('force', 'true');
+			formData.append('file', file);
+			formData.append('name', options.name ?? (file instanceof File ? file.name : 'untitled'));
+			formData.append('isSensitive', options.isSensitive ? 'true' : 'false');
+			if (options.caption != null) formData.append('comment', options.caption);
+			if (options.folderId) formData.append('folderId', options.folderId);
 
-	const abort = () => {
+			xhr.send(formData);
+		},
+	);
+
+	/** 取消底层传输并结束等待；已成功上传的文件不由此删除。 */
+	const abort: () => void = (): void => {
 		xhr.abort();
 		abortController.abort();
 	};
