@@ -5,13 +5,13 @@
 
 /**
  * 文件领域：头像挂件管理页与管理编辑器的真实后端回归。
- * 数据链：隔离实例的真实账户／角色／图片 → 管理界面新增、编辑、删除 → 服务端目录与设置页回访。
+ * 数据链：隔离实例的真实账户／角色／图片 → 弹窗上传或选择素材 → 管理新增、编辑、删除 → 服务端目录与设置页回访。
  * 成功业务响应全部来自后端；失败与竞态场景仅中断或延迟真实传输。
  * 测试不检测或启动运维环境，不读取开发账户；截图是本次验收证据，不自动建立视觉基线。
  */
 import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
-import type { APIResponse, ConsoleMessage, Locator, Page, PlaywrightTestArgs, Request, Route, TestInfo } from '@playwright/test';
+import type { APIResponse, ConsoleMessage, FileChooser, Locator, Page, PlaywrightTestArgs, Request, Response, Route, TestInfo } from '@playwright/test';
 import type * as Misskey from 'misskey-js';
 import type { AccountWithToken } from '../../src/accounts/index.js';
 import { api, registerUser, resetState } from './shared.js';
@@ -46,6 +46,21 @@ async function uploadFrame(page: Page): Promise<string> {
 	return file.url;
 }
 
+/** 操作真实上传按钮和文件选择器，返回服务端生成的素材实体，不绕过弹窗上传链。 */
+async function uploadFrameThroughEditor(page: Page, name: string = 'manager-editor-frame.png'): Promise<Misskey.entities.DriveFile> {
+	const choosing: Promise<FileChooser> = page.waitForEvent('filechooser');
+	await page.getByTestId('decoration-manager-upload').click();
+	const chooser: FileChooser = await choosing;
+	const uploading: Promise<Response> = page.waitForResponse(/** 仅等待本次浏览器发出的真实素材上传回执。 */ (response: Response): boolean => response.url().endsWith('/api/drive/files/create') && response.request().method() === 'POST');
+	await chooser.setFiles({ name, mimeType: 'image/png', buffer: framePng });
+	const uploaded: Response = await uploading;
+	expect(uploaded.ok()).toBe(true);
+	const file: Misskey.entities.DriveFile = await uploaded.json();
+	await expect(page.getByTestId('decoration-manager-material-status')).toContainText('素材已上传');
+	await expect(page.getByTestId('decoration-manager-upload')).toBeEnabled();
+	return file;
+}
+
 /** 只读管理目录，断言依据服务端回执而非组件中的表单草稿。 */
 async function directory(): Promise<Misskey.entities.AdminAvatarDecorationsListResponse> {
 	return await api(BASE_URL, 'admin/avatar-decorations/list', { i: admin.token });
@@ -65,12 +80,19 @@ function card(page: Page, id: string): Locator {
 	return page.getByTestId('decoration-manager-card').and(page.locator(`[data-decoration-id="${id}"]`));
 }
 
-/** 通过实际输入框编辑草稿，测试不会直接修改组件状态。 */
-async function fillDraft(page: Page, name: string, url: string, category: string = '管理验收'): Promise<void> {
+/** 通过真实输入框填写说明字段，素材仍由所选输入路径提供。 */
+async function fillDetails(page: Page, name: string, category: string = '管理验收'): Promise<void> {
 	await page.getByTestId('decoration-manager-name').locator('input').fill(name);
-	await page.getByTestId('decoration-manager-url').locator('input').fill(url);
 	await page.getByTestId('decoration-manager-category').locator('input').fill(category);
 	await page.getByTestId('decoration-manager-description').locator('textarea').fill(`${name} 的透明边框`);
+}
+
+/** 使用辅助图片地址路径填写草稿，展开实际控件而不修改组件状态。 */
+async function fillDraft(page: Page, name: string, url: string, category: string = '管理验收'): Promise<void> {
+	const input: Locator = page.getByTestId('decoration-manager-url').locator('input');
+	if (!await input.isVisible()) await page.getByTestId('decoration-manager-url-toggle').locator('summary').click();
+	await input.fill(url);
+	await fillDetails(page, name, category);
 }
 
 /** 挂件自身的两张图片必须经浏览器成功解码，不能以用户头像代替预览成功。 */
@@ -87,14 +109,14 @@ async function expectPreviewLoaded(page: Page, url: string): Promise<void> {
 /** 截图前等待实际启动遮罩退出、字体就绪及有限动画完成，保持页面原有表现。 */
 async function captureScreenshot(page: Page, path: string): Promise<void> {
 	await page.locator('#splash').waitFor({ state: 'detached' });
-	await page.evaluate(/** 只等待浏览器已经存在的视觉活动，不改变动画或注入样式。 */ async (): Promise<void> => {
-		await document.fonts.ready;
-		const animations: Animation[] = document.getAnimations().filter(/** 有限的入场、退出及按钮波纹需要完成；持续循环动画保持原样。 */ (animation: Animation): boolean => {
+	await page.evaluate(/** 等待实际字体加载完成，不改变字体或注入样式。 */ async (): Promise<void> => { await document.fonts.ready; });
+	await expect.poll(/** 实时核对动画状态，避免持有折叠区域已结束但未交付的 finished Promise。 */ async (): Promise<number> => page.evaluate(
+		/** 只读取浏览器当前的有限动画，持续循环动画保持原样。 */
+		(): number => document.getAnimations().filter(/** 入场、退出及按钮波纹均按实际运行状态等待结束。 */ (animation: Animation): boolean => {
 			const endTime: number = Number(animation.effect?.getComputedTiming().endTime);
 			return Number.isFinite(endTime) && (animation.playState === 'running' || animation.pending);
-		});
-		await Promise.allSettled(animations.map(/** 正常结束或被浏览器取消，均结束本次实际观察到的动画。 */ (animation: Animation): Promise<Animation> => animation.finished));
-	});
+		}).length,
+	), { message: '截图前有限动画应已结束或被取消' }).toBe(0);
 	await page.screenshot({ path });
 }
 
@@ -185,6 +207,14 @@ test('空目录的中文管理入口可键盘打开，取消不写入', /** 真�
 	await page.keyboard.press('Enter');
 	await expect(page.getByTestId('decoration-manager-editor')).toBeVisible();
 	await expect(page.getByText('New decoration', { exact: true })).toHaveCount(0);
+	await expect(page.getByTestId('decoration-manager-upload')).toHaveText('上传素材');
+	await expect(page.getByTestId('decoration-manager-upload')).toBeInViewport();
+	await expect(page.getByTestId('decoration-manager-preview-title')).toHaveText('佩戴效果预览');
+	await expect(page.getByTestId('decoration-manager-preview-empty')).toContainText('尚未选择挂件素材');
+	await expect(page.getByTestId('decoration-manager-preview')).toHaveCount(0);
+	await expect(page.getByTestId('decoration-manager-url').locator('input')).toBeHidden();
+	await expect(page.getByTestId('decoration-manager-save')).toBeDisabled();
+	await captureScreenshot(page, info.outputPath('manager-editor-material-empty.png'));
 	await page.keyboard.press('Escape');
 	await expect(page.getByTestId('decoration-manager-editor')).toHaveCount(0);
 	await page.getByTestId('decoration-manager-add').click();
@@ -203,7 +233,8 @@ test('空目录的中文管理入口可键盘打开，取消不写入', /** 真�
 });
 
 test('设置进入管理后实际新增、编辑、删除，并在返回时刷新目录', /** 全流程通过管理表单提交，角色、分类与描述均由服务端回执核验。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>, info: TestInfo): Promise<void> => {
-	const url: string = await uploadFrame(page);
+	let creates: number = 0;
+	page.on('request', /** 素材准备不能暗中创建挂件，只有明确保存才产生创建请求。 */ (request: Request): void => { if (request.url().endsWith('/api/admin/avatar-decorations/create')) creates++; });
 	const role: Misskey.entities.Role = await createRole();
 	await open(page, '/settings/avatar-decoration');
 	await expect(page.getByTestId('decoration-empty')).toBeVisible();
@@ -211,7 +242,15 @@ test('设置进入管理后实际新增、编辑、删除，并在返回时刷�
 	await expect(page.getByTestId('avatar-decoration-manager')).toBeVisible();
 	await expect(page.getByTestId('decoration-manager-empty')).toBeVisible();
 	await page.getByTestId('decoration-manager-add').click();
-	await fillDraft(page, '管理新增星环', url, '精选');
+	const uploaded: Misskey.entities.DriveFile = await uploadFrameThroughEditor(page);
+	const url: string = uploaded.url;
+	await expectPreviewLoaded(page, url);
+	await expect(page.getByTestId('decoration-manager-preview').getByText('浅色背景预览', { exact: true })).toBeVisible();
+	await expect(page.getByTestId('decoration-manager-preview').getByText('深色背景预览', { exact: true })).toBeVisible();
+	await expect(page.getByTestId('decoration-manager-url').locator('input')).toBeHidden();
+	expect(await directory()).toEqual([]);
+	expect(creates).toBe(0);
+	await fillDetails(page, '管理新增星环', '精选');
 	await page.getByTestId('decoration-manager-role-add').click();
 	await expect(page.getByTestId('modal-dialog-ok')).toHaveCount(1);
 	const roleDialog: Locator = page.getByTestId('modal-dialog-ok').locator('..').locator('..');
@@ -231,6 +270,7 @@ test('设置进入管理后实际新增、编辑、删除，并在返回时刷�
 	await expect(page.getByTestId('decoration-manager-editor')).toHaveCount(0);
 	const createdDirectory: Misskey.entities.AdminAvatarDecorationsListResponse = await directory();
 	expect(createdDirectory).toHaveLength(1);
+	expect(creates).toBe(1);
 	const created: Misskey.entities.AdminAvatarDecorationsListResponse[number] = createdDirectory[0];
 	expect(created).toMatchObject({ name: '管理新增星环', url, category: '精选', description: '管理新增星环 的透明边框', roleIdsThatCanBeUsedThisDecoration: [role.id] });
 	await expect(card(page, created.id)).toContainText('管理新增星环');
@@ -260,6 +300,136 @@ test('设置进入管理后实际新增、编辑、删除，并在返回时刷�
 	await expect(page.getByTestId('decoration-manager-empty')).toBeVisible();
 	await page.goBack();
 	await expect(page.getByTestId('decoration-empty')).toBeVisible();
+});
+
+test('素材选择取消和非图片文件不改变草稿，取消添加保留已上传素材', /** 本地选择器和网盘取消都回到同一草稿，素材与挂件创建具有独立生命周期。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	let uploads: number = 0;
+	page.on('request', /** 非图片与空选择不得产生额外上传请求。 */ (request: Request): void => { if (request.url().endsWith('/api/drive/files/create')) uploads++; });
+	await open(page);
+	await page.getByTestId('decoration-manager-add').click();
+	const uploaded: Misskey.entities.DriveFile = await uploadFrameThroughEditor(page);
+	await fillDetails(page, '取消前保留的草稿', '保留分类');
+	const choosing: Promise<FileChooser> = page.waitForEvent('filechooser');
+	await page.getByTestId('decoration-manager-upload').click();
+	const chooser: FileChooser = await choosing;
+	await chooser.setFiles([]);
+	await expect(page.getByTestId('decoration-manager-upload')).toBeEnabled();
+	await expect(page.getByTestId('decoration-manager-material-error')).toHaveCount(0);
+	await expect(page.getByTestId('decoration-manager-url').locator('input')).toHaveValue(uploaded.url);
+	const choosingInvalid: Promise<FileChooser> = page.waitForEvent('filechooser');
+	await page.getByTestId('decoration-manager-upload').click();
+	const invalidChooser: FileChooser = await choosingInvalid;
+	await invalidChooser.setFiles({ name: 'not-an-image.txt', mimeType: 'text/plain', buffer: Buffer.from('not an image') });
+	await expect(page.getByTestId('decoration-manager-material-error')).toContainText('图片');
+	await expect(page.getByTestId('decoration-manager-upload')).toBeEnabled();
+	await expect(page.getByTestId('decoration-manager-file-input')).toHaveValue('');
+	expect(uploads).toBe(1);
+	await page.getByTestId('decoration-manager-drive').click();
+	await expect(page.getByTestId('decoration-manager-upload')).toBeDisabled();
+	await expect(page.getByText('选择文件', { exact: true })).toBeVisible();
+	await page.mouse.click(8, 8);
+	await expect(page.getByTestId('decoration-manager-upload')).toBeEnabled();
+	await expect(page.getByText('选择文件', { exact: true })).toHaveCount(0);
+	await page.getByTestId('decoration-manager-url-toggle').locator('summary').click();
+	await page.getByTestId('decoration-manager-url').locator('input').fill('');
+	await expect(page.getByTestId('decoration-manager-preview-empty')).toBeVisible();
+	await page.getByTestId('decoration-manager-drive').click();
+	await page.locator('[draggable="true"]').filter({ has: page.getByText(uploaded.name, { exact: true }) }).click();
+	await page.getByRole('button', { name: '完成' }).click();
+	await expect(page.getByTestId('decoration-manager-upload')).toBeEnabled();
+	await expect(page.getByTestId('decoration-manager-material-status')).toContainText('已选择网盘素材');
+	expect(uploads).toBe(1);
+	await expect(page.getByTestId('decoration-manager-url').locator('input')).toHaveValue(uploaded.url);
+	await expect(page.getByTestId('decoration-manager-name').locator('input')).toHaveValue('取消前保留的草稿');
+	await expect(page.getByTestId('decoration-manager-category').locator('input')).toHaveValue('保留分类');
+	await expectPreviewLoaded(page, uploaded.url);
+	await page.getByTestId('decoration-manager-cancel').click();
+	await expect(page.getByTestId('decoration-manager-editor')).toHaveCount(0);
+	expect(await directory()).toEqual([]);
+	const retained: Misskey.entities.DriveFile = await api(BASE_URL, 'drive/files/show', { i: admin.token, fileId: uploaded.id });
+	expect(retained.url).toBe(uploaded.url);
+});
+
+test('更换素材断网后保留原图，同文件重试及保存重试不重复上传', /** 上传和更新分别破坏一次真实传输，成功回执与最终实体均由真实后端提供。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	const originalUrl: string = await uploadFrame(page);
+	const original: Misskey.entities.AdminAvatarDecorationsListResponse[number] = await api(BASE_URL, 'admin/avatar-decorations/create', { i: admin.token, name: '原挂件', description: '', url: originalUrl });
+	let uploads: number = 0;
+	page.on('request', /** 保存重试不得重新上传已经存在的素材。 */ (request: Request): void => { if (request.url().endsWith('/api/drive/files/create')) uploads++; });
+	await open(page);
+	await card(page, original.id).click();
+	await fillDetails(page, '更换后保存的挂件', '保留编辑分类');
+	await page.route('**/api/drive/files/create', /** 只中断浏览器上传链，验证传输失败会结束忙碌状态。 */ async (route: Route): Promise<void> => { await route.abort(); });
+	const choosing: Promise<FileChooser> = page.waitForEvent('filechooser');
+	await page.getByTestId('decoration-manager-upload').click();
+	const chooser: FileChooser = await choosing;
+	await chooser.setFiles({ name: 'manager-retry-frame.png', mimeType: 'image/png', buffer: framePng });
+	await expect(page.getByTestId('decoration-manager-material-error')).toContainText('素材上传失败');
+	await expect(page.getByTestId('decoration-manager-upload')).toBeEnabled();
+	await expect(page.getByTestId('decoration-manager-save')).toBeEnabled();
+	await expect(page.getByTestId('decoration-manager-url').locator('input')).toHaveValue(originalUrl);
+	await expect(page.getByTestId('decoration-manager-name').locator('input')).toHaveValue('更换后保存的挂件');
+	await expect(page.getByTestId('decoration-manager-category').locator('input')).toHaveValue('保留编辑分类');
+	await expectPreviewLoaded(page, originalUrl);
+	expect((await directory())[0]).toMatchObject({ id: original.id, name: '原挂件', url: originalUrl });
+	await page.unroute('**/api/drive/files/create');
+	const replacement: Misskey.entities.DriveFile = await uploadFrameThroughEditor(page, 'manager-retry-frame.png');
+	await expectPreviewLoaded(page, replacement.url);
+	await expect(page.getByTestId('decoration-manager-url').locator('input')).toHaveValue(replacement.url);
+	expect(uploads).toBe(2);
+	await page.route('**/api/admin/avatar-decorations/update', /** 保存失败不撤销已成功的素材上传。 */ async (route: Route): Promise<void> => { await route.abort(); });
+	await page.getByTestId('decoration-manager-save').click();
+	await expect(page.getByTestId('decoration-manager-save-error')).toContainText('保存失败');
+	await expect(page.getByTestId('decoration-manager-url').locator('input')).toHaveValue(replacement.url);
+	expect(uploads).toBe(2);
+	await page.unroute('**/api/admin/avatar-decorations/update');
+	await page.getByTestId('decoration-manager-save').click();
+	await expect(page.getByTestId('decoration-manager-editor')).toHaveCount(0);
+	expect((await directory())[0]).toMatchObject({ id: original.id, name: '更换后保存的挂件', url: replacement.url, category: '保留编辑分类' });
+	expect(uploads).toBe(2);
+});
+
+test('上传回执未交付时可以取消，迟到结果不覆盖原素材', /** 只延迟真实上传响应，主动取消不得变成错误提示或清空原草稿。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	const originalUrl: string = await uploadFrame(page);
+	await open(page);
+	await page.getByTestId('decoration-manager-add').click();
+	await fillDraft(page, '上传取消后仍可保存', originalUrl);
+	let release: () => void = /** 尚未持有回执时没有需要释放的响应。 */ (): void => {};
+	const gate: Promise<void> = new Promise(/** 保留真实上传回执直到用户取消本次传输。 */ (resolve: () => void): void => { release = resolve; });
+	let ready: () => void = /** 通知真实后端已经接受本次素材。 */ (): void => {};
+	const received: Promise<void> = new Promise(/** 确保取消发生在回执尚未交付时。 */ (resolve: () => void): void => { ready = resolve; });
+	await page.route('**/api/drive/files/create', /** 不伪造上传成功，已被浏览器取消的请求不再交付回执。 */ async (route: Route): Promise<void> => {
+		const response: APIResponse = await route.fetch();
+		ready();
+		await gate;
+		if (route.request().failure() === null) {
+			await route.fulfill({ response });
+		} else {
+			await route.abort();
+		}
+	});
+	try {
+		const choosing: Promise<FileChooser> = page.waitForEvent('filechooser');
+		await page.getByTestId('decoration-manager-upload').click();
+		const chooser: FileChooser = await choosing;
+		await chooser.setFiles({ name: 'manager-canceled-frame.png', mimeType: 'image/png', buffer: framePng });
+		await received;
+		await expect(page.getByTestId('decoration-manager-save')).toBeDisabled();
+		await expect(page.getByTestId('decoration-manager-upload')).toBeDisabled();
+		await expect(page.getByTestId('decoration-manager-drive')).toBeDisabled();
+		const canceled: Promise<Request> = page.waitForEvent('requestfailed', { predicate: /** 等待真实 XHR 中止后再释放所持回执。 */ (request: Request): boolean => request.url().endsWith('/api/drive/files/create') });
+		await page.getByTestId('decoration-manager-upload-cancel').click();
+		await canceled;
+		await expect(page.getByTestId('decoration-manager-upload')).toBeEnabled();
+		await expect(page.getByTestId('decoration-manager-material-error')).toHaveCount(0);
+		await expect(page.getByTestId('decoration-manager-url').locator('input')).toHaveValue(originalUrl);
+		release();
+		await page.unrouteAll({ behavior: 'wait' });
+		await expect(page.getByTestId('decoration-manager-url').locator('input')).toHaveValue(originalUrl);
+		await expectPreviewLoaded(page, originalUrl);
+		await page.getByTestId('decoration-manager-save').click();
+		await expect(page.getByTestId('decoration-manager-editor')).toHaveCount(0);
+		expect((await directory())[0]).toMatchObject({ name: '上传取消后仍可保存', url: originalUrl });
+	} finally { release(); }
 });
 
 test('写入回执到达前阻止重复提交、ESC 与背景关闭', /** 后端已经执行真实创建，仅延迟回执以覆盖 busy 边界。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
@@ -500,6 +670,7 @@ test('桌面亮色编辑器沿用全局滚动条且操作区不随正文滚动',
 	await fillDraft(page, '亮色管理预览', url);
 	await expectEditorLayout(page, false);
 	await page.getByTestId('decoration-manager-preview').scrollIntoViewIfNeeded();
+	await expectPreviewLoaded(page, url);
 	await captureScreenshot(page, info.outputPath('manager-editor-desktop-light.png'));
 	await page.getByTestId('decoration-manager-cancel').click();
 	expect(await directory()).toEqual([]);
@@ -534,6 +705,7 @@ test.describe('手机管理抽屉', (): void => {
 			if (landscape) await page.setViewportSize({ width: 844, height: 390 });
 			await expectEditorLayout(page, true);
 			await page.getByTestId('decoration-manager-preview').scrollIntoViewIfNeeded();
+			await expectPreviewLoaded(page, url);
 			await captureScreenshot(page, info.outputPath(`manager-${name}-initial.png`));
 			await page.route('**/api/admin/avatar-decorations/create', /** 首次提交仅模拟传输中断。 */ async (route: Route): Promise<void> => { await route.abort(); });
 			await page.getByTestId('decoration-manager-save').tap();
@@ -552,6 +724,7 @@ test.describe('手机管理抽屉', (): void => {
 			await expectEditorLayout(page, true);
 			await expect(page.getByTestId('decoration-manager-delete')).toBeInViewport();
 			await page.getByTestId('decoration-manager-preview').scrollIntoViewIfNeeded();
+			await expectPreviewLoaded(page, url);
 			await captureScreenshot(page, info.outputPath(`manager-${name}-edit.png`));
 			await page.getByTestId('decoration-manager-cancel').tap();
 			await expect(page.getByTestId('decoration-manager-editor')).toHaveCount(0);
