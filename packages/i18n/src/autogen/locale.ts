@@ -13692,4 +13692,130 @@ export interface Locale extends ILocale {
          */
         "removeAllConfirm": string;
     };
+    "_avatarDecorationManager": {
+        /**
+         * アバターデコレーション管理
+         */
+        "title": string;
+        /**
+         * 画像と説明、利用できるロールを管理します。
+         */
+        "intro": string;
+        /**
+         * {count}件のデコレーション
+         */
+        "count": ParameterizedString<"count">;
+        /**
+         * {count}件のロールが利用可能
+         */
+        "roleCount": ParameterizedString<"count">;
+        /**
+         * すべてのロールが利用可能
+         */
+        "allRoles": string;
+        /**
+         * アバターデコレーションはまだありません
+         */
+        "empty": string;
+        /**
+         * 「追加」から画像と説明を登録できます。
+         */
+        "emptyDescription": string;
+        /**
+         * 一覧を読み込めませんでした
+         */
+        "loadFailed": string;
+        /**
+         * 通信状態と管理権限を確認してから再試行してください。
+         */
+        "loadFailedDescription": string;
+        /**
+         * 一覧の更新に失敗しました。表示中の内容は保持されています。
+         */
+        "refreshFailed": string;
+        /**
+         * アバターデコレーションを保存しました。
+         */
+        "saved": string;
+        /**
+         * アバターデコレーションを削除しました。
+         */
+        "deleted": string;
+        /**
+         * 保存しましたが、一覧を更新できませんでした。再読み込みして最新の内容を確認してください。
+         */
+        "savedRefreshFailed": string;
+        /**
+         * 削除しましたが、一覧を更新できませんでした。再読み込みして最新の内容を確認してください。
+         */
+        "deletedRefreshFailed": string;
+        /**
+         * アバターデコレーションを管理する権限がありません。
+         */
+        "permissionDenied": string;
+        /**
+         * ページまたはアカウントが変更されました。管理ページを開き直してください。
+         */
+        "changedElsewhere": string;
+        /**
+         * アバターデコレーションを追加
+         */
+        "createTitle": string;
+        /**
+         * アバターデコレーションを編集
+         */
+        "editTitle": string;
+        /**
+         * ライト背景
+         */
+        "lightPreview": string;
+        /**
+         * ダーク背景
+         */
+        "darkPreview": string;
+        /**
+         * 画像を読み込めませんでした。アドレスを確認して再試行してください。
+         */
+        "imageFailed": string;
+        /**
+         * ロールを読み込めませんでした。選択中のロールは保持されています。
+         */
+        "roleLoadFailed": string;
+        /**
+         * 読み込めないロール（{id}）
+         */
+        "unknownRole": ParameterizedString<"id">;
+        /**
+         * ロール「{name}」を取り除く
+         */
+        "removeRole": ParameterizedString<"name">;
+        /**
+         * 追加できる公開ロールはありません。
+         */
+        "noAvailableRoles": string;
+        /**
+         * 名前と画像のアドレスを入力してください。
+         */
+        "requiredFields": string;
+        /**
+         * 保存に失敗しました。入力内容は保持されています。通信状態や権限を確認して再試行してください。
+         */
+        "saveFailed": string;
+        /**
+         * 削除に失敗しました。通信状態や権限を確認して再試行してください。
+         */
+        "deleteFailed": string;
+        /**
+         * 保存中…
+         */
+        "saving": string;
+        /**
+         * 削除中…
+         */
+        "deleting": string;
+        /**
+         * ロールを読み込み中…
+         */
+        "loadingRoles": string;
+    };
 }
