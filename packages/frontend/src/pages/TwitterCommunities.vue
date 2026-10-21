@@ -4,47 +4,57 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <!--
-文件领域：Twitter UI · 频道主页（P-26 / ADR-0005，/channels 页面变体，Communities IA，Full 等级）
-
-作用：消费页面层（channels.vue）持有的频道分页器与搜索回调，呈现
-Communities 信息架构——常驻频道搜索 + 双 tab：
-  · ホーム（Home）：顶部已关注频道横条 + 已关注频道帖子聚合流（channels/followed-timeline）；
-  · みつける（Explore）：注目频道条 + 管理 / 收藏折叠区 + 全频道帖子聚合流（channels/global-timeline）。
-搜索提交后结果面板替换内容区（X Communities 常驻搜索行为），清空即退出。
-
-数据链角色：页面层（paginator / 搜索业务，单向传入）→ 本组件（壳与呈现）；
-tab 与搜索词草稿为组件临时 UI 状态（规范第 12 条）。
-布局真值：IA 与常驻搜索为 X-behavior（nitter 无 Communities 域，检索证据见
-port-fidelity-audit 第九节）；返回头 / tab 行 / 时间线复用既有 twitter 变体。
+文件领域：Twitter 频道入口的页面展示。
+作用：以标题／搜索、主标签、横向频道卡片和帖子流组织内容，管理与收藏使用独立窗口。
+数据链：channels.vue 持有原分页器并调度请求 → 本组件只读呈现 → 交互事件返回页面所有者。
+布局依据：X 归档的成员社区横条；发现推荐横条为 Misskey 业务映射，颜色与主列沿用 Nitter Token。
 -->
 
 <template>
-<div ref="rootEl" :class="[$style.root, { [$style.mobile]: isMobile }]" class="_pageScrollable">
+<div ref="rootEl" :class="[$style.root, { [$style.mobile]: isMobile }]" class="_pageScrollable" data-testid="twitter-communities">
 	<MkStickyContainer>
 		<template #header>
-			<header :class="$style.header">
-				<button
-					:class="$style.back"
-					class="_button"
-					type="button"
-					:aria-label="i18n.ts.goBack"
-					@click="goBack"
-				>
+			<header :class="$style.header" data-testid="twitter-communities-header">
+				<button :class="$style.iconButton" class="_button" type="button" :aria-label="i18n.ts.goBack" @click="goBack">
 					<i class="ti ti-arrow-left" aria-hidden="true"></i>
 				</button>
-				<h1 :class="$style.title">{{ i18n.ts.channel }}</h1>
-			</header>
-
-			<div :class="$style.searchRow">
 				<TwitterSearchField
+					v-if="searchOpen"
 					v-model="searchDraft"
 					:class="$style.searchField"
+					:autofocus="true"
 					@submit="submitSearch"
-					@clear="exitSearch"
+					@clear="clearSearch"
 				/>
-			</div>
-
-			<nav v-if="!searching" :class="$style.tabs" role="tablist" :aria-label="i18n.ts.channel">
+				<h1 v-else :class="$style.title">{{ i18n.ts.channel }}</h1>
+				<button
+					v-if="!searchOpen"
+					:class="$style.iconButton"
+					class="_button"
+					type="button"
+					:aria-label="i18n.ts.search"
+					data-testid="twitter-community-search"
+					@click="openSearch"
+				>
+					<i class="ti ti-search" aria-hidden="true"></i>
+				</button>
+				<button v-else :class="$style.iconButton" class="_button" type="button" :aria-label="i18n.ts.close" @click="exitSearch">
+					<i class="ti ti-x" aria-hidden="true"></i>
+				</button>
+				<button
+					:class="$style.iconButton"
+					class="_button"
+					type="button"
+					:aria-label="i18n.ts.menu"
+					aria-haspopup="menu"
+					:disabled="library != null"
+					data-testid="twitter-community-menu"
+					@click="openMenu"
+				>
+					<i class="ti ti-dots" aria-hidden="true"></i>
+				</button>
+			</header>
+			<nav v-if="!searching" ref="tabList" :class="$style.tabs" role="tablist" :aria-label="i18n.ts.channel">
 				<button
 					v-for="item in tabs"
 					:id="`twitter-communities-tab-${item.value}`"
@@ -56,7 +66,7 @@ port-fidelity-audit 第九节）；返回头 / tab 行 / 时间线复用既有 t
 					:aria-selected="tab === item.value"
 					:aria-controls="`twitter-communities-panel-${item.value}`"
 					:tabindex="tab === item.value ? 0 : -1"
-					@click="tab = item.value"
+					@click="selectTab(item.value)"
 					@keydown="onTabKeydown"
 				>
 					{{ item.title }}
@@ -64,106 +74,43 @@ port-fidelity-audit 第九节）；返回头 / tab 行 / 时间线复用既有 t
 			</nav>
 		</template>
 
-		<!-- 搜索结果面板：替换内容区（X 常驻搜索行为） -->
-		<div v-if="searching" :class="$style.body">
-			<div :class="$style.searchResultHeader">
-				<span>{{ i18n.ts.searchResult }}</span>
-				<button
-					class="_button"
-					type="button"
-					:class="$style.searchResultClose"
-					:aria-label="i18n.ts.close"
-					@click="exitSearch"
-				>
-					<i class="ti ti-x" aria-hidden="true"></i>
-				</button>
-			</div>
-			<div v-if="searchPaginator != null" :class="$style.searchResultBody">
-				<MkChannelList :key="searchKey" :paginator="searchPaginator"/>
-			</div>
+		<div v-if="searching" :class="$style.body" data-testid="twitter-community-search-results">
+			<MkPagination v-if="searchPaginator != null" :key="searchKey" :paginator="searchPaginator" :autoLoad="false" :pullToRefresh="false">
+				<template #empty><TwitterPageState type="empty"/></template>
+				<template #default="{ items }">
+					<div :class="$style.searchResults">
+						<MkChannelPreview v-for="channel in items" :key="channel.id" :channel="channel"/>
+					</div>
+				</template>
+			</MkPagination>
 		</div>
-
-		<div
-			v-else
-			:id="`twitter-communities-panel-${tab}`"
-			:class="$style.body"
-			role="tabpanel"
-			:aria-labelledby="`twitter-communities-panel-${tab}`"
-		>
+		<div v-else :id="`twitter-communities-panel-${tab}`" :class="$style.body" role="tabpanel" :aria-labelledby="`twitter-communities-tab-${tab}`">
 			<template v-if="tab === 'home'">
-				<!-- 已关注频道圆形标识行（A-3）：X Communities joined 行为；空关注时
-				     MkPagination 空态被 #empty 覆写为无内容，由引导卡接管 -->
-				<MkPagination :paginator="followedChannelsPaginator">
-					<template #empty></template>
-					<template #default="{ items }">
-						<div v-if="items.length > 0" :class="$style.channelStrip" role="list">
-							<MkA
-								v-for="channel in items"
-								:key="channel.id"
-								:class="$style.channelItem"
-								:to="`/channels/${channel.id}`"
-								role="listitem"
-							>
-								<span :class="$style.channelAvatar" :style="channelAvatarStyle(channel)"></span>
-								<span :class="$style.channelAvatarName">{{ channel.name }}</span>
-							</MkA>
-						</div>
-					</template>
-				</MkPagination>
-
-				<!-- 空关注引导卡（A-3）：X 冷启动为推荐流，此处简化为 CTA
-				     （不复用 featured paginator——同实例双处挂载会引入切 tab 重拉），偏离登记 CH-12 -->
-				<div v-if="followedChannelsEmpty" :class="$style.emptyGuide">
-					<div :class="$style.emptyGuideText">{{ i18n.ts._channel.noFollowing }}</div>
-					<MkButton primary rounded @click="tab = 'explore'">{{ i18n.ts.explore }}</MkButton>
+				<TwitterCommunityStrip
+					:channels="followedChannelsPaginator.items.value"
+					:label="i18n.ts._channel.following"
+					:loading="followedChannelsPaginator.fetching.value"
+					:error="followedChannelsPaginator.error.value"
+					:canFetchMore="followedChannelsPaginator.canFetchOlder.value"
+					:fetchingMore="followedChannelsPaginator.fetchingOlder.value"
+					@retry="retryFollowedChannels"
+					@loadMore="loadMoreChannels"
+				/>
+				<div v-if="followedChannelsEmpty" :class="$style.emptyGuide" data-testid="twitter-community-empty-following" role="status">
+					<h2>{{ i18n.ts._channel.noFollowing }}</h2>
+					<MkButton primary rounded @click="discover">{{ i18n.ts.explore }}</MkButton>
 				</div>
-
-				<!-- Communities 流不带控制条（A-1：X 参照无排序/控制组件，CH-12 登记） -->
-				<MkNotesTimeline :paginator="followedTimelinePaginator" variant="twitter" :withControl="false"/>
+				<MkNotesTimeline v-else-if="followedChannelsReady" :paginator="followedTimelinePaginator" variant="twitter" :autoLoad="false" :withControl="false"/>
 			</template>
-
-			<template v-else-if="tab === 'explore'">
-				<!-- 注目频道卡片网格（A-2）：对齐 X Discover 双列卡片形态；
-				     MkChannelPreview twitter 变体已映射 tweet/card.scss 真值 -->
-				<MkPagination :paginator="featuredPaginator">
-					<template #empty></template>
-					<template #default="{ items }">
-						<div v-if="items.length > 0" :class="$style.sectionHeader">{{ i18n.ts._channel.featured }}</div>
-						<div :class="$style.featuredGrid">
-							<MkChannelPreview v-for="channel in items" :key="channel.id" :channel="channel"/>
-						</div>
-					</template>
-				</MkPagination>
-
-				<!-- Communities 流不带控制条（A-1） -->
-				<MkNotesTimeline :paginator="globalTimelinePaginator" variant="twitter" :withControl="false"/>
-
-				<!-- 管理 / 收藏折叠区（A-4：Misskey 能力安置，移至流后降低视觉权重，CH-12 登记） -->
-				<div :class="$style.manageSection">
-					<MkFoldableSection>
-						<template #header>{{ i18n.ts._channel.owned }}</template>
-						<div ref="ownedBody" :class="$style.manageBody">
-							<div v-if="canCreateChannel" :class="$style.createRow">
-								<MkButton type="routerLink" primary rounded to="/channels/new"><i class="ti ti-plus"></i> {{ i18n.ts.createNew }}</MkButton>
-							</div>
-							<MkPagination v-slot="{ items }" :paginator="ownedPaginator">
-								<div :class="$style.manageGrid">
-									<MkChannelPreview v-for="channel in items" :key="channel.id" :channel="channel"/>
-								</div>
-							</MkPagination>
-						</div>
-					</MkFoldableSection>
-					<MkFoldableSection>
-						<template #header>{{ i18n.ts.favorites }}</template>
-						<div ref="favoritesBody" :class="$style.manageBody">
-							<MkPagination v-slot="{ items }" :paginator="favoritesPaginator">
-								<div :class="$style.manageGrid">
-									<MkChannelPreview v-for="channel in items" :key="channel.id" :channel="channel"/>
-								</div>
-							</MkPagination>
-						</div>
-					</MkFoldableSection>
-				</div>
+			<template v-else>
+				<TwitterCommunityStrip
+					:channels="featuredPaginator.items.value"
+					:label="i18n.ts._channel.featured"
+					:loading="featuredPaginator.fetching.value"
+					:error="featuredPaginator.error.value"
+					@retry="retryFeatured"
+				/>
+				<MkNotesTimeline :paginator="globalTimelinePaginator" variant="twitter" :autoLoad="false" :withControl="false"/>
 			</template>
 		</div>
 	</MkStickyContainer>
@@ -171,141 +118,181 @@ port-fidelity-audit 第九节）；返回头 / tab 行 / 时间线复用既有 t
 </template>
 
 <script lang="ts" setup>
-import { watch } from 'vue';
-import type { Ref } from 'vue';
-import { computed, ref, useTemplateRef } from 'vue';
-import type * as Misskey from 'misskey-js';
+import { computed, onBeforeUnmount, onDeactivated, shallowReactive, ref, useTemplateRef } from 'vue';
+import type { ComputedRef, ModelRef, Ref, ShallowRef } from 'vue';
+import type { ComponentProps } from 'vue-component-type-helpers';
 import MkChannelPreview from '@/components/MkChannelPreview.vue';
-import MkChannelList from '@/components/MkChannelList.vue';
 import MkPagination from '@/components/MkPagination.vue';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkButton from '@/components/MkButton.vue';
-import MkFoldableSection from '@/components/MkFoldableSection.vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
-import { TwitterSearchField, useTwitterLayout } from '@/ui/twitter/index.js';
-import { useTwitterScrollPositionKeeper } from '@/ui/twitter/index.js';
+import { TwitterCommunityLibraryDialog, TwitterCommunityStrip, TwitterPageState, TwitterSearchField, useTwitterLayout, useTwitterScrollPositionKeeper } from '@/ui/twitter/index.js';
+import type { TwitterCommunitiesTab, TwitterCommunityLibrary } from '@/ui/twitter/index.js';
 import { i18n } from '@/i18n.js';
 import type { Paginator } from '@/utility/paginator.js';
+import * as os from '@/os.js';
 
-/** 频道主页 tab 值（X Communities IA：Home / Explore；ADR-0005 D1）。 */
-type CommunitiesTab = 'home' | 'explore';
-
-const props = defineProps<{
-	/** Home 聚合流数据源（channels/followed-timeline，页面层持有）。 */
+/** 页面所有者提供的只读查询依赖，不创建分页器或频道实体副本。 */
+type CommunitiesProps = Readonly<{
 	followedTimelinePaginator: Paginator<'channels/followed-timeline'>;
-	/** Explore 聚合流数据源（channels/global-timeline，页面层持有）。 */
 	globalTimelinePaginator: Paginator<'channels/global-timeline'>;
-	/** 已关注频道横条数据源（channels/followed，页面层持有）。 */
 	followedChannelsPaginator: Paginator<'channels/followed'>;
-	/** 注目频道条数据源（channels/featured，页面层持有）。 */
 	featuredPaginator: Paginator<'channels/featured'>;
-	/** 管理折叠区数据源（channels/owned，页面层持有）。 */
 	ownedPaginator: Paginator<'channels/owned'>;
-	/** 收藏折叠区数据源（channels/my-favorites，页面层持有）。 */
 	favoritesPaginator: Paginator<'channels/my-favorites'>;
-	/** 搜索提交回调（paginator 创建业务留在页面层，规范第 12 条）。 */
 	onSearch: (query: string) => void;
-	/** 搜索结果数据源（null = 尚未执行搜索）。 */
 	searchPaginator: Paginator<'channels/search'> | null;
-	/** 搜索结果重渲染 key。 */
 	searchKey: string;
-	/** 当前用户是否可创建频道（管理折叠区创建按钮）。 */
 	canCreateChannel: boolean;
-}>();
+}>;
+/** 保持页面传入的查询实例，不建立业务状态副本。 */
+const props: CommunitiesProps = defineProps<CommunitiesProps>();
 
-/** 当前选中 tab（页面层 v-model 双向绑定；KeepAlive 回访定向刷新依赖页面层持有）。 */
-const tab = defineModel<string>('tab');
+/** 只将请求意图交回页面所有者，加载状态仍由原分页器提供。 */
+type CommunitiesEvents = {
+	(event: 'retryFollowedChannels'): void;
+	(event: 'loadMoreChannels'): void;
+	(event: 'retryFeatured'): void;
+	(event: 'retryLibrary'): void;
+};
+/** 按事件契约传递请求意图。 */
+const emit: CommunitiesEvents = defineEmits<CommunitiesEvents>();
 
-/** 折叠体是否实际显示属于临时 UI 状态，向原分页器所有者报告即可。 */
-const ownedPanelVisible: Ref<boolean> = defineModel<boolean>('ownedPanelVisible', { default: false });
-const favoritesPanelVisible: Ref<boolean> = defineModel<boolean>('favoritesPanelVisible', { default: false });
-const ownedBody: Readonly<Ref<HTMLDivElement | null>> = useTemplateRef<HTMLDivElement>('ownedBody');
-const favoritesBody: Readonly<Ref<HTMLDivElement | null>> = useTemplateRef<HTMLDivElement>('favoritesBody');
+/** 影响请求可见性的临时 UI 状态由页面持有，供回访调度直接消费。 */
+const tab: ModelRef<TwitterCommunitiesTab> = defineModel<TwitterCommunitiesTab>('tab', { required: true });
+/** 搜索结果是否覆盖当前帖子区域。 */
+const searching: ModelRef<boolean> = defineModel<boolean>('searching', { default: false });
+/** 独立频道资料库当前打开的入口。 */
+const library: ModelRef<TwitterCommunityLibrary | null> = defineModel<TwitterCommunityLibrary | null>('library', { default: null });
+/** 搜索框展开状态不承担业务查询事实。 */
+const searchOpen: Ref<boolean> = ref<boolean>(false);
+/** 尚未提交的查询草稿。 */
+const searchDraft: Ref<string> = ref<string>('');
+/** 布局断点沿用 Shell 的唯一来源。 */
+const { isMobile }: ReturnType<typeof useTwitterLayout> = useTwitterLayout();
+/** 只向现有滚动恢复提供页面根元素。 */
+const rootEl: Readonly<ShallowRef<HTMLDivElement | null>> = useTemplateRef<HTMLDivElement>('rootEl');
+/** 键盘切换标签后的焦点容器。 */
+const tabList: Readonly<ShallowRef<HTMLElement | null>> = useTemplateRef<HTMLElement>('tabList');
+/** 页面只保留关闭意图入口，弹层实例由全局弹层宿主负责释放。 */
+let dismissLibrary: (() => void) | null = null;
 
-/** 只观察业务包裹节点的显示几何，不读取或修改 MkFoldableSection 内部状态。 */
-function observeFoldBody(element: Readonly<Ref<HTMLDivElement | null>>, visible: Ref<boolean>): void {
-	watch(element, /** 父 v-show 折叠或 KeepAlive 停用会使包裹节点尺寸归零。 */ (node: HTMLDivElement | null, _previous: HTMLDivElement | null, cleanup: (dispose: () => void) => void): void => {
-		if (node == null) { visible.value = false; return; }
-
-		/** 可见性只调度 UI 查询，不是环境 readiness 或业务资格。 */
-		function update(): void { visible.value = node != null && node.getClientRects().length > 0 && node.getBoundingClientRect().height > 0; }
-
-		const observer: ResizeObserver = new ResizeObserver(update);
-		observer.observe(node);
-		update();
-		cleanup(/** 解除节点观察，防止缓存驱逐后泄漏。 */ (): void => { observer.disconnect(); });
-	}, { flush: 'post' });
-}
-
-observeFoldBody(ownedBody, ownedPanelVisible);
-observeFoldBody(favoritesBody, favoritesPanelVisible);
-
-const { isMobile } = useTwitterLayout();
-const rootEl = useTemplateRef<HTMLDivElement>('rootEl');
-
-/** 保留列表滚动位置（返回导航后恢复）。 */
 useTwitterScrollPositionKeeper(rootEl);
 
-/** Home 空关注判定（A-3 引导卡渲染条件：拉取完成且无条目）。 */
-const followedChannelsEmpty = computed(() =>
-	!props.followedChannelsPaginator.fetching.value
-	&& props.followedChannelsPaginator.items.value.length === 0);
-
-/**
- * 圆形标识背景样式：banner cover，无 banner 回退频道色（X joined 行形态，CH-12 登记）。
- *
- * @param channel 已关注频道实体
- */
-function channelAvatarStyle(channel: Misskey.entities.Channel): { backgroundImage?: string; backgroundColor?: string } {
-	if (channel.bannerUrl != null) {
-		return { backgroundImage: `url(${channel.bannerUrl})` };
-	}
-	return { backgroundColor: channel.color };
-}
-
-/** tab 定义（X Communities 命名：ホーム / みつける，均复用既有 locale key）。 */
-const tabs = computed(() => [
+/** 空关注只能由成功完成的查询确认，错误不降级为空集合。 */
+const followedChannelsEmpty: ComputedRef<boolean> = computed<boolean>(/** 读取唯一分页器事实。 */ (): boolean =>
+	!props.followedChannelsPaginator.fetching.value && !props.followedChannelsPaginator.error.value && props.followedChannelsPaginator.items.value.length === 0);
+/** 确认存在关注频道后，帖子区域才负责自己的加载与空态。 */
+const followedChannelsReady: ComputedRef<boolean> = computed<boolean>(/** 不将首拉或错误判成可用集合。 */ (): boolean =>
+	!props.followedChannelsPaginator.fetching.value && !props.followedChannelsPaginator.error.value && props.followedChannelsPaginator.items.value.length > 0);
+/** 标签定义引用领域唯一导航类型。 */
+type CommunityTabOption = Readonly<{ value: TwitterCommunitiesTab; title: string }>;
+/** 只读标签视图从权威导航值派生。 */
+const tabs: ComputedRef<readonly CommunityTabOption[]> = computed<readonly CommunityTabOption[]>(/** 本地化展示从导航值单向派生。 */ (): readonly CommunityTabOption[] => [
 	{ value: 'home', title: i18n.ts.home },
 	{ value: 'explore', title: i18n.ts.explore },
-] satisfies Array<{ value: CommunitiesTab; title: string }>);
+]);
 
-/** 搜索词草稿（组件临时 UI 状态，提交后才回传页面层）。 */
-const searchDraft = ref('');
+/** 选中主标签不重新创建查询实例。 */
+function selectTab(value: TwitterCommunitiesTab): void { tab.value = value; }
 
-/** 搜索结果面板开关（true 时内容区替换为结果面板，X 常驻搜索行为）。 */
-const searching = ref(false);
+/** 空关注引导只改变当前页面导航。 */
+function discover(): void { selectTab('explore'); }
 
-/** 提交搜索：进入结果面板并转发页面层回调（K-14 守卫在页面层）。 */
+/** 打开顶部盒内的频道搜索输入。 */
+function openSearch(): void { searchOpen.value = true; }
+
+/** 空白查询不创建结果分页器。 */
 function submitSearch(query: string): void {
+	if (query.trim() === '') { clearSearch(); return; }
 	searching.value = true;
-	props.onSearch(query);
+	props.onSearch(query.trim());
 }
 
-/** 退出搜索结果面板（清空草稿；不销毁结果 paginator，便于再次进入刷新）。 */
-function exitSearch(): void {
-	searching.value = false;
-}
+/** 清空输入后恢复主标签，保留已加载查询的唯一所有者。 */
+function clearSearch(): void { searching.value = false; }
 
-/** tab 键盘巡游（左右 / Home / End；与 TwitterSearch 同构的 roving tabindex）。 */
-function onTabKeydown(ev: KeyboardEvent): void {
-	const currentIndex = tabs.value.findIndex(item => item.value === tab.value);
-	let nextIndex: number | null = null;
+/** 收起搜索时同时移除草稿及结果面板。 */
+function exitSearch(): void { searchDraft.value = ''; searching.value = false; searchOpen.value = false; }
 
-	if (ev.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.value.length;
-	else if (ev.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.value.length) % tabs.value.length;
-	else if (ev.key === 'Home') nextIndex = 0;
-	else if (ev.key === 'End') nextIndex = tabs.value.length - 1;
-
-	if (nextIndex == null) return;
-
-	ev.preventDefault();
-	tab.value = tabs.value[nextIndex].value;
-}
-
-/** 返回上一页（与 TwitterTag / TwitterChannel 一致的返回行为）。 */
+/** 返回优先离开搜索模式，否则使用既有浏览器历史。 */
 function goBack(): void {
-	window.history.back();
+	if (searchOpen.value) exitSearch();
+	else window.history.back();
 }
+
+/** 菜单仅暴露真实的频道管理能力，不复制 X 的帖子排序入口。 */
+function openMenu(event: MouseEvent): void {
+	void os.popupMenu([{
+		text: i18n.ts._channel.owned,
+		icon: 'ti ti-device-tv',
+		action: /** 进入独立管理窗口。 */ (): void => { openLibrary('owned'); },
+	}, {
+		text: i18n.ts.favorites,
+		icon: 'ti ti-star',
+		action: /** 进入独立收藏窗口。 */ (): void => { openLibrary('favorites'); },
+	}], event.currentTarget);
+}
+
+/** 从窗口公共 props 派生可写的弹层宿主输入，业务实体仍为只读引用。 */
+type LibraryPopupProps = { -readonly [Key in keyof ComponentProps<typeof TwitterCommunityLibraryDialog>]: ComponentProps<typeof TwitterCommunityLibraryDialog>[Key] };
+
+/** 在既有全局弹层宿主打开资料库，统一覆盖层定位与关闭生命周期。 */
+function openLibrary(kind: TwitterCommunityLibrary): void {
+	if (library.value != null) return;
+	library.value = kind;
+	const popupProps: LibraryPopupProps = shallowReactive<LibraryPopupProps>({
+		kind,
+		paginator: kind === 'owned' ? props.ownedPaginator : props.favoritesPaginator,
+		canCreateChannel: props.canCreateChannel,
+		closing: false,
+	});
+	/** 关闭先驱动基础窗口释放焦点陷阱，closed 后才撤销全局实例。 */
+	const requestClose: () => void = (): void => { popupProps.closing = true; };
+	const { dispose }: { dispose: () => void } = os.popup(TwitterCommunityLibraryDialog, popupProps, {
+		close: requestClose,
+		navigate: requestClose,
+		closed: /** 关闭完成后清理页面可见性和全局弹层，不直接卸载打开的模态。 */ (): void => {
+			dispose();
+			library.value = null;
+			dismissLibrary = null;
+		},
+		retry: retryLibrary,
+	});
+	dismissLibrary = requestClose;
+}
+
+/** 页面离开时仍经过基础窗口关闭流程，避免残留 inert 与焦点陷阱。 */
+function closeLibrary(): void { dismissLibrary?.(); }
+
+/** 关注横条失败时请求原查询重试。 */
+function retryFollowedChannels(): void { emit('retryFollowedChannels'); }
+
+/** 横条尾部的加载操作仍交给原游标分页器。 */
+function loadMoreChannels(): void { emit('loadMoreChannels'); }
+
+/** 推荐横条失败不会阻断全频道帖子流。 */
+function retryFeatured(): void { emit('retryFeatured'); }
+
+/** 资料库失败时重试当前入口的原查询。 */
+function retryLibrary(): void { emit('retryLibrary'); }
+
+/** 标签键盘巡游同步选择和焦点。 */
+function onTabKeydown(event: KeyboardEvent): void {
+	const currentIndex: number = tabs.value.findIndex(/** 标签值来自同一导航定义。 */ (item: CommunityTabOption): boolean => item.value === tab.value);
+	let nextIndex: number | null = null;
+	if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.value.length;
+	else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.value.length) % tabs.value.length;
+	else if (event.key === 'Home') nextIndex = 0;
+	else if (event.key === 'End') nextIndex = tabs.value.length - 1;
+	if (nextIndex == null) return;
+	event.preventDefault();
+	tab.value = tabs.value[nextIndex].value;
+	tabList.value?.querySelector<HTMLButtonElement>(`#twitter-communities-tab-${tab.value}`)?.focus();
+}
+
+onDeactivated(closeLibrary);
+onBeforeUnmount(closeLibrary);
 </script>
 
 <style lang="scss" module>
@@ -314,8 +301,6 @@ function goBack(): void {
 	background: var(--twitter-bg);
 	color: var(--twitter-fg);
 
-	/* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4）；
-	 * 底部留白与既有页面一致，避免末行被 FAB 遮挡 */
 	&.mobile {
 		padding-bottom: calc(72px + env(safe-area-inset-bottom));
 	}
@@ -326,260 +311,93 @@ function goBack(): void {
 	background: var(--twitter-bg);
 }
 
-/* 紧凑返回头：X-behavior 现代表现层（与 TwitterTag 头部同构） */
 .header {
-	display: grid;
-	grid-template-columns: 44px minmax(0, 1fr);
-	align-items: center;
-	height: var(--twitter-header-height);
-	background: color-mix(in srgb, var(--twitter-bg) 82%, transparent);
-	-webkit-backdrop-filter: blur(12px);
-	backdrop-filter: blur(12px);
-	border-bottom: solid 1px var(--twitter-border);
-}
-
-.back {
 	display: flex;
 	align-items: center;
-	justify-content: center;
-	width: 36px;
-	height: 36px;
-	margin-left: var(--twitter-space-2);
+	gap: var(--twitter-space-1);
+	height: var(--twitter-header-height);
+	padding: 0 var(--twitter-space-2);
+	background: color-mix(in srgb, var(--twitter-bg) 82%, transparent);
+	backdrop-filter: blur(12px);
+}
+
+.iconButton {
+	display: grid;
+	flex: 0 0 var(--twitter-touch-target);
+	place-items: center;
+	width: var(--twitter-touch-target);
+	height: var(--twitter-touch-target);
 	border-radius: var(--twitter-radius-pill);
-	font-size: 17px;
-	transition: background-color var(--twitter-duration-fast) ease;
+	font-size: var(--twitter-font-size-title);
 
-	&:hover {
-		background: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
-	}
-
-	&:focus-visible {
-		outline: 2px solid var(--twitter-accent);
-		outline-offset: 2px;
-	}
+	&:hover { background: var(--twitter-hover); }
+	&:focus-visible { outline: 2px solid var(--twitter-accent); outline-offset: -2px; }
 }
 
 .title {
+	flex: 1;
 	min-width: 0;
 	margin: 0;
-	padding: 0 var(--twitter-space-2);
+	padding-inline: var(--twitter-space-2);
 	overflow: hidden;
-	color: var(--twitter-fg);
-	font-size: var(--twitter-font-size-emphasis);
+	font-size: var(--twitter-font-size-heading);
 	font-weight: 800;
-	line-height: 1.2;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-/* 常驻搜索条：nitter general.scss search-bar 真值（紧凑条 / radius 4px，PF-2 H-1 裁决） */
-.searchRow {
-	display: flex;
-	padding: var(--twitter-space-2) var(--twitter-space-4);
-	background: color-mix(in srgb, var(--twitter-bg) 82%, transparent);
-	-webkit-backdrop-filter: blur(12px);
-	backdrop-filter: blur(12px);
-	border-bottom: solid 1px var(--twitter-border);
-}
+.searchField { flex: 1; min-width: 0; }
 
-.searchField {
-	flex: 1;
-	min-width: 0;
-}
-
-/* tab 行：与既有页面同构（下划线 active，50px 行高） */
 .tabs {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	background: color-mix(in srgb, var(--twitter-bg) 82%, transparent);
-	-webkit-backdrop-filter: blur(12px);
 	backdrop-filter: blur(12px);
 	border-bottom: solid 1px var(--twitter-border);
 }
 
 .tab {
 	position: relative;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	min-height: 50px;
-	padding: 0 12px;
+	display: grid;
+	place-items: center;
+	min-height: var(--twitter-header-height);
+	padding: 0 var(--twitter-space-3);
 	color: var(--twitter-secondary-fg);
 	font-size: var(--twitter-font-size-content);
 	font-weight: 700;
-	transition:
-		background-color var(--twitter-duration-fast) ease,
-		color var(--twitter-duration-fast) ease;
 
 	&::after {
-		content: "";
+		content: '';
 		position: absolute;
-		right: 12px;
 		bottom: 0;
-		left: 12px;
+		width: 56px; /* X 参照的短下划线，宽度不随半列拉伸。 */
 		height: 4px;
-		border-radius: var(--twitter-radius-pill) var(--twitter-radius-pill) 0 0;
+		border-radius: var(--twitter-radius-pill);
 		background: var(--twitter-accent);
 		opacity: 0;
-		transform: scaleX(0.4);
-		transition:
-			opacity var(--twitter-duration-fast) ease,
-			transform var(--twitter-duration-normal) var(--twitter-ease);
 	}
-
-	&:hover,
-	&:focus-visible {
-		background: color-mix(in srgb, var(--twitter-fg) 4%, transparent);
-		color: var(--twitter-fg);
-	}
+	&:hover { background: var(--twitter-hover); }
+	&:focus-visible { outline: 2px solid var(--twitter-accent); outline-offset: -2px; }
 }
 
 .activeTab {
 	color: var(--twitter-fg);
-
-	&::after {
-		opacity: 1;
-		transform: scaleX(1);
-	}
+	&::after { opacity: 1; }
 }
 
-/* 已关注频道横条：X Communities joined 行为——圆形标识（banner 缩略，无 banner 回退频道色）
- * + 名称下置（CH-12 登记；nitter 无对应物，X-behavior 来源） */
-.channelStrip {
-	display: flex;
-	gap: var(--twitter-space-3);
-	padding: var(--twitter-space-2) var(--twitter-space-4);
-	overflow-x: auto;
-	scrollbar-width: none;
-
-	&::-webkit-scrollbar {
-		display: none;
-	}
-}
-
-.channelItem {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	flex-shrink: 0;
-	gap: var(--twitter-space-1);
-	width: 72px;
-	text-decoration: none;
-}
-
-.channelAvatar {
-	width: 56px;
-	height: 56px;
-	border: solid 1px var(--twitter-border);
-	border-radius: var(--twitter-radius-pill);
-	background-color: var(--twitter-panel);
-	background-position: center;
-	background-size: cover;
-
-	.channelItem:hover &,
-	.channelItem:focus-visible & {
-		border-color: var(--twitter-secondary-fg);
-	}
-}
-
-.channelAvatarName {
-	max-width: 72px;
-	overflow: hidden;
-	color: var(--twitter-fg);
-	font-size: var(--twitter-font-size-caption);
-	text-align: center;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-/* 空关注引导卡（A-3）：X 冷启动推荐流的简化 CTA 形态（CH-12 登记偏离） */
 .emptyGuide {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: var(--twitter-space-3);
-	margin: var(--twitter-space-4);
+	display: grid;
+	justify-items: center;
+	gap: var(--twitter-space-4);
 	padding: var(--twitter-space-6) var(--twitter-space-4);
-	border: dashed 1px var(--twitter-border);
-	border-radius: var(--twitter-radius-embed);
-	background: var(--twitter-panel);
+	text-align: center;
+
+	h2 { margin: 0; font-size: var(--twitter-font-size-title); }
 }
 
-.emptyGuideText {
-	color: var(--twitter-secondary-fg);
-	font-size: var(--twitter-font-size-meta);
-}
-
-/* 注目频道卡片网格（A-2）：X Discover 双列卡片形态（600px 主列内约 2×~270px）；
- * 移动端沿用 MkChannelPreview 自带 ≤550/500px 收缩 */
-.featuredGrid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-	gap: var(--twitter-space-3);
-	padding: var(--twitter-space-2) var(--twitter-space-4) 0;
-}
-
-.sectionHeader {
-	padding: var(--twitter-space-2) var(--twitter-space-4) 0;
-	color: var(--twitter-secondary-fg);
-	font-size: var(--twitter-font-size-meta);
-	font-weight: 700;
-}
-
-/* 管理 / 收藏折叠区（A-4）：P-25 旧列表能力的收敛安置（ADR-0005 D3），
- * 位于流之后 → 边线取上缘分隔 */
-.manageSection {
-	display: grid;
-	padding: var(--twitter-space-2) var(--twitter-space-4);
-	gap: var(--twitter-space-2);
-	border-top: solid 1px var(--twitter-border);
-}
-
-.manageBody {
+.searchResults {
 	display: grid;
 	gap: var(--twitter-space-3);
-	padding-top: var(--twitter-space-2);
-}
-
-.manageGrid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-	gap: var(--twitter-space-3);
-}
-
-.createRow {
-	display: flex;
-}
-
-/* 搜索结果面板 */
-.searchResultHeader {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: var(--twitter-space-2) var(--twitter-space-4);
-	border-bottom: solid 1px var(--twitter-border);
-	color: var(--twitter-secondary-fg);
-	font-size: var(--twitter-font-size-meta);
-	font-weight: 700;
-}
-
-.searchResultClose {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 32px;
-	height: 32px;
-	border-radius: var(--twitter-radius-pill);
-	color: var(--twitter-fg);
-	transition: background-color var(--twitter-duration-fast) ease;
-
-	&:hover,
-	&:focus-visible {
-		background: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
-	}
-}
-
-.searchResultBody {
-	padding: var(--twitter-space-3);
+	padding: var(--twitter-space-4);
 }
 </style>
