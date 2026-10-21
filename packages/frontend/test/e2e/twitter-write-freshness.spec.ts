@@ -309,10 +309,16 @@ test('频道发帖更新实体统计且不重载既有流', /** 实时帖子与�
 	await expect(body).toContainText('1 Notes');
 });
 
-test('社区管理列表在创建后回访更新原空集合', /** 真实创建流程后保留 Explore 缓存并刷新 owned。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+test('社区管理列表在创建后回访更新原空集合', /** 真实创建后保留 Explore 缓存，重开管理弹窗读取已确认实体。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
 	await open(page, '/channels');
 	await page.getByRole('tab', { name: 'Explore', exact: true }).click();
-	await page.locator('a[href="/channels/new"]').click();
+	await page.getByTestId('twitter-community-menu').click();
+	const initialOwned: Promise<Response> = page.waitForResponse(/** 先确认原空集合已由后端读取。 */ (response: Response): boolean => response.url().endsWith('/api/channels/owned') && response.status() === 200);
+	await page.getByRole('menuitem', { name: /Owned$/ }).click();
+	await initialOwned;
+	const library: Locator = page.getByTestId('twitter-community-library');
+	await expect(library.locator('a[href^="/channels/"]:not([href="/channels/new"])')).toHaveCount(0);
+	await library.locator('a[href="/channels/new"]').click();
 	await page.locator('._pageContainer input').first().fill('Created from cached communities');
 	await page.locator('._pageContainer').getByRole('button', { name: /Create$/ }).click();
 	await expect(page.locator('._pageContainer')).toContainText('Created from cached communities');
@@ -320,17 +326,31 @@ test('社区管理列表在创建后回访更新原空集合', /** 真实创建�
 	await page.goBack();
 	await page.goBack();
 	await expect(page.getByRole('tab', { name: 'Explore', exact: true })).toHaveAttribute('aria-selected', 'true');
-	await expect(page.locator('._pageContainer')).toContainText('Created from cached communities');
+	await page.getByTestId('twitter-community-menu').click();
+	await page.getByRole('menuitem', { name: /Owned$/ }).click();
+	await expect(page.getByTestId('twitter-community-library')).toContainText('Created from cached communities');
 });
 
-test('收藏频道后缓存社区收藏区回访更新', /** 菜单缓存失效不等于 favorites 分页器失效。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+test('收藏频道后缓存社区收藏区回访更新', /** 原空收藏弹窗回访后必须读取真实成功写入，不能复制发现卡片冒充收藏。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
 	const channel: Misskey.entities.Channel = await api(BASE_URL, 'channels/create', { i: account.token, name: 'Favorite in community', description: '' });
 	await open(page, '/channels');
 	await page.getByRole('tab', { name: 'Explore', exact: true }).click();
-	await page.locator(`._pageContainer a[href="/channels/${channel.id}"]`).first().click();
-	await page.locator('._pageContainer button[class*="asLike"]').click();
+	await page.getByTestId('twitter-community-menu').click();
+	const initialFavorites: Promise<Response> = page.waitForResponse(/** 空收藏必须真实初始化后再执行变更。 */ (response: Response): boolean => response.url().endsWith('/api/channels/my-favorites') && response.status() === 200);
+	await page.getByRole('menuitem', { name: /Favorites$/ }).click();
+	await initialFavorites;
+	await expect(page.getByTestId('twitter-community-library').locator('a[href^="/channels/"]')).toHaveCount(0);
+	await page.getByTestId('modal-window-close').click();
+	await page.getByTestId('twitter-community-menu').click();
+	await page.getByRole('menuitem', { name: /Owned$/ }).click();
+	await page.getByTestId('twitter-community-library').locator(`a[href="/channels/${channel.id}"]`).click();
+	const favorited: Promise<Response> = page.waitForResponse(/** 返回列表前先确认真实收藏写入成功。 */ (response: Response): boolean => response.url().endsWith('/api/channels/favorite') && response.status() === 204);
+	await page.locator('._pageContainer').getByRole('button').filter({ has: page.locator('i.ti-star') }).click();
+	await favorited;
 	await page.goBack();
-	await expect(page.locator(`._pageContainer a[href="/channels/${channel.id}"]`)).toHaveCount(2);
+	await page.getByTestId('twitter-community-menu').click();
+	await page.getByRole('menuitem', { name: /Favorites$/ }).click();
+	await expect(page.getByTestId('twitter-community-library').locator(`a[href="/channels/${channel.id}"]`)).toHaveCount(1);
 });
 
 test('解除屏蔽成功后当前设置集合移除原关系', /** 不将 userId 误作分页关系 id。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
@@ -513,7 +533,6 @@ test('资料刷新被离开取消后再次回访仍消费新意图', /** 上一�
 	} finally { release(); }
 });
 
-
 test('计数查询失败后仍消费其在途期间发生的第二次真实回复', /** 失败不能吞掉后续成功写入；没有新意图时也不自动重试。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
 	const parent: Misskey.entities.Note = await createNote(other, 'counter failure parent');
 	await open(page, `/notes/${parent.id}`);
@@ -570,7 +589,6 @@ test('并发频道回复与引用成功后本地统计无丢失或重复累加',
 	expect(updatedChannel.usersCount).toBe(3);
 	expect(created[0].poll?.choices).toHaveLength(2);
 });
-
 
 test('真实置顶上限拒绝不产生刷新或未处理异常且之后可重试', /** 成功通知的 Promise 分支不得把已经提示的 API 拒绝变成全局错误。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
 	const me: Misskey.entities.MeDetailed = await api(BASE_URL, 'i', { i: account.token });
