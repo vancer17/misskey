@@ -19,4 +19,36 @@ export type TwitterAvatarDecoration = Readonly<Omit<Misskey.entities.UserDetaile
 	id?: Misskey.entities.UserDetailed['avatarDecorations'][number]['id'];
 	/** 编辑器选中提示，不进入佩戴提交协议。 */
 	blink?: boolean;
+	/** 已确认静态的本地预览表示，避免将浏览器私有 URL 交给服务端图片代理；不进入佩戴协议。 */
+	staticUrl?: string;
 }>;
+
+/** 原生挂件的静态制作规格；只约束新导出文件，不改变存量佩戴坐标。 */
+export const TWITTER_AVATAR_DECORATION_CALIBRATION: Readonly<{
+	canvasSize: number;
+	avatarSize: number;
+	minimumScale: number;
+	maximumScale: number;
+	staticMimeTypes: readonly string[];
+}> = {
+	/** 完整透明导出画布的边长。 */
+	canvasSize: 1024,
+	/** 画布中央头像参考圆的直径。 */
+	avatarSize: 512,
+	/** 相对初始等比容纳尺寸的最小百分比。 */
+	minimumScale: 1,
+	/** 相对初始等比容纳尺寸的最大百分比。 */
+	maximumScale: 800,
+	/** 已有动画检测器能够识别且浏览器能够绘制的静态素材类型。 */
+	staticMimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
+} as const;
+
+/** 校准的临时坐标；位移使用导出画布像素，缩放使用初始等比容纳尺寸的百分比。 */
+export type TwitterAvatarDecorationCalibrationTransform = Readonly<{
+	scale: number;
+	offsetX: number;
+	offsetY: number;
+}>;
+
+/** 素材边界的有限失败原因，由业务弹窗映射为本地化提示。 */
+export type TwitterAvatarDecorationMaterialFailure = 'load' | 'unsupported' | 'animated' | 'export';
