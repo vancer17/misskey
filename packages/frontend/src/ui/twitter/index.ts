@@ -27,6 +27,10 @@ export { default as TwitterUserResult } from './UserResult.vue';
 export { default as TwitterSettingsShell } from './SettingsShell.vue';
 export { default as TwitterNote } from './Note.vue';
 export { default as TwitterSearchField } from './SearchField.vue';
+/** 频道集合的横向展示及独立管理／收藏窗口。 */
+export { default as TwitterCommunityStrip } from './components/TwitterCommunityStrip.vue';
+export { default as TwitterCommunityLibraryDialog } from './components/TwitterCommunityLibraryDialog.vue';
+export type { TwitterCommunitiesTab, TwitterCommunityLibrary } from './domain/index.js';
 export { default as TwitterWelcome } from './components/TwitterWelcome.vue';
 export { default as TwitterAuthButtons } from './components/TwitterAuthButtons.vue';
 
