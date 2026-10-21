@@ -37,7 +37,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<div :class="$style.identity">
 		<div :class="$style.identityTop">
-			<MkAvatar :class="$style.avatar" :user="displayUser" indicator/>
+			<TwitterAvatar decorationContext="profile" :class="$style.avatar" :user="displayUser" indicator/>
 			<div :class="$style.actions">
 				<button
 					class="_button"
@@ -175,7 +175,7 @@ import MkRemoteCaution from '@/components/MkRemoteCaution.vue';
 import MkAccountMoved from '@/components/MkAccountMoved.vue';
 import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
 import TwitterPageSkeleton from '@/ui/twitter/components/TwitterPageSkeleton.vue';
-import { twitterUserErrorStateType, useTwitterDisplayUser, useTwitterLayout } from '@/ui/twitter/index.js';
+import { TwitterAvatar, twitterUserErrorStateType, useTwitterDisplayUser, useTwitterLayout } from '@/ui/twitter/index.js';
 import type { TwitterPageStateType } from '@/ui/twitter/index.js';
 import TwitterUserTimeline from './TwitterUserTimeline.vue';
 import number from '@/filters/number.js';
@@ -248,7 +248,7 @@ function showMenu(ev: PointerEvent) {
 		padding-bottom: calc(72px + env(safe-area-inset-bottom));
 
 		.identity {
-			--profileAvatarSize: 80px;
+			--profileAvatarSize: var(--twitter-avatar-profile-mobile-size);
 			--profileAvatarOverlap: 32px;
 			padding: 0 12px;
 		}
@@ -321,7 +321,7 @@ function showMenu(ev: PointerEvent) {
 }
 
 .identity {
-	--profileAvatarSize: 112px;
+	--profileAvatarSize: var(--twitter-avatar-profile-size);
 	--profileAvatarOverlap: 44px;
 	padding: 0 16px;
 }
@@ -338,7 +338,7 @@ function showMenu(ev: PointerEvent) {
 	width: var(--profileAvatarSize);
 	height: var(--profileAvatarSize);
 	flex-shrink: 0;
-	border: solid 4px var(--twitter-bg);
+	border: solid var(--twitter-avatar-profile-border-width) var(--twitter-bg);
 	background: var(--twitter-panel);
 }
 
