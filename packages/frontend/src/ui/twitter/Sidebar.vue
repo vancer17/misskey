@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter 紧凑身份展示。
+作用：保留原头像交互，将紧凑头像明确接入不显示挂件的展示场景。
+数据链：既有用户投影 → Twitter 头像包装 → 无装饰身份展示，不改写用户事实。
+-->
+
 <template>
 <nav :class="[$style.root, { [$style.iconOnly]: iconOnly }]" :aria-label="i18n.ts._twitterUi.primaryNavigation">
 	<div :class="$style.top">
@@ -81,13 +87,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:aria-label="i18n.ts.account"
 			@click="openAccountMenu"
 		>
-			<MkAvatar :user="$i" :class="$style.avatar"/>
+			<TwitterAvatar decorationContext="none" :user="$i" :class="$style.avatar"/>
 		</button>
 	</div>
 </nav>
 </template>
 
 <script lang="ts" setup>
+import TwitterAvatar from './components/TwitterAvatar.vue';
 import { computed } from 'vue';
 import { instance } from '@/instance.js';
 import { i18n } from '@/i18n.js';

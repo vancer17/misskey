@@ -20,3 +20,6 @@ export { twitterUserErrorStateType } from './user-state.js';
 
 /** 服务端确认帖子计数的只读展示投影。 */
 export type { TwitterNoteCounters } from './note-counters.js';
+
+/** 头像挂件展示场景及既有佩戴实体的只读预览投影。 */
+export type { TwitterAvatarDecoration, TwitterAvatarDecorationContext } from './avatar-decoration.js';
