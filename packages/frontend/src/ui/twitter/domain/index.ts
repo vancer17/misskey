@@ -27,5 +27,5 @@ export type { TwitterAvatarDecoration, TwitterAvatarDecorationContext } from './
 export { TWITTER_AVATAR_DECORATION_CALIBRATION } from './avatar-decoration.js';
 export type { TwitterAvatarDecorationCalibrationTransform, TwitterAvatarDecorationMaterialFailure } from './avatar-decoration.js';
 
-/** 频道页导航的唯一类型来源，不复制频道实体和分页事实。 */
-export type { TwitterCommunitiesTab, TwitterCommunityLibrary } from './communities.js';
+/** 频道页导航、所属频道分页事实与资料库只读展示的唯一类型来源。 */
+export type { TwitterCommunitiesTab, TwitterCommunityLibrary, TwitterCommunityLibraryView, OwnedChannelsPage, OwnedChannelsOperation, OwnedChannelsState } from './communities.js';
