@@ -1,6 +1,6 @@
 # Twitter 头像挂件显示与素材坐标
 
-本文描述 Twitter UI 当前的静态图片挂件显示规则。管理与佩戴流程见 [头像挂件管理](avatar-decoration-management.md)，决策及被替代方案见 [ADR-0013](adr/0013-avatar-decoration-rendering.md)。
+本文描述 Twitter UI 当前的静态图片挂件显示规则。管理与佩戴流程见 [头像挂件管理](avatar-decoration-management.md)，绘制边界决策见 [ADR-0013](adr/0013-avatar-decoration-rendering.md)，素材校准决策及被替代方案见 [ADR-0014](adr/0014-avatar-decoration-material-calibration.md)。
 
 ## 组件和数据归属
 
@@ -50,26 +50,27 @@
 
 ## 素材制作
 
+### 管理页面内校准
+
+Twitter 管理编辑器在已有素材时提供“校准当前素材”。本地上传、网盘选择和手动地址仍共用原 URL 草稿；校准读取该地址的原始字节，复用 Cropper.js 2.1.1，在固定完整画布中平移和等比缩放图片。中央参考头像、参考圆及棋盘仅作为辅助显示，不参与导出。
+
+导出固定为 1024×1024 透明 PNG，中央参考圆直径 512px。非正方形图片保留比例并以透明区域补足画布，不自动按非透明像素裁边或居中。圆环按内孔对应的头像参考位置校准，顶部或侧面挂件允许有意偏置。正式帖子／资料预览直接显示本次导出文件，分别沿用 48px 和桌面 112px／移动 80px 头像尺寸及现有裁剪边界。
+
+点击应用后，宿主通过既有上传命令生成新的网盘文件，只有真实回执成功才替换表单 URL。原图不覆盖、不删除；应用校准不自动保存挂件目录。目录保存失败保留已经上传的新地址，重试不会重新生成上传。取消、读取失败、导出失败或上传失败保留原地址；路由离开后的迟到结果不能更新新草稿。
+
+校准支持经 `is-file-animated` 检查的静态 PNG/JPEG/WebP。APNG、动态 WebP 等动画不会被静默变成首帧；SVG、未知格式和无法读取原始字节的资源不能校准，但其既有素材使用能力保持现状。跨域读取失败时可下载原文件后本地上传，不使用缩略图、静态图片代理或新增抓取服务替代原图。JPEG 等不透明图片不会自动去除背景。
+
+个人试戴的水平／垂直位移同时提供步长 0.001 的滑块及数值输入。位移仍相对于两倍挂件画布；百分比显示保留小数，原始佩戴值不因打开、取消或显示格式化而被取整。
+
+### 外部制作的原生素材
+
 1. 使用正方形透明画布，中央头像参考区域的宽、高各为画布的一半。例如 1024 × 1024 画布中央放置 512 × 512 的头像参考圆；参考圆只用于制作，导出的挂件文件不包含参考圆和头像。
 2. 图案围绕参考圆绘制，外部留白保留在文件中。原图画布的中心是位置原点，不能按非透明像素包围盒自动裁边、重新居中。
 3. 仅上半部有图案的挂件仍保留完整画布及透明下半部。文件尺寸无需固定为 1024，必须保留画布与头像参考区域的比例。
 4. 在帖子和资料两种目标预览中核对裁剪边界、邻接文字及 48px 下的清晰度。大幅旋转或位移超出边界时会被裁剪，佩戴参数本身仍保持原协议值。
 5. 更换素材使用新的资源 URL，再更新原挂件 ID；不全局改变所有存量素材的缩放比例。
 
-已校准的月亮圆环样例位于 [avatar-decoration-moon-calibrated.png](assets/avatar-decoration-moon-calibrated.png)。它保留完整透明画布，适用于原有两倍画布约定。运行时无需读取像素或推断图案锚点。
-
-### 开发实例的已有素材更新
-
-2026-10-21 已将 `vancer17` 正在佩戴的“紫色星月”替换为上述校准 PNG。挂件 ID `ask2kktrwg2t001m` 保持不变，文件沿用 1254 × 1254 的完整透明画布。通过既有网盘上传与挂件更新 API 写入新资源地址后，重新读取真实 `i` 投影确认同一 ID 已引用新图；匿名资料页也完成实际图片解码和截图检查。原素材文件保留，不覆盖旧 URL。
-
-| 记录 | 值 |
-| --- | --- |
-| 原资源路径 | `/files/26213b2e-bc3c-49ba-bc0d-2e1369eb9ef0` |
-| 新资源路径 | `/files/78435198-a243-4967-a81d-ee0f891ea3cd` |
-| 新网盘文件 ID | `asl3vppax87p0006` |
-| 校准 PNG SHA-256 | `c49f9fc5ea6a42e36c63065552050161df3f90f5f77ae037a003387ff6b98757` |
-
-这些标识只记录本次开发实例操作，不进入组件、测试或业务配置。完整旧目录字段和新资源回执保存在本轮验收目录的 `live-material-backup.json`、`live-material-update.json`，不包含账户凭据。真实管理页面换图后的账户同步由下述隔离 E2E 单独验证。
+已校准的月亮圆环样例位于 [avatar-decoration-moon-material-calibrated.png](assets/avatar-decoration-moon-material-calibrated.png)。它保留完整透明画布，适用于原有两倍画布约定。运行时无需读取像素或推断图案锚点。
 
 ## 预览与保存反馈
 
@@ -79,53 +80,22 @@ Twitter 管理编辑器及试戴提供“帖子头像预览”和“个人资料
 
 ## 验证
 
-真实后端验证使用 `packages/frontend/test/e2e/avatar-decoration-rendering.spec.ts`，与已有管理、佩戴回归共同运行。成功业务数据由隔离后端创建、上传、佩戴并读取，网络故障场景只中断真实请求。测试基础设施由外部运行脚本准备，不进入组件、领域模型或业务测试逻辑。
+真实后端回归使用 `packages/frontend/test/e2e/avatar-decoration-material.spec.ts`，与已有管理、佩戴、回访及渲染套件共同运行。成功数据全部来自隔离后端，故障场景只中断或延迟真实请求；环境准备留在外部运行设施。
 
-新增套件包含八项：真实佩戴／移除的 SPA 回访；纯转发、独立回复、引用与详情上下文范围；1440px、390px、320px 的正式／试戴精确几何与既有变换；隐藏及静态图片偏好；已佩戴素材换图后的同会话回访；换图已保存但账户读取失败的提示与重试。既有佩戴套件只调整侧栏关闭和可见裁剪边界两处预期。
+素材套件包含九项真实业务和像素检查，以及 1440／390／320px × 明暗主题六项校准弹窗布局检查。它会下载后端实际保存的 PNG，校验完整透明画布、半透明像素、圆孔和锚点坐标、非正方形补边、等比缩放及辅助图层排除；同时覆盖取消、APNG 保护、地址／网盘入口、静态偏好、上传和目录保存失败重试、0.001 位移及 SPA 回访。
 
-视觉检查记录桌面、390px、320px 的明暗主题以及真实图片解码、头像和裁剪盒边界、正文位置。截图用于审阅当前目标结果；新截图本身不意味着视觉基线已被用户批准。
+其余套件继续覆盖角色与数量限制、重复佩戴、旋转／翻转／位移组合、原生默认 UI、管理换图后的真实账户回读及失败反馈。页面检查保持既有头像尺寸与正文起点，包含窄屏和明暗主题。全站 P-19 基线建设仍按阶段计划后置，本轮仅提供局部截图及 diff 审阅材料，不将新结果自动宣布为已批准基线。
 
-本轮范围限于已接入的消费点；47 项通过不代表所有遗留路由均已验收。
-
-### 校准素材的最终外观
-
-下列截图使用校准后的完整 PNG，由隔离后端真实创建、上传和佩戴素材。资料页同时展示主头像与独立帖卡，侧栏和移动导航不带挂件；管理编辑器切换到个人资料主头像场景。
-
-| 宽度 | 资料页浅色 | 资料页深色 | 管理编辑器双背景预览 |
-| --- | --- | --- | --- |
-| 1440px | [浅色](assets/avatar-decoration-calibrated-profile-1440-light.png) | [深色](assets/avatar-decoration-calibrated-profile-1440-dark.png) | [桌面预览](assets/avatar-decoration-calibrated-manager-profile-1440.png) |
-| 320px | [浅色](assets/avatar-decoration-calibrated-profile-320-light.png) | [深色](assets/avatar-decoration-calibrated-profile-320-dark.png) | [窄屏预览](assets/avatar-decoration-calibrated-manager-profile-320.png) |
-
-320px 管理预览的内容宽度与滚动宽度均为 256px，两张背景卡片各为 122px，没有横向溢出。桌面对应为 408px、408px 和 198px。
-
-真实开发账户资料头像的[素材替换前](assets/avatar-decoration-live-material-before.png)与[素材替换后](assets/avatar-decoration-live-material-after.png)均在本轮新渲染实现下截图，用于比较素材坐标校准，不代表旧代码与新代码的视觉基线对比。新截图保留头像在线状态在挂件上层的实际结果。
-
-### 本轮执行记录（2026-10-21）
-
-工作分支为 `fix/twitter-avatar-decoration-scope`，基线为 `6caad7ecfa27c76c19efbaf67732d851b88123a4`。前端工具链使用 Node 24.22.0；隔离后端使用与现有原生依赖匹配的 Node 22.23.3。后端、数据库和 Redis 分别使用 61812、54312、56312，测试没有连接开发数据库 5433 或开发 Redis 6379。
-
-| 检查 | 结果 |
+| 局部审阅材料 | 图片 |
 | --- | --- |
-| i18n 类型生成 | PASS |
-| 最终前端类型检查 | PASS |
-| 前端生产构建与全部语言内联 | PASS |
-| 变更源码及生成 i18n 类型 Lint | PASS |
-| 两个变更 E2E 文件 Lint | PASS，沿用 `test/tsconfig.json` |
-| 相关单元测试 | PASS，`avatar-decoration.test.ts` 3 项、`twitter-display-user.test.ts` 4 项，共 7/7 |
-| 管理页 E2E | PASS，17/17 |
-| 新展示范围／几何／偏好／账户同步 E2E | PASS，8/8 |
-| 既有佩戴及回访 E2E | PASS，22/22 |
-| 四个套件最终合并运行 | PASS，47/47，约 2.9 分钟 |
-| Vue 组件审查 | PASS，修正包装层与基础头像的方形偏好初始化时机后，无未处理的阻塞问题 |
-| SPDX | PASS |
-| Locale safety | FAIL，仅报告本轮已授权的 `locales/zh-CN.yml` 修改 |
+| 桌面深色校准画布／正式场景预览 | [画布](assets/avatar-decoration-calibration-1440-dark-canvas.png)／[预览](assets/avatar-decoration-calibration-1440-dark-previews.png) |
+| 320px 浅色校准画布／正式场景预览 | [画布](assets/avatar-decoration-calibration-320-light-canvas.png)／[预览](assets/avatar-decoration-calibration-320-light-previews.png) |
+| 非正方形测试圆环在真实资料头像中的变化 | [校准前](assets/avatar-decoration-calibration-before.png)／[校准后](assets/avatar-decoration-calibration-after.png)／[像素差异](assets/avatar-decoration-calibration-diff.png) |
 
-交付检查命令为 `node scripts/check-shipping.mjs --base 6caad7ecfa27c76c19efbaf67732d851b88123a4`，退出码为 1：Lint 与 SPDX 通过，Locale safety 失败。按已确认的中文界面要求保留文案，未修改或绕过检查器，也不把此结果记作整套交付检查全通过。
+## 当前开发实例素材
 
-最终 E2E 同时运行 `avatar-decoration-manager.spec.ts`、`avatar-decoration-rendering.spec.ts`、`avatar-decoration-revisit.spec.ts`、`avatar-decoration.spec.ts`。临时运行配置继承仓库 `playwright.config.ts`，仅指定中文语言、现有 Chromium 可执行文件及输出目录；保留原有时限、单 worker、断言与真实后端协议。
+`vancer17` 的“紫色星月”通过上述真实管理界面应用校准并保存，挂件 ID `ask2kktrwg2t001m` 保持不变。当前资源为 `/files/6d1fc536-f6ef-47ff-bb1a-c8e7d9d6dbc1`，对应 1024×1024 PNG，SHA-256 为 `b3cfe9803faa7484ff6300398988e93e1ff26c25f129e0b761a00502f00c25f7`。旧图片继续保留在网盘。
 
-首轮测试修正了三个测试时序／入口问题：等待纯转发卡片出现再检查默认折叠；轮询模态入场结束后的精确几何；偏好验证整页加载时保留显式 `ui=twitter`。新增展示套件没有放宽尺寸、关闭动画或伪造成功响应，其截图等待真实字体和有限动画完成；既有套件沿用原有截图策略。
+[当前 PNG](assets/avatar-decoration-moon-material-calibrated.png)与[实际公开资料头像](assets/avatar-decoration-material-profile-after.png)可供审阅。真实账户回执和公开资料页均确认引用同一新资源；素材校准不修改账户的个人佩戴参数。该圆环的生产语义仍是装饰图案，左侧月亮允许覆盖头像；校准不承诺把任意不规则图案改造成规则圆环。
 
-日志、运行配置与完整截图位于开发工作区 `tmp/twitter-avatar-rendering-20261021/`。现有 backend 和 frontend-embed 构建没有代码改动，本轮沿用既有隔离运行资源；未声称重新构建这些未改动包。
-
-验收完成后已关闭本轮启动的 61812、54312、56312 隔离服务，并恢复隔离运行目录原有的前端构建链接。开发服务 3000、5173、5174、5433、6379 均保持可达。收尾记录位于同一目录的 `final-cleanup.json`；该验收时点的工作区 `git diff --check` 通过，基础 `MkAvatar.vue` 无改动，分支基线未移动。
+执行日志、故障记录、截图与差异图位于开发工作区 `tmp/avatar-decoration-calibration-20261021/`。前置素材处理和旧验收记录集中保留在 [ADR-0014](adr/0014-avatar-decoration-material-calibration.md)。
