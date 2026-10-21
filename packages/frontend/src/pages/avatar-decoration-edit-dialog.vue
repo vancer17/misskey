@@ -17,6 +17,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<section :class="$style.material" :aria-labelledby="materialHeadingId">
 			<h2 :id="materialHeadingId" :class="$style.sectionHeading">{{ i18n.ts._avatarDecorationManager.materialTitle }}</h2>
 			<p :class="$style.hint">{{ i18n.ts._avatarDecorationManager.materialHint }}</p>
+			<p v-if="isTwitterUi" :class="$style.hint">{{ i18n.ts._avatarDecorationSettings.materialCanvasHint }}</p>
 			<input ref="fileInput" type="file" accept="image/*" hidden :disabled="busy" :aria-label="i18n.ts._avatarDecorationManager.uploadMaterial" data-testid="decoration-manager-file-input" @change="uploadMaterial" @cancel="cancelFileSelection">
 			<div :class="$style.materialActions">
 				<MkButton primary rounded type="button" :disabled="busy" data-testid="decoration-manager-upload" @click="chooseLocalMaterial"><i class="ti ti-upload" aria-hidden="true"></i> {{ hasMaterial ? i18n.ts._avatarDecorationManager.replaceMaterial : i18n.ts._avatarDecorationManager.uploadMaterial }}</MkButton>
@@ -41,14 +42,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<section :class="$style.previewSection" :aria-labelledby="previewHeadingId">
 			<h2 :id="previewHeadingId" :class="$style.sectionHeading" data-testid="decoration-manager-preview-title">{{ i18n.ts._avatarDecorationManager.previewTitle }}</h2>
 			<p :class="$style.hint">{{ i18n.ts._avatarDecorationManager.previewDescription }}</p>
+			<label v-if="isTwitterUi" :class="$style.sceneSelector">
+				<span>{{ i18n.ts._avatarDecorationManager.previewTitle }}</span>
+				<select v-model="previewContext" :disabled="busy" data-testid="decoration-preview-context">
+					<option value="note">{{ i18n.ts._avatarDecorationSettings.notePreview }}</option>
+					<option value="profile">{{ i18n.ts._avatarDecorationSettings.profilePreview }}</option>
+				</select>
+			</label>
+			<p v-if="isTwitterUi" :class="$style.hint">{{ i18n.ts._avatarDecorationSettings.previewGeometryHint }}</p>
 			<p v-if="!hasMaterial" :class="$style.previewEmpty" role="status" data-testid="decoration-manager-preview-empty">{{ i18n.ts._avatarDecorationManager.previewEmpty }}</p>
 			<div v-else :key="previewKey" :class="$style.preview" data-testid="decoration-manager-preview" @error.capture="onPreviewError">
 				<section :class="[$style.previewItem, $style.light]" :aria-label="i18n.ts._avatarDecorationManager.lightPreview">
-					<div :class="$style.previewCanvas"><MkAvatar :class="$style.avatar" :user="$i" :decorations="previewDecorations" :link="false" forceShowDecoration/></div>
+					<TwitterAvatarDecorationPreview v-if="isTwitterUi" :user="$i" :decorations="previewDecorations" :context="previewContext"/>
+					<div v-else :class="$style.previewCanvas"><MkAvatar :class="$style.avatar" :user="$i" :decorations="previewDecorations" :link="false" forceShowDecoration/></div>
 					<p :class="$style.previewLabel">{{ i18n.ts._avatarDecorationManager.lightPreview }}</p>
 				</section>
 				<section :class="[$style.previewItem, $style.dark]" :aria-label="i18n.ts._avatarDecorationManager.darkPreview">
-					<div :class="$style.previewCanvas"><MkAvatar :class="$style.avatar" :user="$i" :decorations="previewDecorations" :link="false" forceShowDecoration/></div>
+					<TwitterAvatarDecorationPreview v-if="isTwitterUi" :user="$i" :decorations="previewDecorations" :context="previewContext"/>
+					<div v-else :class="$style.previewCanvas"><MkAvatar :class="$style.avatar" :user="$i" :decorations="previewDecorations" :link="false" forceShowDecoration/></div>
 					<p :class="$style.previewLabel">{{ i18n.ts._avatarDecorationManager.darkPreview }}</p>
 				</section>
 			</div>
@@ -118,7 +129,8 @@ import * as os from '@/os.js';
 import { ensureSignin } from '@/i.js';
 import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { TwitterAvatarDecorationPreview, useIsTwitterUi } from '@/ui/twitter/index.js';
+import type { TwitterAvatarDecorationContext } from '@/ui/twitter/index.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { uploadFile, UploadAbortedError } from '@/utility/drive.js';
 
@@ -150,6 +162,8 @@ const roleMessage: Ref<string | null> = ref(null);
 const errorMessage: Ref<string | null> = ref(null);
 const previewFailed: Ref<boolean> = ref(false);
 const previewKey: Ref<number> = ref(0);
+/** 目标场景仅控制未保存素材的呈现，不进入管理写入协议。 */
+const previewContext: Ref<Exclude<TwitterAvatarDecorationContext, 'none'>> = ref('note');
 const materialStatus: Ref<string | null> = ref(null);
 const materialError: Ref<string | null> = ref(null);
 const uploadProgress: Ref<number | null> = ref(null);
@@ -340,9 +354,10 @@ function removeRole(roleId: string): void {
 	selectedRoleIds.value = selectedRoleIds.value.filter(/** 只丢弃用户明确移除的标识，保留未知元数据项。 */ (id: string): boolean => id !== roleId);
 }
 
-/** 捕获当前挂件图片的实际错误；用户头像错误和迟到的旧地址错误不影响提示。 */
+/** 捕获当前素材或其静态代理的实际错误，基础用户头像错误不影响管理素材提示。 */
 function onPreviewError(event: Event): void {
-	if (event.target instanceof HTMLImageElement && event.target.getAttribute('src') === url.value.trim()) previewFailed.value = true;
+	if (!(event.target instanceof HTMLImageElement)) return;
+	if (event.target.hasAttribute('data-twitter-avatar-decoration') || event.target.getAttribute('src') === url.value.trim()) previewFailed.value = true;
 }
 
 /** 重新挂载双主题预览，保留名称、描述、角色等表单草稿。 */
@@ -458,6 +473,9 @@ onBeforeUnmount(/** 销毁时先撤销交付身份，再中止本轮上传、角
 .urlDetails > summary { width: fit-content; min-height: var(--twitter-touch-target, 44px); align-content: center; color: var(--twitter-accent, var(--MI_THEME-accent)); cursor: pointer; }
 .urlDetails > summary:focus-visible { outline: 2px solid var(--twitter-accent, var(--MI_THEME-accent)); outline-offset: 2px; border-radius: var(--twitter-radius-small, 4px); }
 .urlDetails[open] > summary { margin-bottom: var(--twitter-space-2, 8px); }
+.sceneSelector { display: grid; gap: var(--twitter-space-1, 4px); font-size: var(--twitter-font-size-meta, 13px); }
+.sceneSelector select { width: 100%; min-height: var(--twitter-touch-target, 44px); padding: 0 var(--twitter-space-2, 8px); border: 1px solid var(--twitter-border, var(--MI_THEME-divider)); border-radius: var(--twitter-radius-medium, 8px); background: var(--twitter-panel, var(--MI_THEME-panel)); color: inherit; font: inherit; }
+.sceneSelector select:focus-visible { outline: 2px solid var(--twitter-accent, var(--MI_THEME-accent)); outline-offset: 2px; }
 .previewSection { margin-top: var(--twitter-space-4, 16px); }
 .previewEmpty { margin: 0; padding: var(--twitter-space-4, 16px); border: 1px dashed var(--twitter-border, var(--MI_THEME-divider)); border-radius: var(--twitter-radius-medium, 8px); color: var(--twitter-secondary-fg, var(--MI_THEME-fgTransparentWeak)); font-size: var(--twitter-font-size-meta, 13px); line-height: 1.6; }
 

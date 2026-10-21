@@ -13,7 +13,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div :class="[$style.root, { [$style.twitter]: isTwitterUi, [$style.mobile]: isMobile }]" data-testid="avatar-decoration-page">
 		<section :class="$style.summary" :aria-label="i18n.ts._avatarDecorationSettings.currentAvatar">
 			<div :class="$style.avatarStage" data-testid="decoration-current-avatar">
-				<MkAvatar :class="$style.avatar" :user="$i" forceShowDecoration/>
+				<TwitterAvatar v-if="isTwitterUi" :class="$style.avatar" :user="$i" decorationContext="profile" forceShowDecoration/>
+				<MkAvatar v-else :class="$style.avatar" :user="$i" forceShowDecoration/>
 			</div>
 			<div :class="$style.summaryText">
 				<h2>{{ i18n.ts._avatarDecorationSettings.currentAvatar }}</h2>
@@ -30,7 +31,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<p v-if="$i.avatarDecorations.length > $i.policies.avatarDecorationLimit" :class="$style.warning" role="status">{{ i18n.ts._avatarDecorationSettings.overLimit }}</p>
 			<div :class="$style.wearingList">
 				<div v-for="(worn, index) in $i.avatarDecorations" :key="`${index}:${worn.id}`" :class="$style.wearingRow" data-testid="decoration-wearing-row">
-					<div :class="$style.wearingPreview"><MkAvatar :class="$style.wearingAvatar" :user="$i" :decorations="[worn]" forceShowDecoration/></div>
+					<div :class="$style.wearingPreview">
+						<TwitterAvatar v-if="isTwitterUi" :class="$style.wearingAvatar" :user="$i" :decorations="[worn]" decorationContext="note" forceShowDecoration/>
+						<MkAvatar v-else :class="$style.wearingAvatar" :user="$i" :decorations="[worn]" forceShowDecoration/>
+					</div>
 					<div :class="$style.wearingLabel">
 						<strong>{{ catalogById.get(worn.id)?.name ?? (hasLoaded ? i18n.ts._avatarDecorationSettings.unavailable : i18n.ts._avatarDecorationSettings.directoryPending) }}</strong>
 						<span v-if="hasLoaded && !catalogById.has(worn.id)" :class="$style.secondary">{{ i18n.ts._avatarDecorationSettings.unavailableDescription }}</span>
@@ -89,7 +93,7 @@ import { definePage } from '@/page.js';
 import type { PageMetadata } from '@/page.js';
 import { updateCurrentAccountPartial } from '@/accounts.js';
 import { serializeAvatarDecorations } from '@/utility/avatar-decoration/index.js';
-import { useIsTwitterUi, useTwitterLayout, TwitterPageState } from '@/ui/twitter/index.js';
+import { TwitterAvatar, useIsTwitterUi, useTwitterLayout, TwitterPageState } from '@/ui/twitter/index.js';
 
 /** 账户唯一来源：不把已佩戴数组复制到页面业务状态。 */
 const $i: ReturnType<typeof ensureSignin> = ensureSignin();
@@ -296,6 +300,19 @@ definePage(/** 沿用设置页宿主提供的标准返回头。 */ (): PageMetad
 .manage { text-align: center; padding: var(--twitter-space-3, 12px) 0; }
 .message { margin-top: var(--twitter-space-4, 16px) !important; padding: var(--twitter-space-3, 12px); border-radius: var(--twitter-radius-medium, 8px); background: var(--twitter-hover, var(--MI_THEME-panel)); line-height: 1.6; }
 .twitter {
+	/* 预览只分配正式场景的四向绘制空间，顶部与底部预算不能对称平分。 */
+	.avatarStage {
+		box-sizing: content-box;
+		width: calc(var(--twitter-avatar-profile-size) + var(--twitter-avatar-profile-border-width) * 2);
+		min-height: calc(var(--twitter-avatar-profile-size) + var(--twitter-avatar-profile-border-width) * 2);
+		padding: var(--twitter-avatar-profile-bleed-top) var(--twitter-avatar-profile-bleed-right) var(--twitter-avatar-profile-bleed-bottom) var(--twitter-avatar-profile-bleed-left);
+	}
+	.avatar { width: var(--twitter-avatar-profile-size); height: var(--twitter-avatar-profile-size); border: solid var(--twitter-avatar-profile-border-width) var(--twitter-bg); }
+	.wearingAvatar { width: var(--twitter-avatar-note-size); height: var(--twitter-avatar-note-size); }
+	&.mobile {
+		.avatar { width: var(--twitter-avatar-profile-mobile-size); height: var(--twitter-avatar-profile-mobile-size); }
+		.avatarStage { width: calc(var(--twitter-avatar-profile-mobile-size) + var(--twitter-avatar-profile-border-width) * 2); min-height: calc(var(--twitter-avatar-profile-mobile-size) + var(--twitter-avatar-profile-border-width) * 2); padding-left: var(--twitter-avatar-profile-mobile-bleed-left); }
+	}
 	background: var(--twitter-bg);
 	:global(._textButton), :global(._link) { color: var(--twitter-accent); }
 	.danger { color: var(--twitter-danger); }

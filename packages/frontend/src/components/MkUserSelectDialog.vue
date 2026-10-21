@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：共享身份组件的 Twitter 表现适配。
+作用：通过公开头像属性关闭 Twitter 紧凑场景的挂件，保留原组件交互及默认 UI 表现。
+数据链：UI 展示上下文 → 头像装饰属性；不参与用户状态与业务判断。
+-->
+
 <template>
 <MkModalWindow
 	ref="dialogEl"
@@ -34,7 +40,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-if="username != '' || host != ''" :class="[$style.result, { [$style.hit]: users.length > 0 }]">
 			<div v-if="users.length > 0" :class="$style.users">
 				<div v-for="user in users" :key="user.id" class="_button" :class="[$style.user, { [$style.selected]: selected && selected.id === user.id }]" @click="selected = user" @dblclick="ok()">
-					<MkAvatar :user="user" :class="$style.avatar" indicator/>
+					<MkAvatar :decorations="isTwitterUi ? [] : undefined" :user="user" :class="$style.avatar" indicator/>
 					<div :class="$style.userBody">
 						<MkUserName :user="user" :class="$style.userName"/>
 						<MkAcct :user="user" :class="$style.userAcct"/>
@@ -48,7 +54,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-if="username == '' && host == ''" :class="$style.recent">
 			<div :class="$style.users">
 				<div v-for="user in recentUsers" :key="user.id" class="_button" :class="[$style.user, { [$style.selected]: selected && selected.id === user.id }]" @click="selected = user" @dblclick="ok()">
-					<MkAvatar :user="user" :class="$style.avatar" indicator/>
+					<MkAvatar :decorations="isTwitterUi ? [] : undefined" :user="user" :class="$style.avatar" indicator/>
 					<div :class="$style.userBody">
 						<MkUserName :user="user" :class="$style.userName"/>
 						<MkAcct :user="user" :class="$style.userAcct"/>

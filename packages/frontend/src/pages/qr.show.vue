@@ -23,7 +23,7 @@ Twitter 变体以固定深色二维码和浅色底保持识别对比度，颜色
 			@click="shareFromQr" @keydown.enter="shareFromQr" @keydown.space.prevent="shareFromQr"
 		></div>
 		<div v-flip="!isTwitterUi" :class="$style.user">
-			<MkAvatar :class="$style.avatar" :user="$i" :indicator="false"/>
+			<MkAvatar :decorations="isTwitterUi ? [] : undefined" :class="$style.avatar" :user="$i" :indicator="false"/>
 			<div>
 				<div :class="$style.name"><MkCondensedLine :minScale="2 / 3"><MkUserName :user="$i" :nowrap="true"/></MkCondensedLine></div>
 				<div :class="$style.account"><MkCondensedLine :minScale="2 / 3">{{ acct }}</MkCondensedLine></div>
