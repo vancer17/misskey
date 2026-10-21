@@ -3,18 +3,24 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：共享身份组件的 Twitter 表现适配。
+作用：通过公开头像属性关闭 Twitter 紧凑场景的挂件，保留原组件交互及默认 UI 表现。
+数据链：UI 展示上下文 → 头像装饰属性；不参与用户状态与业务判断。
+-->
+
 <template>
 <div v-if="show" ref="el" :class="[$style.root]">
 	<div :class="[$style.upper, { [$style.slim]: narrow, [$style.thin]: thin_ }]">
 		<div v-if="!thin_ && (narrow || deviceKind === 'smartphone') && props.displayMyAvatar && $i" class="_button" @click="openAccountMenu">
-			<MkAvatar :class="$style.avatar" :user="$i"/>
+			<MkAvatar :decorations="isTwitterUi ? [] : undefined" :class="$style.avatar" :user="$i"/>
 		</div>
 		<div v-else-if="!thin_ && narrow && !hideTitle" :class="$style.buttons"></div>
 
 		<template v-if="pageMetadata">
 			<div v-if="!hideTitle" :class="$style.titleContainer" @click="top">
 				<div v-if="pageMetadata.avatar" :class="$style.titleAvatarContainer">
-					<MkAvatar :class="$style.titleAvatar" :user="pageMetadata.avatar" indicator/>
+					<MkAvatar :decorations="isTwitterUi ? [] : undefined" :class="$style.titleAvatar" :user="pageMetadata.avatar" indicator/>
 				</div>
 				<i v-else-if="pageMetadata.icon" :class="[$style.titleIcon, pageMetadata.icon]"></i>
 
@@ -58,6 +64,8 @@ export type PageHeaderProps = {
 </script>
 
 <script lang="ts" setup>
+import type { ComputedRef } from 'vue';
+import { useIsTwitterUi } from '@/ui/twitter/index.js';
 import { onMounted, onUnmounted, ref, inject, useTemplateRef, computed } from 'vue';
 import { scrollToTop } from '@@/js/scroll.js';
 import XTabs from './MkPageHeader.tabs.vue';
@@ -66,6 +74,9 @@ import { deviceKind } from '@/utility/device-kind.js';
 import { $i } from '@/i.js';
 import { DI } from '@/di.js';
 import * as os from '@/os.js';
+
+/** 共享紧凑头像只在 Twitter 展示上下文关闭挂件，保留原 UI 的既有偏好行为。 */
+const isTwitterUi: ComputedRef<boolean> = useIsTwitterUi();
 
 const props = withDefaults(defineProps<PageHeaderProps>(), {
 	tabs: () => ([] as Tab[]),
