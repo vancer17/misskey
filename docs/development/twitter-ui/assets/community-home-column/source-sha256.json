@@ -1,0 +1,15 @@
+{
+  "baseCommit": "0e96dbd558c951ef86e02dd21aa9b8eb960efebe",
+  "sourceSha256": {
+    "packages/frontend/src/components/MkModal.vue": "9e6aa381b2db491b8ddc160e30d8b5f5f891201cdffc191f191001feec623e7c",
+    "packages/frontend/src/components/MkModalWindow.vue": "3e8e9a9805b5d6ca5552f953f9722a395d2fbd1d761474b6ddd42560e0f6aff3",
+    "packages/frontend/src/pages/TwitterCommunities.vue": "cc078b52a7d27de5640820c470f5b922c1b0a0336d8df0f7c9e23efb9bdc540e",
+    "packages/frontend/src/pages/channels.vue": "3caf9b63802e40df2c3792b6d1913aa65c7ac448caf1f0cf858c6ef975d5124e",
+    "packages/frontend/src/ui/twitter/components/TwitterCommunityLibraryDialog.vue": "d1cd37642d2e6b136dfde7fb7017ceed93b0e6b5e986813af716fe37a6329568",
+    "packages/frontend/src/ui/twitter/composables/use-community-dialog-position.ts": "9c9cc330d403a8d0759962aa73ff4cb26a626212d0fcce753bf14eefa2889c42",
+    "packages/frontend/src/ui/twitter/index.ts": "3a96c712bf314d7bc98631fcc4ebfa37cd47589bd1a798fbf1c4f2a3bf662587",
+    "packages/frontend/test/e2e/twitter-communities.spec.ts": "52dfbea58248b0df6467adef5f1ea773563cbf4b5e9cfcd12cc6709ac0dfe6fc",
+    "packages/frontend/test/e2e/twitter-community-library.spec.ts": "7e854710dce663f99e154b3f3851c1b853dedd71654128785cf6d182495c893d",
+    "frontend-build/manifest.json": "a5f57d2d73b7f094222f8a281fa79d6d9321d3a7a2cc32c658cee39155eb8938"
+  }
+}

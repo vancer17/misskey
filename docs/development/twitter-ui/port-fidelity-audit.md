@@ -132,7 +132,7 @@ S-1 裁决建议：三栏 Shell 是 phase-1 P-00 的产品决策（总表原文"
 
 ## 九、滚动登记 · P-25 Channels 页（基线后新增实现）
 
-频道入口当前契约见 [频道入口布局与请求边界](./communities-layout.md)。[ADR-0005](./adr/0005-communities-ia-convergence.md) 记录聚合数据源与详情页决策；[ADR-0015](./adr/0015-community-strip-layout.md) 记录当前入口横条、搜索与资料库窗口的选择及被替代方案。
+频道入口当前契约见 [频道入口布局与请求边界](./communities-layout.md)。[ADR-0005](./adr/0005-communities-ia-convergence.md) 记录聚合数据源与详情页决策；[ADR-0015](./adr/0015-community-strip-layout.md) 记录横条参数与窗口选择，[ADR-0017](./adr/0017-community-home-strip-and-column-dialog.md) 明确首页专属横条及管理窗口主列居中。
 
 ### 检索证据与来源范围
 
@@ -158,7 +158,7 @@ S-1 裁决建议：三栏 Shell 是 phase-1 P-00 的产品决策（总表原文"
 | # | 项 | 处置 |
 | --- | --- | --- |
 | CH-1 | 列表页 Home／Explore 双标签 | 标题栏与主标签吸顶；标签支持方向键、Home／End 与正确的 ARIA 关联；详情页按关注态派生标签，见 CH-11 |
-| CH-2 | 600px 主列内频道导航 | 首页和发现分别以单行横幅卡片位于帖子流上方；原生横向滚动、吸附、触摸／键盘、RTL 与可用方向箭头；关注集合保留游标分页 |
+| CH-2 | 600px 主列内频道导航 | 仅首页以单行横幅卡片位于帖子流上方；原生横向滚动、吸附、触摸／键盘、RTL 与可用方向箭头；关注集合保留游标分页 |
 | CH-3 | 统计／敏感内容／管理员标记 | 沿用频道详情及原有搜索预览卡的业务呈现；紧凑主横条只保留横幅与名称 |
 | CH-4 | 关注按钮 | `MkChannelFollowButton` 的原 Twitter 变体继续保留；详情页 Join／Leave 使用页面回调，见 CH-11 |
 | CH-5 | O-3 裁决延伸 | Twitter 频道时间线不渲染内联表单与 legacy 页脚发帖按钮；详情头部 pencil 使用带频道上下文的 `os.post`；移动 FAB 无频道上下文为已知限制 |
@@ -168,17 +168,17 @@ S-1 裁决建议：三栏 Shell 是 phase-1 P-00 的产品决策（总表原文"
 | CH-9 | 预览卡响应式边界 | 搜索结果继续继承原 `MkChannelPreview` 的媒体查询；主横条使用固定宽卡片与容器溢出，不借用大预览卡断点 |
 | CH-10 | 侧栏频道入口（`Sidebar.vue` → `/channels`） | 桌面频道入口常驻，属于 Misskey 实例能力的显式选择；移动底栏不新增频道项。Nitter 的单社区深链没有提供本入口的导航设计 |
 | CH-11 | 频道详情 Communities IA（ADR-0005 D7） | 社区头映射 Nitter `views/community.nim` + `profile/card.scss`；join-gate 与 Home／Explore／About 为 X-behavior。Home 使用频道流及置顶帖，Explore 使用 `notes/featured` + `channelId`，About 展示身份统计，Search 为频道内笔记搜索；Join／Leave 经页面 `channels/follow`／`unfollow` 回填 |
-| CH-12 | 频道列表 Communities IA（ADR-0015） | Home 为关注横条 + `channels/followed-timeline`；Explore 为推荐横条 + `channels/global-timeline`。管理／收藏由头部菜单打开独立窗口，移动端继承抽屉。入口数据源均为现有端点；默认 UI 继续原机制 |
+| CH-12 | 频道列表 Communities IA（ADR-0017） | Home 为关注横条 + `channels/followed-timeline`；Explore 直接展示 `channels/global-timeline`。管理／收藏由头部菜单打开独立窗口，移动端继承抽屉。入口数据源均为现有端点；默认 UI 继续原机制 |
 
 ### CH-12 展示与生命周期登记
 
 | # | 当前行为 | 登记类 |
 | --- | --- | --- |
 | CH-12a | 聚合流继续 `withControl=false`，不额外显示排序／控制条 | B 类（X 入口内容层级） |
-| CH-12b | 首页与发现使用同一横条组件；卡宽 `132px`、横幅 `2.5:1`、圆角 `12px`；发现推荐横条属于 Misskey 适配，X 归档 Explore 为主题入口 | B 类（归档参数与适配边界） |
-| CH-12c | 关注加载、失败、成功空集合分别处理；成功空关注只显示发现引导，关注非空后才展示首页帖子空态。推荐成功为空隐藏横条，推荐失败不阻断全频道流 | D 类空态协调修复；业务冷启动简化见 ADR-0015 |
+| CH-12b | 首页关注横条卡宽 `132px`、横幅 `2.5:1`、圆角 `12px`；发现仅显示全频道帖子，X 主题入口没有对应的分类数据源 | B 类（归档参数与适配边界） |
+| CH-12c | 关注加载、失败、成功空集合分别处理；成功空关注只显示发现引导，关注非空后才展示首页帖子空态。发现不创建推荐横条消费者 | D 类空态协调修复；业务冷启动简化见 ADR-0015 |
 | CH-12d | `channels.vue` 负责 Twitter 主面板、搜索及资料库唯一首拉；展示组件 `autoLoad=false`。初始化集合仅表达请求生命周期，既有回访刷新按实际面板可见性执行 | D 类请求生命周期修复；不复制分页器业务事实 |
-| CH-12e | 我的频道／收藏各自使用独立业务窗口；窗口内显示集合专用空态和重试；创建入口复用既有权限及路由 | B 类（Misskey 能力安置） |
+| CH-12e | 我的频道／收藏各自使用独立业务窗口；我的频道在桌面水平对齐主列，收藏维持视口居中，手机沿用抽屉；窗口内显示集合专用空态和重试；创建入口复用既有权限及路由 | B 类（Misskey 能力安置） |
 
 类型检查、真实后端集成与视觉采样的具体结果随交付记录保存；本节的来源映射不代替验证结果。
 
