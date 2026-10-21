@@ -3498,6 +3498,10 @@ _qr:
   mfm: "MFM"
 
 _avatarDecorationSettings:
+  notePreview: "帖子头像预览"
+  profilePreview: "个人资料主头像预览"
+  previewGeometryHint: "以下使用实际展示尺寸与绘制范围，虚线外的挂件内容不会显示。"
+  materialCanvasHint: "保留正方形透明画布，中央头像参考区域的宽高各为画布的一半，例如 1024 × 1024 画布中央的 512 × 512 区域。仅上半部有图案的挂件也须保留透明下半部，不要裁边后重新居中。"
   currentAvatar: "当前头像"
   wearingCount: "已佩戴 {count} / {max}"
   intro: "选择喜欢的挂件，为头像添加装饰。"
@@ -3535,6 +3539,7 @@ _avatarDecorationSettings:
   removeAllConfirm: "确定移除全部头像挂件吗？"
 
 _avatarDecorationManager:
+  accountRefreshFailed: "操作已保存，但当前佩戴图片刷新失败，请重新加载。"
   title: "头像挂件管理"
   intro: "管理挂件图片、说明及可使用的角色。"
   count: "共 {count} 个挂件"

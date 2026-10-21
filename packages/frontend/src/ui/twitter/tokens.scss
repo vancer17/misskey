@@ -117,6 +117,28 @@ body[data-ui='twitter'] {
 	/* 右侧信息栏宽度 */
 	--twitter-right-rail-width: 350px;
 
+	/* 头像尺寸沿用 Nitter tweet-avatar=48px 与当前资料头像 112/80px，不改变正文起点。 */
+	--twitter-avatar-note-size: 48px;
+	--twitter-avatar-note-gap: var(--twitter-space-3);
+	/* 当前移动帖卡和详情的 10px 间距，见 Note.vue / NoteDetail.vue。 */
+	--twitter-avatar-note-mobile-gap: 10px;
+	--twitter-avatar-profile-size: 112px;
+	--twitter-avatar-profile-mobile-size: 80px;
+	--twitter-avatar-profile-border-width: var(--twitter-space-1);
+	/* 挂件区域由宿主留白减去 4px 保护间距得出；只裁剪挂件，不裁剪头像或帖子。 */
+	--twitter-avatar-note-bleed-top: calc(var(--twitter-space-3) - var(--twitter-space-1));
+	--twitter-avatar-note-bleed-left: calc(var(--twitter-space-3) - var(--twitter-space-1));
+	--twitter-avatar-note-bleed-right: calc(var(--twitter-avatar-note-gap) - var(--twitter-space-1));
+	--twitter-avatar-note-mobile-bleed-right: calc(var(--twitter-avatar-note-mobile-gap) - var(--twitter-space-1));
+	/* 线程连接线从头像下方 4px 开始，装饰不越过该起点。 */
+	--twitter-avatar-note-bleed-bottom: var(--twitter-space-1);
+	/* 资料头像上方为横幅；左右及下方分别受 16/12px 内距、操作间距和身份文字间距约束。 */
+	--twitter-avatar-profile-bleed-top: var(--twitter-space-6);
+	--twitter-avatar-profile-bleed-left: calc(var(--twitter-space-4) - var(--twitter-space-1));
+	--twitter-avatar-profile-mobile-bleed-left: calc(var(--twitter-space-3) - var(--twitter-space-1));
+	--twitter-avatar-profile-bleed-right: calc(var(--twitter-space-3) - var(--twitter-space-1));
+	--twitter-avatar-profile-bleed-bottom: calc(var(--twitter-space-3) - var(--twitter-space-1));
+
 	/* 头像挂件为 Misskey 专属能力，无 Nitter 编辑器。下列尺寸保留原组件尺度，见 ADR-0011。 */
 	/* 设置页原有 72px 头像。 */
 	--twitter-decoration-avatar-size: 72px;

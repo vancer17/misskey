@@ -13,9 +13,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<template #header>{{ i18n.ts._avatarDecorationSettings.tryOn }}</template>
 	<div :class="$style.root" :aria-busy="busy" data-testid="decoration-editor">
 		<div :class="$style.heading"><h2>{{ decoration.name }}</h2><span>{{ i18n.ts._avatarDecorationSettings.previewOnly }}</span></div>
-		<div :key="previewKey" :class="$style.preview" data-testid="decoration-draft-preview" @error.capture="onPreviewError">
-			<MkAvatar :class="$style.avatar" :user="$i" :decorations="decorationsForPreview" forceShowDecoration/>
+		<label v-if="isTwitterUi" :class="$style.sceneSelector">
+			<span>{{ i18n.ts._avatarDecorationManager.previewTitle }}</span>
+			<select v-model="previewContext" :disabled="busy" data-testid="decoration-preview-context">
+				<option value="note">{{ i18n.ts._avatarDecorationSettings.notePreview }}</option>
+				<option value="profile">{{ i18n.ts._avatarDecorationSettings.profilePreview }}</option>
+			</select>
+		</label>
+		<div :key="previewKey" :class="isTwitterUi ? $style.targetPreview : $style.preview" data-testid="decoration-draft-preview" @error.capture="onPreviewError">
+			<TwitterAvatarDecorationPreview v-if="isTwitterUi" :user="$i" :decorations="decorationsForPreview" :context="previewContext"/>
+			<MkAvatar v-else :class="$style.avatar" :user="$i" :decorations="decorationsForPreview" forceShowDecoration/>
 		</div>
+		<p v-if="isTwitterUi" :class="$style.description">{{ i18n.ts._avatarDecorationSettings.previewGeometryHint }}</p>
 		<p v-if="decoration.description" :class="$style.description">{{ decoration.description }}</p>
 		<p v-if="locked" :class="$style.warning" role="status" data-testid="decoration-locked">{{ i18n.ts._avatarDecorationSettings.roleRequiredDescription }}</p>
 		<p v-if="exceeded" :class="$style.warning" role="status" data-testid="decoration-limit">{{ i18n.ts._avatarDecorationSettings.limitReached }}</p>
@@ -49,6 +58,8 @@ import MkModalWindow from '@/components/MkModalWindow.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
 import { i18n } from '@/i18n.js';
 import { ensureSignin } from '@/i.js';
+import { TwitterAvatarDecorationPreview, useIsTwitterUi } from '@/ui/twitter/index.js';
+import type { TwitterAvatarDecorationContext } from '@/ui/twitter/index.js';
 import { canUseAvatarDecoration } from '@/utility/avatar-decoration/index.js';
 
 const $i: ReturnType<typeof ensureSignin> = ensureSignin();
@@ -65,6 +76,9 @@ const busy: Ref<boolean> = ref(false);
 const errorMessage: Ref<string | null> = ref(null);
 const previewFailed: Ref<boolean> = ref(false);
 const previewKey: Ref<number> = ref(0);
+const isTwitterUi: ComputedRef<boolean> = useIsTwitterUi();
+/** 试戴目标只改变预览，佩戴变换草稿与实际写入字段保持一致。 */
+const previewContext: Ref<Exclude<TwitterAvatarDecorationContext, 'none'>> = ref('note');
 let disposed: boolean = false;
 const exceeded: ComputedRef<boolean> = computed(/** 调整已有项不增加数量；上限降低时仍需减少到合法数量。 */ (): boolean => $i.avatarDecorations.length + (props.usingIndex === null ? 1 : 0) > $i.policies.avatarDecorationLimit);
 const locked: ComputedRef<boolean> = computed(/** 角色限制只派生 UI 提示，服务端始终执行最终校验。 */ (): boolean => !canUseAvatarDecoration(props.decoration, $i.roles));
@@ -136,6 +150,10 @@ onBeforeUnmount(/** 页面离开后写入可以完成，但不能再操作已销
 .heading { text-align: center; display: grid; gap: var(--twitter-space-2, 8px); }
 .heading h2 { margin: 0; font-size: var(--twitter-font-size-title, 18px); overflow-wrap: anywhere; }
 .heading span, .description { color: var(--twitter-secondary-fg, var(--MI_THEME-fgTransparentWeak)); font-size: var(--twitter-font-size-meta, 13px); line-height: 1.6; }
+.sceneSelector { display: grid; gap: var(--twitter-space-1, 4px); margin-top: var(--twitter-space-3, 12px); font-size: var(--twitter-font-size-meta, 13px); }
+.sceneSelector select { width: 100%; min-height: var(--twitter-touch-target, 44px); padding: 0 var(--twitter-space-2, 8px); border: 1px solid var(--twitter-border, var(--MI_THEME-divider)); border-radius: var(--twitter-radius-medium, 8px); background: var(--twitter-panel, var(--MI_THEME-panel)); color: inherit; font: inherit; }
+.sceneSelector select:focus-visible { outline: 2px solid var(--twitter-accent, var(--MI_THEME-accent)); outline-offset: 2px; }
+.targetPreview { margin: var(--twitter-space-3, 12px) 0; border: 1px solid var(--twitter-border); border-radius: var(--twitter-radius-medium); }
 .preview { display: grid; place-items: center; min-height: calc(var(--twitter-decoration-editor-avatar-size, 64px) * 4); }
 .avatar { width: var(--twitter-decoration-editor-avatar-size, 64px); height: var(--twitter-decoration-editor-avatar-size, 64px); }
 .description { margin: 0 0 var(--twitter-space-3, 12px); white-space: pre-wrap; overflow-wrap: anywhere; }
