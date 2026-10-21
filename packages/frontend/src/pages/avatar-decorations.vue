@@ -53,7 +53,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 								:data-decoration-id="decoration.id"
 								@click="openEditor(decoration)"
 							>
-								<div :class="$style.preview"><MkAvatar :class="$style.avatar" :user="$i" :link="false" :decorations="[{ url: decoration.url }]" forceShowDecoration/></div>
+								<div :class="$style.preview">
+									<TwitterAvatar v-if="isTwitterUi" :class="$style.avatar" :user="$i" :link="false" :decorations="[{ url: decoration.url }]" decorationContext="note" forceShowDecoration/>
+									<MkAvatar v-else :class="$style.avatar" :user="$i" :link="false" :decorations="[{ url: decoration.url }]" forceShowDecoration/>
+								</div>
 								<strong :class="$style.decorationName">{{ decoration.name }}</strong>
 								<span :class="$style.count">{{ decoration.roleIdsThatCanBeUsedThisDecoration.length === 0 ? i18n.ts._avatarDecorationManager.allRoles : i18n.tsx._avatarDecorationManager.roleCount({ count: decoration.roleIdsThatCanBeUsedThisDecoration.length }) }}</span>
 							</button>
@@ -75,10 +78,11 @@ import XEditor from './avatar-decoration-edit-dialog.vue';
 import { ensureSignin, $i as currentAccount } from '@/i.js';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import { updateCurrentAccountPartial } from '@/accounts.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import type { PageMetadata } from '@/page.js';
-import { useIsTwitterUi, TwitterSettingsShell } from '@/ui/twitter/index.js';
+import { TwitterAvatar, useIsTwitterUi, TwitterSettingsShell } from '@/ui/twitter/index.js';
 
 /** 账号与管理策略沿用现有入口的权威来源，后端仍执行每次操作的权限校验。 */
 const $i: ReturnType<typeof ensureSignin> = ensureSignin();
@@ -141,25 +145,52 @@ async function loadDirectory(): Promise<boolean> {
 	}
 }
 
-/** 用户主动刷新只清除旧提示，不清空目录。 */
-function refresh(): void {
+/** 从服务端读取最新佩戴投影；离开管理页后仍可完成已保存素材的账户刷新。 */
+async function refreshWornAccount(): Promise<boolean> {
+	const accountId: string = $i.id;
+	const token: string = $i.token;
+	if (currentAccount !== $i) return false;
+	const appearance: string = JSON.stringify($i.avatarDecorations);
+	try {
+		const confirmed: Misskey.entities.MeDetailed = await misskeyApi('i', {}, token);
+		if (currentAccount !== $i || currentAccount.id !== accountId || currentAccount.token !== token || confirmed.id !== accountId) return false;
+		// 后到的读取不可覆盖其间已经确认的新佩戴或图片投影。
+		if (JSON.stringify($i.avatarDecorations) !== appearance) return true;
+		updateCurrentAccountPartial({ avatarDecorations: confirmed.avatarDecorations });
+		return true;
+	} catch (error: unknown) {
+		return false;
+	}
+}
+
+/** 用户主动刷新目录及当前佩戴图片；失败保留原事实，并提供可重复使用的重试入口。 */
+async function refresh(): Promise<void> {
 	if (loading.value || saving.value) return;
 	pageMessage.value = null;
-	void loadDirectory();
+	await loadDirectory();
+	const refreshed: boolean = $i.avatarDecorations.length === 0 || await refreshWornAccount();
+	if (!refreshed && active && !disposed && currentAccount === $i) pageMessage.value = i18n.ts._avatarDecorationManager.accountRefreshFailed;
 }
 
 /** 所有写命令复用执行边界；写成功与后续读取失败分别提示，避免重复提交。 */
-async function write(command: () => Promise<void>, deleted: boolean = false): Promise<void> {
+async function write(command: () => Promise<void>, deleted: boolean = false, decorationId?: string): Promise<void> {
 	if (!active || disposed || saving.value || !canManage.value || currentAccount !== $i) throw new Error(i18n.ts._avatarDecorationManager.changedElsewhere);
 	saving.value = true;
 	pageMessage.value = null;
 	invalidateRead();
+	const refreshAccount: boolean = decorationId !== undefined && $i.avatarDecorations.some(
+		/** 仅已佩戴的目录实体变更需要重新读取账户，目录草稿不参与账户事实。 */
+		(decoration: Misskey.entities.MeDetailed['avatarDecorations'][number]): boolean => decoration.id === decorationId,
+	);
 	try {
 		await command();
+		const accountRefreshed: boolean = !refreshAccount || await refreshWornAccount();
 		if (!active || disposed || currentAccount !== $i) return;
 		const refreshed: boolean = await loadDirectory();
 		if (!active || disposed || currentAccount !== $i) return;
-		pageMessage.value = refreshed
+		pageMessage.value = !accountRefreshed
+			? i18n.ts._avatarDecorationManager.accountRefreshFailed
+			: refreshed
 			? (deleted ? i18n.ts._avatarDecorationManager.deleted : i18n.ts._avatarDecorationManager.saved)
 			: (deleted ? i18n.ts._avatarDecorationManager.deletedRefreshFailed : i18n.ts._avatarDecorationManager.savedRefreshFailed);
 	} catch (error: unknown) {
@@ -188,7 +219,7 @@ function openEditor(decoration?: Misskey.entities.AdminAvatarDecorationsListResp
 					const created: Misskey.entities.AdminAvatarDecorationsListResponse[number] = await misskeyApi('admin/avatar-decorations/create', draft, $i.token);
 					if (active && !disposed && currentAccount === $i) avatarDecorations.value = [created, ...avatarDecorations.value];
 				}
-			},
+			}, false, selectedId,
 		),
 		/** 删除只针对打开时的实体；成功回执后立即移除，随后重读确认目录。 */
 		remove: selectedId === undefined ? undefined : async (): Promise<void> => write(
@@ -196,7 +227,7 @@ function openEditor(decoration?: Misskey.entities.AdminAvatarDecorationsListResp
 			async (): Promise<void> => {
 				await misskeyApi('admin/avatar-decorations/delete', { id: selectedId }, $i.token);
 				if (active && !disposed && currentAccount === $i) avatarDecorations.value = avatarDecorations.value.filter(/** 保留其他已确认实体。 */ (item: Misskey.entities.AdminAvatarDecorationsListResponse[number]): boolean => item.id !== selectedId);
-			}, true,
+			}, true, selectedId,
 		),
 	}, {
 		/** 释放弹窗句柄后才允许再次打开，避免叠加多份草稿。 */
@@ -262,5 +293,7 @@ definePage(/** 两个现有路由共享同一管理标题与业务实现。 */ (
 .preview { display: grid; place-items: center; width: 100%; height: calc(var(--twitter-decoration-card-avatar-size, 60px) * 2); pointer-events: none; }
 .avatar { width: var(--twitter-decoration-card-avatar-size, 60px); height: var(--twitter-decoration-card-avatar-size, 60px); }
 .decorationName { max-width: 100%; line-height: 1.5; overflow-wrap: anywhere; }
-.twitter { background: var(--twitter-bg); color: var(--twitter-fg); }
+.twitter { background: var(--twitter-bg); color: var(--twitter-fg);
+	.avatar { width: var(--twitter-avatar-note-size); height: var(--twitter-avatar-note-size); }
+}
 </style>

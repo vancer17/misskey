@@ -3630,6 +3630,10 @@ _twitterUi:
   scheduleTimeIsInThePast: "現在より未来の日時を指定してください"
 
 _avatarDecorationSettings:
+  notePreview: "投稿アバターのプレビュー"
+  profilePreview: "プロフィールアバターのプレビュー"
+  previewGeometryHint: "実際の表示サイズと描画範囲です。点線の外側は表示されません。"
+  materialCanvasHint: "正方形の透明キャンバスを保ち、中央に幅・高さが各半分のアバター基準領域を置いてください（例：1024 × 1024 内の中央 512 × 512）。上半分だけの飾りでも透明な下半分を切り取らないでください。"
   currentAvatar: "現在のアバター"
   wearingCount: "装着中 {count} / {max}"
   intro: "デコレーションを選んで、アバターを飾りましょう。"
@@ -3667,6 +3671,7 @@ _avatarDecorationSettings:
   removeAllConfirm: "すべてのデコレーションを取り外しますか？"
 
 _avatarDecorationManager:
+  accountRefreshFailed: "保存結果は確定しましたが、装着中の画像を更新できませんでした。再読み込みしてください。"
   title: "アバターデコレーション管理"
   intro: "画像と説明、利用できるロールを管理します。"
   count: "{count}件のデコレーション"
