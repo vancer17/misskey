@@ -1,0 +1,21 @@
+{
+  "comparison": "Same fixed API seed, viewport, DPR 1, browser zoom 100%, same light/dark browser preference; intended old-to-new layout change. This is review evidence, not an approved X baseline or a pass threshold.",
+  "scenes": [
+    {
+      "scene": "dark-owned-4",
+      "width": 1440,
+      "height": 1000,
+      "changedPixels": 142964,
+      "changedRatio": 0.09928055555555555,
+      "threshold": "sum RGB absolute distance > 36"
+    },
+    {
+      "scene": "light-owned-4",
+      "width": 1440,
+      "height": 1000,
+      "changedPixels": 313700,
+      "changedRatio": 0.21784722222222222,
+      "threshold": "sum RGB absolute distance > 36"
+    }
+  ]
+}

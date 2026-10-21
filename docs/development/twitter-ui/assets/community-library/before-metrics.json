@@ -1,0 +1,22 @@
+[
+  {
+    "colorScheme": "dark",
+    "height": 650,
+    "top": 175,
+    "bottom": 825,
+    "bodyHeight": 604,
+    "bodyScrollHeight": 604,
+    "bodyBackground": "rgb(21, 32, 43)",
+    "listBackground": "rgb(16, 24, 33)"
+  },
+  {
+    "colorScheme": "light",
+    "height": 650,
+    "top": 175,
+    "bottom": 825,
+    "bodyHeight": 604,
+    "bodyScrollHeight": 604,
+    "bodyBackground": "rgb(255, 255, 255)",
+    "listBackground": "rgb(230, 236, 240)"
+  }
+]

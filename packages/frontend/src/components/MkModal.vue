@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：基础模态层的定位、过渡与交互生命周期。
+作用：统一弹出菜单、桌面对话框和移动抽屉，允许桌面对话框接收视口水平中心坐标。
+数据链：调用方原始布局参数 → 模态布局 → 插槽窗口；不解释业务实体或定位参照来源。
+-->
+
 <template>
 <Transition
 	:name="transitionName"
@@ -34,7 +40,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 >
 	<div v-show="manualShowing != null ? manualShowing : showing" ref="modalRootEl" v-hotkey.global="keymap" :class="[$style.root, { [$style.drawer]: type === 'drawer', [$style.dialog]: type === 'dialog', [$style.popup]: type === 'popup', [$style.twitter]: isTwitterUi }]" :style="{ zIndex, pointerEvents: (manualShowing != null ? manualShowing : showing) ? 'auto' : 'none', '--transformOrigin': transformOrigin }">
 		<div data-testid="bg" :data-test-is-transparent="isEnableBgTransparent" class="_modalBg" :class="[$style.bg, { [$style.bgTransparent]: isEnableBgTransparent }]" :style="{ zIndex }" @click="onBgClick" @mousedown="onBgClick" @contextmenu.prevent.stop="() => {}"></div>
-		<div ref="content" :class="[$style.content, { [$style.fixed]: fixed }]" :style="{ zIndex }" @click.self="onBgClick">
+		<div ref="content" :class="[$style.content, { [$style.fixed]: fixed }]" :style="{ zIndex, ...dialogLayoutStyle }" @click.self="onBgClick">
 			<slot :max-height="maxHeight" :type="type"></slot>
 		</div>
 	</div>
@@ -43,6 +49,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { nextTick, normalizeClass, onMounted, onUnmounted, provide, watch, ref, useTemplateRef, computed } from 'vue';
+import type { ComputedRef, CSSProperties } from 'vue';
 import type { Keymap } from '@/utility/hotkey.js';
 import * as os from '@/os.js';
 import { isTouchUsing } from '@/utility/touch.js';
@@ -75,6 +82,8 @@ const props = withDefaults(defineProps<{
 	transparentBg?: boolean;
 	hasInteractionWithOtherFocusTrappedEls?: boolean;
 	returnFocusTo?: HTMLElement | null;
+	/** 桌面对话框相对布局视口左缘的水平中心，单位为 CSS 像素。 */
+	dialogCenterX?: number;
 }>(), {
 	manualShowing: null,
 	anchorElement: null,
@@ -118,6 +127,21 @@ const type = computed<ModalTypes>(() => {
 		return props.preferType!;
 	}
 });
+
+/** 将有限的桌面中心坐标投影为纯布局变量，抽屉、菜单和默认居中不消费此参数。 */
+const dialogLayoutStyle: ComputedRef<CSSProperties> = computed<CSSProperties>(
+	/** 仅向对话框内容层传入定位坐标与匹配的缩放原点，保留既有 transform 动画。 */
+	(): CSSProperties => {
+		/** 调用方提供的可选视口坐标；非有限值保持默认居中。 */
+		const centerX: number | undefined = props.dialogCenterX;
+		if (type.value !== 'dialog' || centerX === undefined || !Number.isFinite(centerX)) return {};
+		return {
+			'--modal-dialog-center-x': `${centerX}px`,
+			'--transformOrigin': 'var(--modal-dialog-resolved-center-x) center',
+		};
+	},
+);
+
 const isEnableBgTransparent = computed(() => props.transparentBg && (type.value === 'popup'));
 const transitionName = computed((() =>
 	prefer.s.animation
@@ -476,18 +500,24 @@ defineExpose({
 .root {
 	&.dialog {
 		> .content {
+			--modal-dialog-padding: 32px;
+			--modal-dialog-resolved-center-x: clamp(var(--modal-dialog-padding), var(--modal-dialog-center-x, 50%), calc(100% - var(--modal-dialog-padding)));
+
 			position: fixed;
 			top: 0;
 			bottom: 0;
 			left: 0;
 			right: 0;
 			margin: auto;
-			padding: 32px;
+			padding: var(--modal-dialog-padding);
+			/* 非对称留白将可用区域中心移至目标坐标，窗口仍由原有 flex 与 auto margin 居中、收窄。 */
+			padding-left: calc(var(--modal-dialog-padding) + max(0px, var(--modal-dialog-resolved-center-x) + var(--modal-dialog-resolved-center-x) - 100%));
+			padding-right: calc(var(--modal-dialog-padding) + max(0px, 100% - var(--modal-dialog-resolved-center-x) - var(--modal-dialog-resolved-center-x)));
 			display: flex;
 			overflow: auto;
 
 			@media (max-width: 500px) {
-				padding: 16px;
+				--modal-dialog-padding: 16px;
 			}
 		}
 	}
