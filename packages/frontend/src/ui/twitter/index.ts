@@ -30,6 +30,11 @@ export { default as TwitterSearchField } from './SearchField.vue';
 export { default as TwitterWelcome } from './components/TwitterWelcome.vue';
 export { default as TwitterAuthButtons } from './components/TwitterAuthButtons.vue';
 
+/** 主内容头像与挂件预览共用同一场景边界和素材坐标。 */
+export { default as TwitterAvatar } from './components/TwitterAvatar.vue';
+export { default as TwitterAvatarDecorationPreview } from './components/TwitterAvatarDecorationPreview.vue';
+export type { TwitterAvatarDecoration, TwitterAvatarDecorationContext } from './domain/index.js';
+
 /** 当前账户身份的只读展示派生，不改变输入业务模型。 */
 export { useTwitterDisplayUser } from './composables/use-twitter-display-user.js';
 
