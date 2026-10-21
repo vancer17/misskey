@@ -1,0 +1,68 @@
+{
+  "comparison": "Fixed scenario names and relations, same viewport/DPR 1/theme; test fixtures recreated after isolated server restart. RGB absolute distance sum > 36. Changes are review evidence, not an approved pixel baseline or pass threshold.",
+  "scenes": [
+    {
+      "scene": "dark-1440-explore",
+      "width": 1440,
+      "height": 1000,
+      "changedPixels": 18387,
+      "changedRatio": 0.01276875
+    },
+    {
+      "scene": "dark-1440-home",
+      "width": 1440,
+      "height": 1000,
+      "changedPixels": 2982,
+      "changedRatio": 0.0020708333333333334
+    },
+    {
+      "scene": "dark-1440-owned",
+      "width": 1440,
+      "height": 1000,
+      "changedPixels": 74724,
+      "changedRatio": 0.05189166666666667
+    },
+    {
+      "scene": "dark-1657-owned",
+      "width": 1657,
+      "height": 1000,
+      "changedPixels": 45222,
+      "changedRatio": 0.027291490645745323
+    },
+    {
+      "scene": "dark-900-owned",
+      "width": 900,
+      "height": 1000,
+      "changedPixels": 44395,
+      "changedRatio": 0.049327777777777776
+    },
+    {
+      "scene": "light-1440-owned",
+      "width": 1440,
+      "height": 1000,
+      "changedPixels": 44802,
+      "changedRatio": 0.0311125
+    },
+    {
+      "scene": "mobile-390-explore",
+      "width": 390,
+      "height": 844,
+      "changedPixels": 14931,
+      "changedRatio": 0.04536091870215093
+    },
+    {
+      "scene": "mobile-390-home",
+      "width": 390,
+      "height": 844,
+      "changedPixels": 60,
+      "changedRatio": 0.0001822821728034998
+    },
+    {
+      "scene": "mobile-390-owned",
+      "width": 390,
+      "height": 844,
+      "changedPixels": 0,
+      "changedRatio": 0
+    }
+  ]
+}
