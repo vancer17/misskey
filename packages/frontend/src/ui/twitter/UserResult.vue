@@ -3,10 +3,16 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter 紧凑身份展示。
+作用：保留原头像交互，将紧凑头像明确接入不显示挂件的展示场景。
+数据链：既有用户投影 → Twitter 头像包装 → 无装饰身份展示，不改写用户事实。
+-->
+
 <template>
 <article :class="[$style.root, { [$style.mobile]: isMobile }]">
 	<MkA :class="$style.identity" :to="userPage(user)" :aria-label="acct(user)">
-		<MkAvatar :class="$style.avatar" :user="user" indicator/>
+		<TwitterAvatar decorationContext="none" :class="$style.avatar" :user="user" indicator/>
 		<span :class="$style.account">
 			<span :class="$style.nameRow">
 				<span :class="$style.name"><MkUserName :user="user" :nowrap="true"/></span>
@@ -33,6 +39,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import TwitterAvatar from './components/TwitterAvatar.vue';
 import * as Misskey from 'misskey-js';
 import MkFollowButton from '@/components/MkFollowButton.vue';
 import { acct, userPage } from '@/filters/user.js';
