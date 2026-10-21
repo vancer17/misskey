@@ -33,6 +33,8 @@ export { default as TwitterAuthButtons } from './components/TwitterAuthButtons.v
 /** 主内容头像与挂件预览共用同一场景边界和素材坐标。 */
 export { default as TwitterAvatar } from './components/TwitterAvatar.vue';
 export { default as TwitterAvatarDecorationPreview } from './components/TwitterAvatarDecorationPreview.vue';
+/** 管理入口使用的静态素材校准；通过真实上传命令确认后交付新图片。 */
+export { default as TwitterAvatarDecorationCalibrationDialog } from './components/TwitterAvatarDecorationCalibrationDialog.vue';
 export type { TwitterAvatarDecoration, TwitterAvatarDecorationContext } from './domain/index.js';
 
 /** 当前账户身份的只读展示派生，不改变输入业务模型。 */
