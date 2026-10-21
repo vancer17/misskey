@@ -1,0 +1,22 @@
+{
+  "baseCommit": "0e96dbd558c951ef86e02dd21aa9b8eb960efebe",
+  "branch": "fix/twitter-communities-layout",
+  "sourceSha256": {
+    "locales/ja-JP.yml": "f3e44191d729376a67515c897315af9fabe160ef5eaa5aafd512b8e772025ead",
+    "packages/frontend/src/components/MkModalWindow.vue": "99b4d4c3a91b62a6831099fcfe95a4aaca336380e200af537eb3dd74bd0374b8",
+    "packages/frontend/src/pages/TwitterCommunities.vue": "bf83739ff82440731d5d3ba214a1133217e1b75942abf6a61219913eb148d778",
+    "packages/frontend/src/pages/channels.vue": "17a0542b7a06ff891e6d51c0b4ae2198ce147479c651a44dbd516ce80377b4b8",
+    "packages/frontend/src/ui/twitter/adapters/owned-channels.ts": "c2f1f6f1c375da86dcf68e1c49db2457c520045435112bfe3872a39edb416a61",
+    "packages/frontend/src/ui/twitter/components/TwitterCommunityLibraryDialog.vue": "1d3987860028c29e65de36350e2b6b78c3f60f3b8f260a9a83dec28e504c49a2",
+    "packages/frontend/src/ui/twitter/composables/use-channel-library-focus.ts": "7033dde2236385483d7d7c03ad00fef212797c43fcfda5179405841d6a0c343a",
+    "packages/frontend/src/ui/twitter/domain/communities.ts": "a9ec7d056e2004519bf6a904640837b362df28fd583a9d4e6796f846fe35dcf0",
+    "packages/frontend/src/ui/twitter/domain/index.ts": "2b272d41bf1cea4a591d34f347892419abde5858280ccb60610e2e5d8569c394",
+    "packages/frontend/src/ui/twitter/index.ts": "92b120116a1205e221d55d61917dbb548ad6f06d821530b55b3c9d649b418008",
+    "packages/frontend/src/ui/twitter/store/owned-channels.ts": "45b0727096df5766bb349df994fdf275e389a4c609a1c1845f640cd229dd6669",
+    "packages/frontend/test/e2e/twitter-community-library.spec.ts": "4457248f0761abf241c28b1010b09f2c5d8de4d3a75e0011885d60f65de63c57",
+    "packages/frontend/test/unit/twitter-owned-channels.test.ts": "c55a304928e3bbcf2427777fe8e4d6f7cb4b290e76d630daf1fc44676b0b3e0d",
+    "packages/i18n/src/autogen/locale.ts": "2fe611da42108bf73635266ea73613e59d6c7b33e47e4607f2733b202e3b5b85",
+    "packages/i18n/src/index.ts": "d4a017661e8625f5c4fd3084254412bbecbdc1918c01c4ae1d254445128b8c94",
+    "packages/i18n/src/resources/fork/zh-CN.json": "cbd30da857eeb41d88f36ab5d7306356e9321b20e432387febaff5ce1093f483"
+  }
+}

@@ -23,8 +23,19 @@ type PrimaryLang = keyof typeof primaries;
 
 type Locales = Record<Language, ILocale>;
 
-/** fork 目前唯一允许补充的业务文案区域；叶子键始终由日文源和生成类型派生。 */
-const forkChineseNamespace: keyof Pick<Locale, '_avatarDecorationCalibration'> = '_avatarDecorationCalibration';
+/** fork 明确允许补充的业务区域，命名空间与叶子键由日文源生成类型派生。 */
+type ForkChineseNamespaces = Pick<Locale, '_avatarDecorationCalibration' | '_channel'>;
+
+/** 每个允许区域只补尚未进入正式中文资源的叶子键，不复制完整语言模型。 */
+type ForkChineseSupplement = { [Namespace in keyof ForkChineseNamespaces]?: Partial<ForkChineseNamespaces[Namespace]> };
+
+/** 补充范围保持显式白名单，避免任意业务区域意外绕过原生回退。 */
+const forkChineseNamespaces = {
+	/** 头像挂件素材校准的本地业务文案。 */
+	_avatarDecorationCalibration: true,
+	/** 频道资料库的空态与加载结束文案。 */
+	_channel: true,
+} as const satisfies Readonly<Record<keyof ForkChineseNamespaces, true>>;
 
 /** 判断外部 JSON 是否为普通对象，避免数组、空值或标量被当作翻译字典。 */
 function isLocaleRecord(value: unknown): value is Record<string, unknown> {
@@ -35,7 +46,7 @@ function isLocaleRecord(value: unknown): value is Record<string, unknown> {
  * 读取 fork 自有的中文补充，只补当前日文源存在而正式中文尚未提供的叶子键。
  * 每次构建重新读取原始字节，避免常驻开发进程的 ESM 缓存冻结翻译；删除文件即回到原生回退。
  */
-function loadForkChineseSupplement(rawLocales: Locales, moduleUrl: string): Partial<Locale[typeof forkChineseNamespace]> {
+function loadForkChineseSupplement(rawLocales: Locales, moduleUrl: string): ForkChineseSupplement {
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(fs.readFileSync(new URL('./resources/fork/zh-CN.json', moduleUrl), 'utf-8'));
@@ -44,24 +55,24 @@ function loadForkChineseSupplement(rawLocales: Locales, moduleUrl: string): Part
 		throw error;
 	}
 	if (!isLocaleRecord(parsed)) throw new Error('Fork zh-CN supplement must be an object.');
-	for (const namespace of Object.keys(parsed)) {
-		if (namespace !== forkChineseNamespace) throw new Error(`Fork zh-CN supplement has unsupported namespace: ${namespace}`);
-	}
-	if (!Object.hasOwn(parsed, forkChineseNamespace)) return {};
-	const section: unknown = parsed[forkChineseNamespace];
-	if (!isLocaleRecord(section)) throw new Error(`Fork zh-CN ${forkChineseNamespace} must be an object.`);
-	const source: unknown = rawLocales['ja-JP'][forkChineseNamespace];
-	if (!isLocaleRecord(source)) throw new Error(`Fork zh-CN source namespace is missing: ${forkChineseNamespace}`);
-	const nativeChinese: unknown = rawLocales['zh-CN'][forkChineseNamespace];
-	const supplement: Partial<Locale[typeof forkChineseNamespace]> = {};
-	for (const [key, value] of Object.entries(section)) {
-		if (!Object.hasOwn(source, key) || typeof source[key] !== 'string') throw new Error(`Fork zh-CN supplement has unknown key: ${forkChineseNamespace}.${key}`);
-		if (typeof value !== 'string' || value.trim().length === 0) throw new Error(`Fork zh-CN ${forkChineseNamespace}.${key} must be a nonempty string.`);
-		if (isLocaleRecord(nativeChinese) && Object.hasOwn(nativeChinese, key)) {
-			throw new Error(`Official zh-CN already contains ${forkChineseNamespace}.${key}; remove the fork supplement for this key.`);
+	const supplement: ForkChineseSupplement = {};
+	for (const [rawNamespace, section] of Object.entries(parsed)) {
+		if (!Object.hasOwn(forkChineseNamespaces, rawNamespace)) throw new Error(`Fork zh-CN supplement has unsupported namespace: ${rawNamespace}`);
+		const namespace: keyof ForkChineseNamespaces = rawNamespace as keyof ForkChineseNamespaces;
+		if (!isLocaleRecord(section)) throw new Error(`Fork zh-CN ${namespace} must be an object.`);
+		const source: unknown = rawLocales['ja-JP'][namespace];
+		if (!isLocaleRecord(source)) throw new Error(`Fork zh-CN source namespace is missing: ${namespace}`);
+		const nativeChinese: unknown = rawLocales['zh-CN'][namespace];
+		const sectionSupplement: Record<string, string> = {};
+		for (const [key, value] of Object.entries(section)) {
+			if (!Object.hasOwn(source, key) || typeof source[key] !== 'string') throw new Error(`Fork zh-CN supplement has unknown key: ${namespace}.${key}`);
+			if (typeof value !== 'string' || value.trim().length === 0) throw new Error(`Fork zh-CN ${namespace}.${key} must be a nonempty string.`);
+			if (isLocaleRecord(nativeChinese) && Object.hasOwn(nativeChinese, key)) {
+				throw new Error(`Official zh-CN already contains ${namespace}.${key}; remove the fork supplement for this key.`);
+			}
+			sectionSupplement[key] = value;
 		}
-		const localeKey: keyof Locale[typeof forkChineseNamespace] = key as keyof Locale[typeof forkChineseNamespace];
-		supplement[localeKey] = value;
+		supplement[namespace] = sectionSupplement;
 	}
 	return supplement;
 }
@@ -118,13 +129,13 @@ function build(): Record<Language, Locale> {
 	);
 
 	removeEmpty(rawLocales);
-	const forkChinese: Partial<Locale[typeof forkChineseNamespace]> = loadForkChineseSupplement(rawLocales, metaUrl);
+	const forkChinese: ForkChineseSupplement = loadForkChineseSupplement(rawLocales, metaUrl);
 
 	return Object.entries(rawLocales).reduce<Record<Language, Locale>>(/** 保持各语言原有继承顺序，补充不会流入英文、日文或繁体中文。 */ (all: Record<Language, Locale>, [language, value]: [string, ILocale]): Record<Language, Locale> => {
 		const lang: string = language.split('-')[0];
 		const key: Language = language as Language;
 		/** 中文目标独享补充；不修改 rawLocales，避免 primaries.zh=CN 将 fork 文案传给繁体中文。 */
-		const target: ILocale = key === 'zh-CN' ? merge<ILocale>(value, { [forkChineseNamespace]: forkChinese as ILocale }) : value;
+		const target: ILocale = key === 'zh-CN' ? merge<ILocale>(value, forkChinese as ILocale) : value;
 
 		switch (key) {
 			case 'ja-JP':

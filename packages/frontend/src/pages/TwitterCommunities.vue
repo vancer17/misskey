@@ -6,8 +6,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <!--
 文件领域：Twitter 频道入口的页面展示。
 作用：以标题／搜索、主标签、横向频道卡片和帖子流组织内容，管理与收藏使用独立窗口。
-数据链：channels.vue 持有原分页器并调度请求 → 本组件只读呈现 → 交互事件返回页面所有者。
-布局依据：X 归档的成员社区横条；发现推荐横条为 Misskey 业务映射，颜色与主列沿用 Nitter Token。
+数据链：channels.vue 持有唯一查询并调度请求 → 本组件只读呈现 → 交互事件返回页面所有者。
+布局依据：X 归档的首页成员社区横条；发现仅呈现全频道帖子，颜色与主列沿用 Nitter Token。
 -->
 
 <template>
@@ -103,13 +103,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkNotesTimeline v-else-if="followedChannelsReady" :paginator="followedTimelinePaginator" variant="twitter" :autoLoad="false" :withControl="false"/>
 			</template>
 			<template v-else>
-				<TwitterCommunityStrip
-					:channels="featuredPaginator.items.value"
-					:label="i18n.ts._channel.featured"
-					:loading="featuredPaginator.fetching.value"
-					:error="featuredPaginator.error.value"
-					@retry="retryFeatured"
-				/>
 				<MkNotesTimeline :paginator="globalTimelinePaginator" variant="twitter" :autoLoad="false" :withControl="false"/>
 			</template>
 		</div>
@@ -126,8 +119,8 @@ import MkPagination from '@/components/MkPagination.vue';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
-import { TwitterCommunityLibraryDialog, TwitterCommunityStrip, TwitterPageState, TwitterSearchField, useTwitterLayout, useTwitterScrollPositionKeeper } from '@/ui/twitter/index.js';
-import type { TwitterCommunitiesTab, TwitterCommunityLibrary } from '@/ui/twitter/index.js';
+import { TwitterCommunityLibraryDialog, TwitterCommunityStrip, TwitterPageState, TwitterSearchField, useCommunityDialogPosition, useTwitterLayout, useTwitterScrollPositionKeeper } from '@/ui/twitter/index.js';
+import type { TwitterCommunitiesTab, TwitterCommunityLibrary, TwitterCommunityLibraryView } from '@/ui/twitter/index.js';
 import { i18n } from '@/i18n.js';
 import type { Paginator } from '@/utility/paginator.js';
 import * as os from '@/os.js';
@@ -137,8 +130,7 @@ type CommunitiesProps = Readonly<{
 	followedTimelinePaginator: Paginator<'channels/followed-timeline'>;
 	globalTimelinePaginator: Paginator<'channels/global-timeline'>;
 	followedChannelsPaginator: Paginator<'channels/followed'>;
-	featuredPaginator: Paginator<'channels/featured'>;
-	ownedPaginator: Paginator<'channels/owned'>;
+	ownedView: ComputedRef<TwitterCommunityLibraryView>;
 	favoritesPaginator: Paginator<'channels/my-favorites'>;
 	onSearch: (query: string) => void;
 	searchPaginator: Paginator<'channels/search'> | null;
@@ -152,8 +144,8 @@ const props: CommunitiesProps = defineProps<CommunitiesProps>();
 type CommunitiesEvents = {
 	(event: 'retryFollowedChannels'): void;
 	(event: 'loadMoreChannels'): void;
-	(event: 'retryFeatured'): void;
 	(event: 'retryLibrary'): void;
+	(event: 'loadMoreLibrary'): void;
 };
 /** 按事件契约传递请求意图。 */
 const emit: CommunitiesEvents = defineEmits<CommunitiesEvents>();
@@ -176,6 +168,14 @@ const rootEl: Readonly<ShallowRef<HTMLDivElement | null>> = useTemplateRef<HTMLD
 const tabList: Readonly<ShallowRef<HTMLElement | null>> = useTemplateRef<HTMLElement>('tabList');
 /** 页面只保留关闭意图入口，弹层实例由全局弹层宿主负责释放。 */
 let dismissLibrary: (() => void) | null = null;
+/** 主列坐标只在“我的频道”窗口存续期间测量，不进入业务查询。 */
+const observeDialogCenter: ReturnType<typeof useCommunityDialogPosition> = useCommunityDialogPosition(rootEl);
+/** 收藏仍沿用一次性分页器，只派生窗口需要的只读视图，不复制实体数组。 */
+const favoritesView: ComputedRef<TwitterCommunityLibraryView> = computed<TwitterCommunityLibraryView>(/** 原查询事实直接映射为展示状态。 */ (): TwitterCommunityLibraryView => ({
+	items: props.favoritesPaginator.items.value,
+	status: props.favoritesPaginator.fetching.value ? 'loading' : props.favoritesPaginator.error.value ? 'error' : 'ready',
+	hasMore: false,
+}));
 
 useTwitterScrollPositionKeeper(rootEl);
 
@@ -240,24 +240,39 @@ type LibraryPopupProps = { -readonly [Key in keyof ComponentProps<typeof Twitter
 /** 在既有全局弹层宿主打开资料库，统一覆盖层定位与关闭生命周期。 */
 function openLibrary(kind: TwitterCommunityLibrary): void {
 	if (library.value != null) return;
+	if (kind === 'owned' && rootEl.value == null) return;
 	library.value = kind;
 	const popupProps: LibraryPopupProps = shallowReactive<LibraryPopupProps>({
 		kind,
-		paginator: kind === 'owned' ? props.ownedPaginator : props.favoritesPaginator,
+		view: kind === 'owned' ? props.ownedView : favoritesView,
 		canCreateChannel: props.canCreateChannel,
 		closing: false,
 	});
+	/** 关闭开始即冻结当前定位，避免离页时锚点变化影响退出动画。 */
+	let stopPosition: (() => void) | null = null;
 	/** 关闭先驱动基础窗口释放焦点陷阱，closed 后才撤销全局实例。 */
-	const requestClose: () => void = (): void => { popupProps.closing = true; };
+	const requestClose: () => void = (): void => {
+		stopPosition?.();
+		stopPosition = null;
+		popupProps.closing = true;
+	};
+	if (kind === 'owned') {
+		stopPosition = observeDialogCenter(/** 业务窗口仅接收原始布局坐标，锚点失效沿用关闭流程。 */ (centerX: number | undefined): void => {
+			if (centerX == null) requestClose();
+			else popupProps.dialogCenterX = centerX;
+		});
+	}
 	const { dispose }: { dispose: () => void } = os.popup(TwitterCommunityLibraryDialog, popupProps, {
 		close: requestClose,
 		navigate: requestClose,
 		closed: /** 关闭完成后清理页面可见性和全局弹层，不直接卸载打开的模态。 */ (): void => {
+			stopPosition?.();
 			dispose();
 			library.value = null;
 			dismissLibrary = null;
 		},
 		retry: retryLibrary,
+		loadMore: loadMoreLibrary,
 	});
 	dismissLibrary = requestClose;
 }
@@ -271,11 +286,11 @@ function retryFollowedChannels(): void { emit('retryFollowedChannels'); }
 /** 横条尾部的加载操作仍交给原游标分页器。 */
 function loadMoreChannels(): void { emit('loadMoreChannels'); }
 
-/** 推荐横条失败不会阻断全频道帖子流。 */
-function retryFeatured(): void { emit('retryFeatured'); }
-
 /** 资料库失败时重试当前入口的原查询。 */
 function retryLibrary(): void { emit('retryLibrary'); }
+
+/** 窗口追加请求交回页面持有的所属频道查询，不由弹层重新取数。 */
+function loadMoreLibrary(): void { emit('loadMoreLibrary'); }
 
 /** 标签键盘巡游同步选择和焦点。 */
 function onTabKeydown(event: KeyboardEvent): void {

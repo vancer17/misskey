@@ -2318,6 +2318,7 @@ _channel:
   noFollowing: "フォローしているチャンネルはありません"
   noOwned: "管理しているチャンネルはありません"
   noFavorites: "お気に入りのチャンネルはありません"
+  allShown: "すべてのチャンネルを表示しました"
   usersCount: "{n}人が参加中"
   notesCount: "{n}投稿があります"
   nameAndDescription: "名前と説明"
