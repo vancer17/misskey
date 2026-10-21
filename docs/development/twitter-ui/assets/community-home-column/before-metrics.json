@@ -1,0 +1,102 @@
+[
+  {
+    "viewport": {
+      "width": 1440,
+      "height": 1000,
+      "dpr": 1
+    },
+    "dialog": {
+      "x": 420,
+      "y": 279.046875,
+      "width": 600,
+      "height": 441.890625,
+      "centerX": 720
+    },
+    "main": {
+      "x": 378.5,
+      "width": 598,
+      "centerX": 677.5
+    },
+    "centerError": 42.5
+  },
+  {
+    "viewport": {
+      "width": 1440,
+      "height": 1000,
+      "dpr": 1
+    },
+    "dialog": {
+      "x": 420,
+      "y": 279.046875,
+      "width": 600,
+      "height": 441.890625,
+      "centerX": 720
+    },
+    "main": {
+      "x": 378.5,
+      "width": 598,
+      "centerX": 677.5
+    },
+    "centerError": 42.5
+  },
+  {
+    "viewport": {
+      "width": 1657,
+      "height": 1000,
+      "dpr": 1
+    },
+    "dialog": {
+      "x": 528.5,
+      "y": 279.046875,
+      "width": 600,
+      "height": 441.890625,
+      "centerX": 828.5
+    },
+    "main": {
+      "x": 487,
+      "width": 598,
+      "centerX": 786
+    },
+    "centerError": 42.5
+  },
+  {
+    "viewport": {
+      "width": 900,
+      "height": 1000,
+      "dpr": 1
+    },
+    "dialog": {
+      "x": 150,
+      "y": 279.046875,
+      "width": 600,
+      "height": 441.890625,
+      "centerX": 450
+    },
+    "main": {
+      "x": 182,
+      "width": 598,
+      "centerX": 481
+    },
+    "centerError": 31
+  },
+  {
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "dpr": 1
+    },
+    "dialog": {
+      "x": 0,
+      "y": 30,
+      "width": 390,
+      "height": 814,
+      "centerX": 195
+    },
+    "main": {
+      "x": 0,
+      "width": 390,
+      "centerX": 195
+    },
+    "centerError": 0
+  }
+]
