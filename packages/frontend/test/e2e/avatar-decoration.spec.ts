@@ -355,11 +355,11 @@ test('窄屏试戴支持键盘调整且变换后挂件仍在预览范围内', /*
 	const stage: Locator = page.getByTestId('decoration-draft-preview');
 	await stage.scrollIntoViewIfNeeded();
 	const contained: boolean = await stage.evaluate(/** 坐标只用于视觉几何断言，不写回业务参数。 */ (element: HTMLElement): boolean => {
-		const image: HTMLImageElement | undefined = Array.from(element.querySelectorAll('img')).at(-1);
-		if (!image) return false;
+		const layer: HTMLElement | null = element.querySelector('[data-twitter-avatar-decoration-layer]');
+		if (!layer) return false;
 		const frame: DOMRect = element.getBoundingClientRect();
-		const actual: DOMRect = image.getBoundingClientRect();
-		return actual.left >= frame.left - 1 && actual.top >= frame.top - 1 && actual.right <= frame.right + 1 && actual.bottom <= frame.bottom + 1;
+		const actual: DOMRect = layer.getBoundingClientRect();
+		return getComputedStyle(layer).overflowX === 'clip' && actual.left >= frame.left - 1 && actual.top >= frame.top - 1 && actual.right <= frame.right + 1 && actual.bottom <= frame.bottom + 1;
 	});
 	expect(contained).toBe(true);
 	await page.screenshot({ path: info.outputPath('try-on-mobile.png'), animations: 'disabled' });
@@ -369,14 +369,14 @@ test('窄屏试戴支持键盘调整且变换后挂件仍在预览范围内', /*
 	await page.screenshot({ path: info.outputPath('save-error-mobile.png'), animations: 'disabled' });
 });
 
-test('保存后侧栏与本人资料帖子头像使用已确认挂件', /** 当前会话不刷新浏览器，检查共享账户数据的实际消费。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+test('保存后本人资料帖子头像同步挂件，侧栏保持关闭', /** 当前会话不刷新浏览器，检查共享账户数据与场景策略的实际消费。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
 	const decoration: Misskey.entities.GetAvatarDecorationsResponse[number] = await addDecoration(page, '跨页面显示');
 	const created: Misskey.Endpoints['notes/create']['res'] = await api(BASE_URL, 'notes/create', { i: user.token, text: '挂件同步验证' });
 	await open(page);
 	await card(page, decoration.id).getByRole('button').first().click();
 	await page.getByTestId('decoration-save').click();
 	await expect(page.getByTestId('decoration-editor')).toHaveCount(0);
-	await expect(page.getByTestId('twitter-sidebar').locator(`img[src="${decoration.url}"]`)).toHaveCount(1);
+	await expect(page.getByTestId('twitter-sidebar').locator(`img[src="${decoration.url}"]`)).toHaveCount(0);
 	await page.getByTestId('twitter-sidebar').locator('a[href="/@decoration_user"]').click();
 	await expect(page.getByTestId('twitter-user-timeline-notes').locator(`[data-testid="twitter-note"][data-note-id="${created.createdNote.id}"] img[src="${decoration.url}"]`)).toHaveCount(1);
 });
