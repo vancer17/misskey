@@ -1,0 +1,37 @@
+{
+  "e2e": {
+    "exitCode": 0,
+    "durationSeconds": 90.91
+  },
+  "e2e-final-targets": {
+    "exitCode": 0,
+    "durationSeconds": 18.95
+  },
+  "shipping": {
+    "exitCode": 0,
+    "durationSeconds": 7.41
+  },
+  "typecheck": {
+    "exitCode": 0
+  },
+  "unit": {
+    "exitCode": 0,
+    "tests": 11
+  },
+  "build-and-inlining": {
+    "exitCode": 0
+  },
+  "browserCases": {
+    "unique": 30,
+    "fullSuite": 28,
+    "targetedReruns": 2,
+    "additionalFreshness": 2
+  },
+  "vueReview": {
+    "result": "PASS",
+    "fixedFindings": [
+      "template indentation",
+      "remeasure after same-width CSS transition completion"
+    ]
+  }
+}

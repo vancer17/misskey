@@ -1,0 +1,46 @@
+{
+  "i18n-typecheck": {
+    "exitCode": 0,
+    "durationSeconds": 0.53
+  },
+  "build-final": {
+    "exitCode": 0,
+    "durationSeconds": 10.12
+  },
+  "inline-final": {
+    "exitCode": 0,
+    "durationSeconds": 5.22
+  },
+  "typecheck-final": {
+    "exitCode": 0,
+    "durationSeconds": 30.73
+  },
+  "unit": {
+    "exitCode": 0,
+    "durationSeconds": 1.94
+  },
+  "locale-validation": {
+    "exitCode": 0,
+    "durationSeconds": 1.16
+  },
+  "e2e-owned-final": {
+    "exitCode": 0,
+    "durationSeconds": 60.73
+  },
+  "e2e-channel-regressions": {
+    "exitCode": 0,
+    "durationSeconds": 16.26
+  },
+  "lint-tests": {
+    "exitCode": 0,
+    "durationSeconds": 2.48
+  },
+  "shipping": {
+    "exitCode": 0,
+    "durationSeconds": 11.16
+  },
+  "capture-final": {
+    "exitCode": 0,
+    "durationSeconds": 4.62
+  }
+}

@@ -30,7 +30,14 @@ export { default as TwitterSearchField } from './SearchField.vue';
 /** 频道集合的横向展示及独立管理／收藏窗口。 */
 export { default as TwitterCommunityStrip } from './components/TwitterCommunityStrip.vue';
 export { default as TwitterCommunityLibraryDialog } from './components/TwitterCommunityLibraryDialog.vue';
-export type { TwitterCommunitiesTab, TwitterCommunityLibrary } from './domain/index.js';
+export type { TwitterCommunitiesTab, TwitterCommunityLibrary, TwitterCommunityLibraryView, OwnedChannelsPage, OwnedChannelsOperation, OwnedChannelsState } from './domain/index.js';
+/** 页面唯一所属频道查询同时服务原界面与 Twitter 管理窗口。 */
+export { createOwnedChannelsQuery } from './store/owned-channels.js';
+export type { OwnedChannelsQuery } from './store/owned-channels.js';
+/** 所属频道的异步操作在两种界面中保留键盘阅读位置。 */
+export { useChannelLibraryFocus } from './composables/use-channel-library-focus.js';
+/** 频道管理窗口的临时主列中心坐标，不参与业务状态。 */
+export { useCommunityDialogPosition } from './composables/use-community-dialog-position.js';
 export { default as TwitterWelcome } from './components/TwitterWelcome.vue';
 export { default as TwitterAuthButtons } from './components/TwitterAuthButtons.vue';
 

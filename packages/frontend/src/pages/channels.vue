@@ -18,8 +18,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:followedTimelinePaginator="followedTimelinePaginator"
 	:globalTimelinePaginator="globalTimelinePaginator"
 	:followedChannelsPaginator="followedChannelsPaginator"
-	:featuredPaginator="featuredPaginator"
-	:ownedPaginator="ownedPaginator"
+	:ownedView="ownedChannels.view"
 	:favoritesPaginator="favoritesPaginator"
 	:onSearch="searchFromCommunitiesBar"
 	:searchPaginator="channelPaginator"
@@ -27,8 +26,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:canCreateChannel="$i != null && $i.policies.canCreateChannel"
 	@retryFollowedChannels="retryFollowedChannels"
 	@loadMoreChannels="loadMoreChannels"
-	@retryFeatured="retryFeatured"
 	@retryLibrary="retryLibrary"
+	@loadMoreLibrary="loadMoreOwnedChannels"
 />
 <PageWithHeader v-else v-model:tab="tab" :actions="headerActions" :tabs="headerTabs" :swipable="true">
 	<div class="_spacer" style="--MI_SPACER-w: 1200px;">
@@ -75,13 +74,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkPagination>
 		</div>
-		<div v-else-if="tab === 'owned'" class="_gaps">
+		<div v-else-if="tab === 'owned'" ref="ownedRoot" class="_gaps" data-testid="owned-channels" tabindex="-1" :aria-busy="ownedView.status === 'loading'">
 			<MkButton v-if="$i?.policies.canCreateChannel" type="routerLink" primary rounded to="/channels/new"><i class="ti ti-plus"></i> {{ i18n.ts.createNew }}</MkButton>
-			<MkPagination v-slot="{items}" :paginator="ownedPaginator">
-				<div :class="$style.root">
-					<MkChannelPreview v-for="channel in items" :key="channel.id" :channel="channel"/>
-				</div>
-			</MkPagination>
+			<MkLoading v-if="ownedView.status === 'loading' && ownedView.items.length === 0"/>
+			<div v-if="ownedView.items.length > 0" :class="$style.root">
+				<MkChannelPreview v-for="channel in ownedView.items" :key="channel.id" :channel="channel" data-community-library-item/>
+			</div>
+			<div v-if="ownedView.status !== 'loading' || ownedView.items.length > 0" :class="$style.ownedStatus" role="status" aria-live="polite" data-community-library-status tabindex="-1">
+				<template v-if="ownedView.status === 'error'">
+					<p>{{ i18n.ts.somethingHappened }}</p>
+					<MkButton data-community-library-action @click="retryOwnedChannels">{{ i18n.ts.retry }}</MkButton>
+				</template>
+				<p v-else-if="ownedView.items.length === 0">{{ i18n.ts._channel.noOwned }}</p>
+				<MkButton v-else-if="ownedView.hasMore || ownedView.status === 'loading'" :disabled="ownedView.status === 'loading'" data-testid="owned-channels-more" data-community-library-action @click="loadMoreOwnedChannels">
+					{{ ownedView.status === 'loading' ? i18n.ts.loading : i18n.ts.loadMore }}
+				</MkButton>
+				<p v-else>{{ i18n.ts._channel.allShown }}</p>
+			</div>
 		</div>
 	</div>
 </PageWithHeader>
@@ -89,9 +98,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import type { Component, ComputedRef, Ref, ShallowRef } from 'vue';
-import { useTwitterPaginatorRefresh } from '@/ui/twitter/index.js';
-import type { TwitterCommunitiesTab, TwitterCommunityLibrary } from '@/ui/twitter/index.js';
-import { computed, defineAsyncComponent, inject, markRaw, onActivated, onDeactivated, onMounted, ref, shallowRef, watch } from 'vue';
+import { createOwnedChannelsQuery, useChannelLibraryFocus, useTwitterPaginatorRefresh, useTwitterRefresh } from '@/ui/twitter/index.js';
+import type { OwnedChannelsQuery, TwitterCommunitiesTab, TwitterCommunityLibrary, TwitterCommunityLibraryView } from '@/ui/twitter/index.js';
+import { computed, defineAsyncComponent, inject, markRaw, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue';
 import type { Endpoints } from 'misskey-js';
 import MkChannelPreview from '@/components/MkChannelPreview.vue';
 import MkChannelList from '@/components/MkChannelList.vue';
@@ -128,7 +137,7 @@ const tab = ref('featured');
 const twitterTab: Ref<TwitterCommunitiesTab> = ref<TwitterCommunitiesTab>('home');
 /** 搜索结果覆盖主内容时，后台集合不主动刷新。 */
 const twitterSearching: Ref<boolean> = ref<boolean>(false);
-/** 管理／收藏窗口为临时 UI 状态，实体仍归原分页器。 */
+/** 管理／收藏窗口为临时 UI 状态，实体归页面唯一查询所有者。 */
 const twitterLibrary: Ref<TwitterCommunityLibrary | null> = ref<TwitterCommunityLibrary | null>(null);
 /** 缓存页真正停用时不触发首拉或后台取数。 */
 const pageActive: Ref<boolean> = ref<boolean>(true);
@@ -158,9 +167,17 @@ const favoritesPaginator = markRaw(new Paginator('channels/my-favorites', {
 const followingPaginator = markRaw(new Paginator('channels/followed', {
 	limit: 10,
 }));
-const ownedPaginator = markRaw(new Paginator('channels/owned', {
-	limit: 10,
-}));
+/** 两种界面的所属频道共用一个查询所有者，窗口关闭不会丢弃已确认页。 */
+const ownedChannels: OwnedChannelsQuery = createOwnedChannelsQuery();
+/** 原界面也直接消费同一只读投影，不再建立另一个 owned 分页器。 */
+const ownedView: ComputedRef<TwitterCommunityLibraryView> = ownedChannels.view;
+/** 所属频道仅在当前入口真实可见时初始化或消费回访刷新。 */
+const ownedVisible: ComputedRef<boolean> = computed<boolean>(/** 可见性不从集合是否为空推断。 */ (): boolean =>
+	pageActive.value && (isTwitterUi.value ? twitterLibrary.value === 'owned' : tab.value === 'owned'));
+/** 原界面的列表容器只提供 DOM 焦点范围，不保存频道状态副本。 */
+const ownedRoot: Readonly<ShallowRef<HTMLElement | null>> = useTemplateRef<HTMLElement>('ownedRoot');
+/** 原界面与管理弹窗共用相同的键盘追加衔接。 */
+const rememberOwnedFocus: (event?: MouseEvent) => void = useChannelLibraryFocus(ownedView, ownedRoot, /** 缓存页隐藏时不抢回焦点。 */ (): boolean => ownedVisible.value);
 
 /** Twitter Communities：已关注频道帖子聚合流（ADR-0005 D2，channels/followed-timeline）。 */
 const followedTimelinePaginator = markRaw(new Paginator('channels/followed-timeline', {
@@ -199,19 +216,22 @@ function initializePaginator(paginator: IPaginator): void {
 function initializeVisiblePaginators(): void {
 	if (!isTwitterUi.value || !pageActive.value) return;
 	if (twitterLibrary.value != null) {
-		initializePaginator(twitterLibrary.value === 'owned' ? ownedPaginator : favoritesPaginator);
+		if (twitterLibrary.value === 'favorites') initializePaginator(favoritesPaginator);
 	} else if (twitterHomeVisible.value) {
 		initializePaginator(followedChannelsPaginator);
 		initializePaginator(followedTimelinePaginator);
 	} else if (twitterExploreVisible.value) {
-		initializePaginator(featuredPaginator);
 		initializePaginator(globalTimelinePaginator);
 	}
 }
 
 watch([isTwitterUi, twitterTab, twitterSearching, twitterLibrary, pageActive], initializeVisiblePaginators, { immediate: true, flush: 'post' });
+watch(ownedVisible, /** 首拉幂等性由查询状态负责，失败和合法空集合不被当作未初始化。 */ (visible: boolean): void => {
+	if (visible) void ownedChannels.initialize();
+}, { immediate: true, flush: 'post' });
 onActivated(/** 原缓存页恢复后再消费当前入口。 */ (): void => { pageActive.value = true; });
 onDeactivated(/** 隐藏页面不响应其子树关闭窗口造成的导航状态变化。 */ (): void => { pageActive.value = false; });
+onBeforeUnmount(/** 仅在页面所有者销毁时取消所属频道请求，关闭窗口不销毁查询。 */ (): void => { ownedChannels.dispose(); });
 
 useTwitterPaginatorRefresh(/** 已关注频道聚合流。 */ (): typeof followedTimelinePaginator => followedTimelinePaginator,
 	/** 首拉由页面负责，回访仍由原调度器合并。 */ (): boolean => twitterHomeVisible.value);
@@ -219,12 +239,16 @@ useTwitterPaginatorRefresh(/** 全频道聚合流。 */ (): typeof globalTimelin
 	/** 搜索覆盖时不发后台请求。 */ (): boolean => twitterExploreVisible.value);
 useTwitterPaginatorRefresh(/** 空关注横条也需要回访更新。 */ (): typeof followedChannelsPaginator => followedChannelsPaginator,
 	/** 横条与首页帖子共用可见边界。 */ (): boolean => twitterHomeVisible.value);
-useTwitterPaginatorRefresh(/** 推荐集合维持固定十条的端点语义。 */ (): typeof featuredPaginator => featuredPaginator,
-	/** 默认界面继续沿用原 tab。 */ (): boolean => isTwitterUi.value ? twitterExploreVisible.value : tab.value === 'featured');
+useTwitterPaginatorRefresh(/** 原界面推荐集合维持固定十条的端点语义。 */ (): typeof featuredPaginator => featuredPaginator,
+	/** 推荐频道仅由原界面的推荐标签消费。 */ (): boolean => !isTwitterUi.value && tab.value === 'featured');
 useTwitterPaginatorRefresh(/** 收藏集合不借用菜单缓存。 */ (): typeof favoritesPaginator => favoritesPaginator,
 	/** 只在当前资料库窗口展示时消费回访。 */ (): boolean => isTwitterUi.value ? pageActive.value && twitterLibrary.value === 'favorites' : tab.value === 'favorites');
-useTwitterPaginatorRefresh(/** 管理集合在创建后回访仍更新原实例。 */ (): typeof ownedPaginator => ownedPaginator,
-	/** 资料库已关闭时保留刷新意图。 */ (): boolean => isTwitterUi.value ? pageActive.value && twitterLibrary.value === 'owned' : tab.value === 'owned');
+useTwitterRefresh(/** 回访复用通用调度，将取消信号传给所属频道的唯一查询。 */ (signal: AbortSignal): Promise<boolean> => ownedChannels.reload(signal), {
+	visible: /** 资料库关闭时保留刷新意图，原界面使用同一可见边界。 */ (): boolean => ownedVisible.value,
+	busy: /** 首拉、刷新和追加均占用当前查询。 */ (): boolean => ownedChannels.state.value.status === 'loading',
+	initializing: /** 首拉同步覆盖此前回访意图，避免首次进入连续取两页。 */ (): boolean =>
+		ownedChannels.state.value.status === 'loading' && ownedChannels.state.value.operation === 'initial',
+});
 useTwitterPaginatorRefresh(/** 默认界面原关注列表。 */ (): typeof followingPaginator => followingPaginator,
 	/** 不为未挂载的默认分支发请求。 */ (): boolean => !isTwitterUi.value && tab.value === 'following');
 
@@ -239,12 +263,23 @@ function retryFollowedChannels(): void { retryPaginator(followedChannelsPaginato
 /** 横向排版保留服务端游标，不将关注集合截断为固定列表。 */
 function loadMoreChannels(): void { void followedChannelsPaginator.fetchOlder(); }
 
-/** 推荐失败不改变全频道流的领域范围。 */
-function retryFeatured(): void { retryPaginator(featuredPaginator); }
+/** 两种界面的所属频道重试都重放失败操作，追加失败保留原游标。 */
+function retryOwnedChannels(event?: MouseEvent): void {
+	rememberOwnedFocus(event);
+	void ownedChannels.retry();
+}
 
-/** 资料库窗口的重试始终定位当前原查询。 */
+/** 更多意图只交给页面查询，重复点击由其在途守卫合并。 */
+function loadMoreOwnedChannels(event?: MouseEvent): void {
+	if (ownedView.value.status === 'loading' || !ownedView.value.hasMore) return;
+	rememberOwnedFocus(event);
+	void ownedChannels.loadMore();
+}
+
+/** 资料库窗口的重试始终定位当前唯一查询。 */
 function retryLibrary(): void {
-	if (twitterLibrary.value != null) retryPaginator(twitterLibrary.value === 'owned' ? ownedPaginator : favoritesPaginator);
+	if (twitterLibrary.value === 'owned') retryOwnedChannels();
+	else if (twitterLibrary.value === 'favorites') retryPaginator(favoritesPaginator);
 }
 
 /** 搜索复用频道实体端点；同参提交刷新原实例，首次搜索由唯一页面所有者初始化。 */
@@ -321,5 +356,15 @@ definePage(() => ({
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
 	gap: var(--MI-margin);
+}
+
+.ownedStatus {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--MI-margin);
+	text-align: center;
+
+	p { margin: 0; }
 }
 </style>
