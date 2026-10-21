@@ -132,51 +132,55 @@ S-1 裁决建议：三栏 Shell 是 phase-1 P-00 的产品决策（总表原文"
 
 ## 九、滚动登记 · P-25 Channels 页（基线后新增实现）
 
-依「审计局限」第 3 条，本节为基线 `156a2e6b55` 之后新增实现（P-25，ADR-0002 决策 D4：Channels 页 Compatible 化，帖子卡频道链接 A5 保留）自带的 nitter 映射表与「无对应物」检索证据。
+频道入口当前契约见 [频道入口布局与请求边界](./communities-layout.md)。[ADR-0005](./adr/0005-communities-ia-convergence.md) 记录聚合数据源与详情页决策；[ADR-0015](./adr/0015-community-strip-layout.md) 记录当前入口横条、搜索与资料库窗口的选择及被替代方案。
 
-### 检索证据
+### 检索证据与来源范围
 
-- `grep -ril channel external/app/nitter/src/sass/` → **0 命中**（sass 全目录）。
-- nitter 为只读 Twitter 镜像，路由 / 视图（views/*.nim）无 Communities / 频道概念；Twitter Communities 在 nitter 中无对应实现。
-- 结论：**频道域整体为 nitter 无对应物**，仅下列子结构存在可映射的同构物。
+- `external/app/nitter/src/views/community.nim` 的 `renderCommunity` 实现**单个社区详情页**，包含 banner、名称、分类、描述和成员数；因此“nitter 无 Communities／频道域”不能作为检索结论。
+- 对应社区路由与视图未提供同本项目 `/channels` 相同的 Home／Explore 聚合入口。入口采用 X 行为与 Misskey 数据映射，社区详情继续消费 Nitter 的适用结构。
+- X 入口参考为 `tmp/community_for_x` 的 Communities bundle 模块 `119474`、主主题脚本及用户截图。归档 HTML 为失败状态；脚本默认参数能作为尺度依据，不能充当成功 DOM 的像素测量。完整锚点见 ADR-0015。
 
-### nitter 映射表
+### 来源映射表
 
-| P-25 实现件 | nitter 对应物 | 采用真值 |
+| 当前实现件 | 适用来源 | 采用真值 |
 | --- | --- | --- |
-| `MkChannelPreview` `.twitter` 变体 | `tweet/card.scss` `.card-container`（结构同构：图 + 标题卡） | border 1px dark_grey、radius 10px（`--twitter-radius-embed`）、bg_elements → `--twitter-panel` |
-| `MkChannelPreview` 标题字 | `.card-title` bold **1.1em**（≈16.5px） | → emphasis 16px 档（舍入登记，比照 E-3 范式） |
-| 频道详情身份卡（`TwitterChannel` overview） | `profile/card.scss` `.profile-card` / `-fullname` / `.profile-bio` | 卡身 12px、fullname 16px/700、bio 15px 行高 1.3（N-3 既有裁决） |
-| 频道详情 banner | `profile/_base.scss` 3:1（U-4 先例） | aspect-ratio 3/1 + max-height 200px |
-| 频道时间线（timeline tab） | `timeline.scss`（P-01 既有覆盖） | `MkStreamingNotesTimeline` 既有 twitter 分支，无新增工作 |
-| 返回头 / tab 行 / 搜索表单 / 编辑器表单 / follow 按钮 | 无对应物 | X-behavior 表现层 + Misskey IA（B 类登记如下） |
+| `TwitterCommunityStrip` 横幅卡片 | X 归档 Communities `119474`：`eE.container`／`eE.name`／`eM`，主脚本主题 | 卡宽 `36×3+24=132px`、banner `2.5:1`、圆角 `12px`、边框 `1px`、名称内距 `8px`；通过 `--twitter-community-*` 与既有 Token 消费 |
+| 横条配色与通用间距 | Nitter `themes/twitter{,_dark}.css`、既有 Token 阶梯 | 背景／文字／边框继承 `--twitter-*`；横条内距与可见卡间距 `16px` |
+| 搜索结果 `MkChannelPreview` `.twitter` 变体 | Nitter `tweet/card.scss` `.card-container`（图与标题同构） | border `1px`、radius `10px`（`--twitter-radius-embed`）、`--twitter-panel` |
+| 搜索结果预览卡标题 | Nitter `.card-title` bold `1.1em`（约 `16.5px`） | emphasis `16px` 档；舍入登记见 CH-6 |
+| 频道详情社区头 | Nitter `views/community.nim`、`profile/card.scss` | 卡身 `12px`、fullname `16px/700`、bio `15px/1.3`，控件入流 |
+| 频道详情 banner | Nitter `profile/_base.scss`（U-4 先例） | `aspect-ratio: 3/1`、`max-height: 200px` |
+| 频道帖子流 | Nitter `timeline.scss`（P-01 既有覆盖） | 继续使用既有 Twitter 帖卡与分页／流式组件 |
+| 入口标题搜索、管理窗口、加入按钮与编辑表单 | X-behavior／Misskey IA | 按下表登记；复用既有 `Mk*` 业务逻辑 |
 
-### B 类登记（X-behavior / Misskey IA，成文于本节）
+### B 类登记（X-behavior／Misskey IA，当前契约）
 
 | # | 项 | 处置 |
 | --- | --- | --- |
-| CH-1 | 列表页 5 tab / 详情页 4 tab 信息架构 | Misskey 特有 IA，Compatible 等级保留；tab 行视觉与 TwitterSearch / S-2 同构（50px、下划线 active） |
-| CH-2 | 600px 主列内频道卡网格退化单列 | 沿用 legacy `minmax(360px, 1fr)` 列定义（IA 保留，零发明值）；窄视口行为为派生结果 |
-| CH-3 | banner 上统计 / sensitive chip 叠加 | Misskey IA 保留；图上信息用深底白字（与 MkChannelPreview 同构惯例） |
-| CH-4 | `MkChannelFollowButton` `.twitter` 变体 | X follow button 语义：未关注 = accent 实心 pill、已关注 = hairline 描边、悬停转危险色 |
-| CH-5 | O-3 裁决延伸 | twitter UI 频道时间线不渲染内联表单与 legacy 页脚发帖按钮；发帖入口 = 头部 pencil（`os.post` 带 channel 上下文）；移动 FAB 无频道上下文为已知限制 |
-| CH-6 | card-title 1.1em(≈16.5px) → 16px 舍入；preview hover 边框 grey → `--twitter-secondary-fg` 近似派生 | 无独立 grey token，登记待 token 阶梯复审 |
-| CH-7 | 列表页 5 tab 窄视口横向滚动 | tab 行 `flex + overflow-x`（TwitterSearch originBar 同构） |
-| CH-8 | `MkFoldableSection` / `MkRadios` / `MkInput` / `MkColorInput` / `MkSwitch` / `MkFolder` / `MkDraggable` | Compatible 定义的基础兼容（U-8 范式），不做变体；走查发现问题再补 |
-| CH-9 | 频道卡媒体查询断点（550/500px banner 高度收缩） | Mk* 基础样式不属 twitter 作用域（N-4 附注范式），twitter 上下文继承该收缩行为 |
-| CH-10 | 侧栏频道入口（`Sidebar.vue` チャンネル 项 → `/channels`，位于 Profile 前） | X-behavior 来源（X Help Center：Communities 为 x.com 侧栏项）；**两点已记录偏离**：① X 仅对已加入 ≥1 Community 的用户显示入口（否则收 More 菜单），此处按"Misskey 频道为实例核心功能 + default UI チャンネル 项常驻"常驻显示，不复刻条件显示逻辑；② 移动端不加底栏项——X 移动端 Communities 亦不在底栏（在抽屉菜单），本项目移动端无抽屉，移动入口待账号菜单/drawer 裁决（归 A7/P-20）。nitter 侧无入口设计可借鉴（导航仅 搜索/RSS/Open in X/About/Preferences，社区页仅 URL 深链），检索证据见本节上文 |
-| CH-11 | **频道详情页 Communities IA**（P-26 / ADR-0005 D7；即 ADR-0002 补记所裁事项的落地） | 社区头映射 nitter `views/community.nim` + `profile/card.scss`（banner 3:1、卡身 12px、fullname 16px/700、bio 15/1.3、控件入流 U-7）；**join-gate 与 Home / Explore / About 命名为 X-behavior**（nitter 社区页 tab 为 Top/Latest/Media/About/Members，无按关注态派生的 tab 集合）。数据映射：ホーム = 频道时间线（既有流式）+ 置顶帖；みつける = `notes/featured` + channelId；情報 = 身份卡统计行；検索 = 频道内笔记搜索。Join/Leave 按钮落在页面层回调（`channels/follow`/`unfollow` + 软刷新回填，规范 12），不复用 MkChannelFollowButton（无状态外发信号；组件保留供 legacy 分支使用） |
-| CH-12 | **频道列表页 Communities IA**（P-26 / ADR-0005 D1–D4） | 整体 X-behavior（nitter 无 Communities 入口设计）；常驻搜索条为 nitter `general.scss` search-bar 真值（PF-2 H-1 裁决复用）；ホーム = 已关注频道横条（X Communities joined 横条行为）+ `channels/followed-timeline` 聚合流（**新端点**，ADR-0005 B-1）；みつける = 注目频道条（featured 复用）+ 管理/收藏折叠区（P-25 旧列表能力收敛安置，D3）+ `channels/global-timeline` 聚合流（**新端点**，B-2）。搜索类型固定 nameAndDescription（X 行为，legacy 单选保留 default UI）。旧五 tab twitter 变体（TwitterChannels.vue）退役；default UI 不受影响 |
+| CH-1 | 列表页 Home／Explore 双标签 | 标题栏与主标签吸顶；标签支持方向键、Home／End 与正确的 ARIA 关联；详情页按关注态派生标签，见 CH-11 |
+| CH-2 | 600px 主列内频道导航 | 首页和发现分别以单行横幅卡片位于帖子流上方；原生横向滚动、吸附、触摸／键盘、RTL 与可用方向箭头；关注集合保留游标分页 |
+| CH-3 | 统计／敏感内容／管理员标记 | 沿用频道详情及原有搜索预览卡的业务呈现；紧凑主横条只保留横幅与名称 |
+| CH-4 | 关注按钮 | `MkChannelFollowButton` 的原 Twitter 变体继续保留；详情页 Join／Leave 使用页面回调，见 CH-11 |
+| CH-5 | O-3 裁决延伸 | Twitter 频道时间线不渲染内联表单与 legacy 页脚发帖按钮；详情头部 pencil 使用带频道上下文的 `os.post`；移动 FAB 无频道上下文为已知限制 |
+| CH-6 | 预览卡标题舍入与 hover 边框 | 搜索预览卡的 `1.1em`（约 `16.5px`）映射到 `16px`；hover 边框沿用 `--twitter-secondary-fg` 近似派生，待 Token 阶梯复审 |
+| CH-7 | 顶部搜索 | 搜索图标位于标题栏末端，展开后输入位于同一标题盒内；提交频道实体搜索、关闭后恢复主标签；类型固定 `nameAndDescription` |
+| CH-8 | 基础组件边界 | 管理窗口包装 `MkModalWindow`，分页和帖子继续使用 `MkPagination`／`MkNotesTimeline`；编辑器沿用原表单组件，其内部业务逻辑保持既有机制 |
+| CH-9 | 预览卡响应式边界 | 搜索结果继续继承原 `MkChannelPreview` 的媒体查询；主横条使用固定宽卡片与容器溢出，不借用大预览卡断点 |
+| CH-10 | 侧栏频道入口（`Sidebar.vue` → `/channels`） | 桌面频道入口常驻，属于 Misskey 实例能力的显式选择；移动底栏不新增频道项。Nitter 的单社区深链没有提供本入口的导航设计 |
+| CH-11 | 频道详情 Communities IA（ADR-0005 D7） | 社区头映射 Nitter `views/community.nim` + `profile/card.scss`；join-gate 与 Home／Explore／About 为 X-behavior。Home 使用频道流及置顶帖，Explore 使用 `notes/featured` + `channelId`，About 展示身份统计，Search 为频道内笔记搜索；Join／Leave 经页面 `channels/follow`／`unfollow` 回填 |
+| CH-12 | 频道列表 Communities IA（ADR-0015） | Home 为关注横条 + `channels/followed-timeline`；Explore 为推荐横条 + `channels/global-timeline`。管理／收藏由头部菜单打开独立窗口，移动端继承抽屉。入口数据源均为现有端点；默认 UI 继续原机制 |
 
-**CH-12 增补登记（P-26 样式走查修复，对齐 X 参照 `/home/vancer17/x.com` + 用户提供的 Home/Discover 目标截图）**：
+### CH-12 展示与生命周期登记
 
-| # | 修复项 | 登记类 |
+| # | 当前行为 | 登记类 |
 | --- | --- | --- |
-| CH-12a | 聚合流（列表页 Home/Explore、详情页みつける/検索）补 `withControl="false"`——`MkNotesTimeline` 默认 true 会渲染 Misskey 排序/控制条，X 参照无此控件 | B 类（X 无对应控件；twitter 变体收敛） |
-| CH-12b | ホーム关注横条：pill chip（12px 色点 + 名称）→ **圆形标识行**（56px banner 缩略圆，无 banner 回退频道色 + 名称下置） | B 类（X joined 行为；nitter 无对应物） |
-| CH-12c | ホーム空关注引导卡：X 冷启动为推荐流，此处**简化为纯 CTA**（文案 + みつける按钮；不复用 featured paginator——同实例双处挂载会引入切 tab 重拉），**已记录偏离**；新增 locale key `_channel.noFollowing`（仅 ja-JP） | B 类（简化偏离登记） |
-| CH-12d | みつける注目频道：chip 横条 → **MkChannelPreview 双列卡片网格**（minmax(220px,1fr)；X Discover 双列卡片形态；组件 twitter 变体映射 tweet/card.scss 真值已有）；featured 与关注 paginator 的 MkPagination 内建空态以空 `#empty` 覆写（空列表不渲染 MkResult，由引导卡/无内容接管） | B 类（X Discover 形态）+ 派生行为登记 |
-| CH-12e | 管理/收藏折叠区移至みつける流**之后**（Misskey 能力安置，非 X 元素；边线改上缘分隔） | B 类（能力安置登记） |
+| CH-12a | 聚合流继续 `withControl=false`，不额外显示排序／控制条 | B 类（X 入口内容层级） |
+| CH-12b | 首页与发现使用同一横条组件；卡宽 `132px`、横幅 `2.5:1`、圆角 `12px`；发现推荐横条属于 Misskey 适配，X 归档 Explore 为主题入口 | B 类（归档参数与适配边界） |
+| CH-12c | 关注加载、失败、成功空集合分别处理；成功空关注只显示发现引导，关注非空后才展示首页帖子空态。推荐成功为空隐藏横条，推荐失败不阻断全频道流 | D 类空态协调修复；业务冷启动简化见 ADR-0015 |
+| CH-12d | `channels.vue` 负责 Twitter 主面板、搜索及资料库唯一首拉；展示组件 `autoLoad=false`。初始化集合仅表达请求生命周期，既有回访刷新按实际面板可见性执行 | D 类请求生命周期修复；不复制分页器业务事实 |
+| CH-12e | 我的频道／收藏各自使用独立业务窗口；窗口内显示集合专用空态和重试；创建入口复用既有权限及路由 | B 类（Misskey 能力安置） |
+
+类型检查、真实后端集成与视觉采样的具体结果随交付记录保存；本节的来源映射不代替验证结果。
 
 
 ## 九、右栏固定内容（P-23，滚动登记）
