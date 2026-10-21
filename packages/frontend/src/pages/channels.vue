@@ -13,8 +13,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <TwitterCommunities
 	v-if="isTwitterUi"
 	v-model:tab="twitterTab"
-	v-model:ownedPanelVisible="ownedPanelVisible"
-	v-model:favoritesPanelVisible="favoritesPanelVisible"
+	v-model:searching="twitterSearching"
+	v-model:library="twitterLibrary"
 	:followedTimelinePaginator="followedTimelinePaginator"
 	:globalTimelinePaginator="globalTimelinePaginator"
 	:followedChannelsPaginator="followedChannelsPaginator"
@@ -25,6 +25,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:searchPaginator="channelPaginator"
 	:searchKey="key"
 	:canCreateChannel="$i != null && $i.policies.canCreateChannel"
+	@retryFollowedChannels="retryFollowedChannels"
+	@loadMoreChannels="loadMoreChannels"
+	@retryFeatured="retryFeatured"
+	@retryLibrary="retryLibrary"
 />
 <PageWithHeader v-else v-model:tab="tab" :actions="headerActions" :tabs="headerTabs" :swipable="true">
 	<div class="_spacer" style="--MI_SPACER-w: 1200px;">
@@ -84,9 +88,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import type { Ref } from 'vue';
+import type { Component, ComputedRef, Ref, ShallowRef } from 'vue';
 import { useTwitterPaginatorRefresh } from '@/ui/twitter/index.js';
-import { computed, defineAsyncComponent, inject, markRaw, onMounted, ref, shallowRef } from 'vue';
+import type { TwitterCommunitiesTab, TwitterCommunityLibrary } from '@/ui/twitter/index.js';
+import { computed, defineAsyncComponent, inject, markRaw, onActivated, onDeactivated, onMounted, ref, shallowRef, watch } from 'vue';
 import type { Endpoints } from 'misskey-js';
 import MkChannelPreview from '@/components/MkChannelPreview.vue';
 import MkChannelList from '@/components/MkChannelList.vue';
@@ -99,11 +104,12 @@ import { definePage } from '@/page.js';
 import { i18n } from '@/i18n.js';
 import { useRouter } from '@/router.js';
 import { Paginator } from '@/utility/paginator.js';
+import type { IPaginator } from '@/utility/paginator.js';
 import { $i } from '@/i.js';
 import { DI } from '@/di.js';
 
 /** Twitter UI 页面变体（Communities IA，ADR-0005；异步加载，default UI 不承担其分包成本）。 */
-const TwitterCommunities = defineAsyncComponent(() => import('./TwitterCommunities.vue'));
+const TwitterCommunities = defineAsyncComponent(/** 按需加载 Twitter 页面展示，不将查询所有权移入组件。 */ (): Promise<{ default: Component }> => import('./TwitterCommunities.vue'));
 
 const router = useRouter();
 
@@ -118,16 +124,19 @@ const props = defineProps<{
 const key = ref('');
 /** legacy 五 tab 状态（default UI 分支专用）。 */
 const tab = ref('featured');
-/** Twitter Communities 双 tab 状态（home / explore；P-26，页面层持有以支持回访定向刷新）。 */
-const twitterTab = ref<'home' | 'explore'>('home');
-/** 折叠体显示由业务包裹节点报告，不持有频道实体副本。 */
-const ownedPanelVisible: Ref<boolean> = ref<boolean>(false);
-const favoritesPanelVisible: Ref<boolean> = ref<boolean>(false);
+/** 主标签只保存导航意图，取数与回访均引用同一领域类型。 */
+const twitterTab: Ref<TwitterCommunitiesTab> = ref<TwitterCommunitiesTab>('home');
+/** 搜索结果覆盖主内容时，后台集合不主动刷新。 */
+const twitterSearching: Ref<boolean> = ref<boolean>(false);
+/** 管理／收藏窗口为临时 UI 状态，实体仍归原分页器。 */
+const twitterLibrary: Ref<TwitterCommunityLibrary | null> = ref<TwitterCommunityLibrary | null>(null);
+/** 缓存页真正停用时不触发首拉或后台取数。 */
+const pageActive: Ref<boolean> = ref<boolean>(true);
 const searchQuery = ref('');
 const searchType = ref<SearchType>('nameAndDescription');
 
 /** 搜索结果分页器（null = 尚未执行搜索；Twitter 变体经 prop 消费）。 */
-const channelPaginator = shallowRef<Paginator<'channels/search'> | null>(null);
+const channelPaginator: ShallowRef<Paginator<'channels/search'> | null> = shallowRef<Paginator<'channels/search'> | null>(null);
 
 /** 当前 UI 样式（由 Twitter Shell 注入；非 Twitter 场景回退 'default'）。 */
 const uiStyle = inject(DI.uiStyle, ref('default'));
@@ -164,56 +173,97 @@ const globalTimelinePaginator = markRaw(new Paginator('channels/global-timeline'
 }));
 
 /** Twitter Communities：已关注频道横条（Home 顶部；复用既有 channels/followed）。 */
-const followedChannelsPaginator = markRaw(new Paginator('channels/followed', {
+const followedChannelsPaginator: Paginator<'channels/followed'> = markRaw(new Paginator('channels/followed', {
 	limit: 20,
+	// 此端点按上限返回完整集合；使用原分页器的数量探测，避免少量频道仍显示多余分页入口。
+	canFetchDetection: 'limit',
 }));
 
-/** 独立集合分别处理回访；不以非空判断是否初始化，不订阅聚合实时流。 */
+/** 仅记录分页器是否由本页面发起过首拉，不复制集合或成功／错误事实。 */
+const initializedPaginators: WeakSet<IPaginator> = new WeakSet<IPaginator>();
+/** 首页当前是否实际展示，搜索和资料库覆盖时不消费回访刷新。 */
+const twitterHomeVisible: ComputedRef<boolean> = computed<boolean>(/** UI 可见性只调度查询。 */ (): boolean =>
+	isTwitterUi.value && pageActive.value && !twitterSearching.value && twitterLibrary.value == null && twitterTab.value === 'home');
+/** 发现页可见性和首页互斥。 */
+const twitterExploreVisible: ComputedRef<boolean> = computed<boolean>(/** 不以频道内容反推导航状态。 */ (): boolean =>
+	isTwitterUi.value && pageActive.value && !twitterSearching.value && twitterLibrary.value == null && twitterTab.value === 'explore');
+
+/** 每个实例只由页面发起一次首拉，合法空集合不会被误判为尚未初始化。 */
+function initializePaginator(paginator: IPaginator): void {
+	if (initializedPaginators.has(paginator)) return;
+	initializedPaginators.add(paginator);
+	void paginator.init();
+}
+
+/** 只初始化当前入口需要的原查询，展示组件统一关闭自动首拉。 */
+function initializeVisiblePaginators(): void {
+	if (!isTwitterUi.value || !pageActive.value) return;
+	if (twitterLibrary.value != null) {
+		initializePaginator(twitterLibrary.value === 'owned' ? ownedPaginator : favoritesPaginator);
+	} else if (twitterHomeVisible.value) {
+		initializePaginator(followedChannelsPaginator);
+		initializePaginator(followedTimelinePaginator);
+	} else if (twitterExploreVisible.value) {
+		initializePaginator(featuredPaginator);
+		initializePaginator(globalTimelinePaginator);
+	}
+}
+
+watch([isTwitterUi, twitterTab, twitterSearching, twitterLibrary, pageActive], initializeVisiblePaginators, { immediate: true, flush: 'post' });
+onActivated(/** 原缓存页恢复后再消费当前入口。 */ (): void => { pageActive.value = true; });
+onDeactivated(/** 隐藏页面不响应其子树关闭窗口造成的导航状态变化。 */ (): void => { pageActive.value = false; });
+
 useTwitterPaginatorRefresh(/** 已关注频道聚合流。 */ (): typeof followedTimelinePaginator => followedTimelinePaginator,
-	/** 仅 Twitter Home 存在此面板。 */ (): boolean => isTwitterUi.value && twitterTab.value === 'home');
+	/** 首拉由页面负责，回访仍由原调度器合并。 */ (): boolean => twitterHomeVisible.value);
 useTwitterPaginatorRefresh(/** 全频道聚合流。 */ (): typeof globalTimelinePaginator => globalTimelinePaginator,
-	/** 聚合流保持 ADR-0005 的手动／回访刷新边界。 */ (): boolean => isTwitterUi.value && twitterTab.value === 'explore');
+	/** 搜索覆盖时不发后台请求。 */ (): boolean => twitterExploreVisible.value);
 useTwitterPaginatorRefresh(/** 空关注横条也需要回访更新。 */ (): typeof followedChannelsPaginator => followedChannelsPaginator,
-	/** 不在 Explore 后台预取横条。 */ (): boolean => isTwitterUi.value && twitterTab.value === 'home');
-useTwitterPaginatorRefresh(/** 推荐频道集合。 */ (): typeof featuredPaginator => featuredPaginator,
-	/** 当前 UI 的推荐面板。 */ (): boolean => isTwitterUi.value ? twitterTab.value === 'explore' : tab.value === 'featured');
-useTwitterPaginatorRefresh(/** 收藏频道集合独立于菜单缓存。 */ (): typeof favoritesPaginator => favoritesPaginator,
-	/** 已挂载管理区随 Explore 回访；折叠不创建新业务副本。 */ (): boolean => isTwitterUi.value ? twitterTab.value === 'explore' && favoritesPanelVisible.value : tab.value === 'favorites');
-useTwitterPaginatorRefresh(/** 管理频道列表。 */ (): typeof ownedPaginator => ownedPaginator,
-	/** 创建频道后回访也更新原空集合。 */ (): boolean => isTwitterUi.value ? twitterTab.value === 'explore' && ownedPanelVisible.value : tab.value === 'owned');
+	/** 横条与首页帖子共用可见边界。 */ (): boolean => twitterHomeVisible.value);
+useTwitterPaginatorRefresh(/** 推荐集合维持固定十条的端点语义。 */ (): typeof featuredPaginator => featuredPaginator,
+	/** 默认界面继续沿用原 tab。 */ (): boolean => isTwitterUi.value ? twitterExploreVisible.value : tab.value === 'featured');
+useTwitterPaginatorRefresh(/** 收藏集合不借用菜单缓存。 */ (): typeof favoritesPaginator => favoritesPaginator,
+	/** 只在当前资料库窗口展示时消费回访。 */ (): boolean => isTwitterUi.value ? pageActive.value && twitterLibrary.value === 'favorites' : tab.value === 'favorites');
+useTwitterPaginatorRefresh(/** 管理集合在创建后回访仍更新原实例。 */ (): typeof ownedPaginator => ownedPaginator,
+	/** 资料库已关闭时保留刷新意图。 */ (): boolean => isTwitterUi.value ? pageActive.value && twitterLibrary.value === 'owned' : tab.value === 'owned');
 useTwitterPaginatorRefresh(/** 默认界面原关注列表。 */ (): typeof followingPaginator => followingPaginator,
 	/** 不为未挂载的默认分支发请求。 */ (): boolean => !isTwitterUi.value && tab.value === 'following');
 
-async function search() {
-	const query = searchQuery.value.toString().trim();
+/** 用户重试只操作空闲的原分页器，避免在途 init 相互覆盖。 */
+function retryPaginator(paginator: IPaginator): void {
+	if (!paginator.fetching.value && !paginator.fetchingOlder.value && !paginator.fetchingNewer.value) void paginator.reload();
+}
 
-	if (query == null) return;
+/** 关注频道错误的显式恢复入口。 */
+function retryFollowedChannels(): void { retryPaginator(followedChannelsPaginator); }
 
-	const type = searchType.value.toString().trim();
+/** 横向排版保留服务端游标，不将关注集合截断为固定列表。 */
+function loadMoreChannels(): void { void followedChannelsPaginator.fetchOlder(); }
 
-	if (type !== 'nameAndDescription' && type !== 'nameOnly') {
-		console.error(`Unrecognized search type: ${type}`);
-		return;
-	}
+/** 推荐失败不改变全频道流的领域范围。 */
+function retryFeatured(): void { retryPaginator(featuredPaginator); }
 
-	/* 重复提交完全相同的 query+type 时 key 不变 → MkChannelList 不重挂载 →
-	 * 新建 Paginator 无人调用 init()，fetching 停留在初始 true 造成无限加载
-	 * （K-14，上游既有缺陷）。同参重复搜索改为刷新既有分页器。 */
-	const nextKey = query + type;
+/** 资料库窗口的重试始终定位当前原查询。 */
+function retryLibrary(): void {
+	if (twitterLibrary.value != null) retryPaginator(twitterLibrary.value === 'owned' ? ownedPaginator : favoritesPaginator);
+}
+
+/** 搜索复用频道实体端点；同参提交刷新原实例，首次搜索由唯一页面所有者初始化。 */
+function search(): void {
+	const query: string = searchQuery.value.trim();
+	if (query === '') return;
+	const type: SearchType = searchType.value;
+	const nextKey: string = JSON.stringify([query, type]);
 	if (key.value === nextKey && channelPaginator.value != null) {
-		void channelPaginator.value.reload();
+		retryPaginator(channelPaginator.value);
 		return;
 	}
-
-	channelPaginator.value = markRaw(new Paginator('channels/search', {
+	const nextPaginator: Paginator<'channels/search'> = markRaw(new Paginator('channels/search', {
 		limit: 10,
-		params: {
-			query: searchQuery.value,
-			type: type,
-		},
+		params: { query, type },
 	}));
-
+	channelPaginator.value = nextPaginator;
 	key.value = nextKey;
+	if (isTwitterUi.value) initializePaginator(nextPaginator);
 }
 
 /** Twitter 变体搜索回调：同步页面层搜索状态后走统一 search 流程
