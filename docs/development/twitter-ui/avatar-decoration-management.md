@@ -1,6 +1,6 @@
 # 头像挂件管理
 
-本文描述头像挂件管理页及新增／编辑弹窗的当前实现。设计决策和历史排查记录见 [ADR-0012](adr/0012-avatar-decoration-management.md)。
+本文描述头像挂件管理页及新增／编辑弹窗的当前实现。Twitter UI 的显示范围、素材坐标及裁剪规则见 [头像挂件显示与素材坐标](avatar-decoration-rendering.md)；管理流程的设计决策和历史排查记录见 [ADR-0012](adr/0012-avatar-decoration-management.md)。
 
 ## 页面入口与职责
 
@@ -30,6 +30,8 @@ Twitter UI 使用从 `ui/twitter/index.ts` 导出的 `TwitterSettingsShell`；�
 创建请求类型直接使用 `Misskey.Endpoints['admin/avatar-decorations/create']['req']`。父页绑定待编辑或删除的实体 ID，表单不能改变操作对象。更新接口没有实体回执，因此请求字段不被拼接成“已更新实体”。
 
 写命令开始时使旧目录读取失效。写入确认之后，目录刷新即使失败，提交命令仍按写入成功完成：编辑器关闭，管理页提示“已保存，列表刷新失败”或“已删除，列表刷新失败”，用户通过刷新取得完整目录。这个边界避免把刷新失败呈现为需要再次提交的创建失败。
+
+若更新或删除的挂件正在当前账户上佩戴，写入确认后还会请求真实 `i` 回执，通过既有 `updateCurrentAccountPartial` 更新账户的 `avatarDecorations`，使已佩戴头像使用服务端确认的新图片或移除结果，不从表单 URL 拼装账户事实。账户刷新失败单独提示，不改变已确认的写入结果；管理页的刷新按钮可重新读取目录和当前佩戴。账户身份检查及佩戴快照比较阻止旧回执覆盖其间已确认的新佩戴状态。
 
 ## 加载与失败状态
 
@@ -66,6 +68,8 @@ Twitter 内容区域就地映射基础输入组件需要的主题变量。颜色
 遮罩点击、Escape 和取消按钮进入同一个关闭处理。提交或删除尚未完成时，操作按钮禁用，关闭按钮隐藏；成功后关闭，失败后恢复可操作状态并保留草稿。删除操作使用 `os.confirm`，取消确认不会发送删除请求。
 
 预览区域显示“佩戴效果预览”标题，并说明使用当前头像展示同一挂件在两种背景下的效果。没有素材时显示明确空态，不展示容易误解为已选挂件的两张头像；有素材后显示“浅色背景预览”与“深色背景预览”两张卡片。两张卡片使用同一图片草稿，分别声明亮色与暗色 `color-scheme`，不修改管理员实际佩戴的挂件。验收读取最终 computed background color，并确认真实挂件图片成功解码。
+
+Twitter 管理编辑器与试戴共用 `TwitterAvatarDecorationPreview`，可切换帖子头像（`note`）与个人资料主头像（`profile`）场景。预览和正式页面共用头像组件、尺寸 tokens 及裁剪边界：帖子头像为 `48 × 48px`，资料头像内容为桌面 `112 × 112px`、移动 `80 × 80px`，资料边框四边各 `4px`。预览同时展示相邻文字布局，并用虚线标出挂件可见边界；Twitter 目录卡片也使用正式帖子头像尺寸。默认 UI 保留既有预览。
 
 共享上传工具仅补全传输结束行为：网络错误、中止、已有超时事件和响应 JSON 解析失败均使 Promise 完成失败收尾，保留原有成功回执、错误提示和调用签名。没有添加新的超时值、上传限额或业务数据模型。
 
@@ -121,11 +125,11 @@ node scripts/check-shipping.mjs
 | 6 | HTTP 502 携带无效 JSON | 错误响应解析失败同样结束等待，不发布文件创建事件 |
 | 7 | 取消前已排队的加载与进度回调迟到 | 取消终态保持有效，不再发布文件创建事件或交付上传进度 |
 
-截图输出到 Playwright 的 `packages/frontend/test/e2e/artifacts/` 目录。截图前等待实际启动遮罩移除、字体就绪，并在断言时限内轮询当前有限动画的运行状态；页面动画保持原样，几何容差及验收断言保持不变。截图与几何断言用于本轮验收，生成截图不会自动批准视觉基线。手机场景使用 Chromium 的移动布局、触控和手机 UA；实体设备及 Windows 原生滚动条的外观需要相应环境的独立证据。
+截图输出到 Playwright 的 `packages/frontend/test/e2e/artifacts/` 目录。截图前等待实际启动遮罩移除、字体就绪，并在断言时限内轮询当前有限动画的运行状态；页面动画保持原样，几何容差及验收断言保持不变。截图与几何断言用于相应测试运行的验收，生成截图不会自动批准视觉基线。手机场景使用 Chromium 的移动布局、触控和手机 UA；实体设备及 Windows 原生滚动条的外观需要相应环境的独立证据。
 
-## 本轮执行记录（2026-10-20）
+## 历史执行记录（2026-10-20）
 
-本轮素材入口与预览语义修复位于 `fix/avatar-decoration-material-upload`，基于提交 `be43e84f40c5b11881c3a5f84c8051072c20352c`。以下结果来自本轮实际执行；上一轮管理页改造的结果及像素对照保存在 [ADR-0012](adr/0012-avatar-decoration-management.md)。
+以下结果仅对应 2026-10-20 的素材入口与预览语义修复，位于 `fix/avatar-decoration-material-upload`，基于提交 `be43e84f40c5b11881c3a5f84c8051072c20352c`，不代表后续头像渲染及场景预览变更的验证结果。此前管理页改造的结果及像素对照保存在 [ADR-0012](adr/0012-avatar-decoration-management.md)。
 
 | 检查 | 实际结果 |
 | --- | --- |
@@ -138,15 +142,15 @@ node scripts/check-shipping.mjs
 | 前端生产构建 | `frontend` 与 `frontend-embed` 构建及 locale inlining 均通过 |
 | 管理页真实后端 E2E | 最终 17 / 17 通过，Playwright 报告约 1.3 分钟 |
 | Vue 组件审阅 | 按仓库 Vue reviewer 要求审阅，未发现待修问题 |
-| Locale safety | FAIL：报告本轮已授权的 `locales/zh-CN.yml` 变更 |
+| Locale safety | FAIL：报告该次已授权的 `locales/zh-CN.yml` 变更 |
 
-交付检查实际命令为 `node scripts/check-shipping.mjs --base be43e84f40c5b11881c3a5f84c8051072c20352c`，退出码为 `1`：Lint 与 SPDX 为 PASS，Locale safety 为 FAIL。本轮按已确认方案保留中文文案修改，语言检查器及其报告均保持原样；这一结果不记作整套交付检查全通过。
+交付检查实际命令为 `node scripts/check-shipping.mjs --base be43e84f40c5b11881c3a5f84c8051072c20352c`，退出码为 `1`：Lint 与 SPDX 为 PASS，Locale safety 为 FAIL。该次按已确认方案保留中文文案修改，语言检查器及其报告均保持原样；这一结果不记作整套交付检查全通过。
 
 最终 E2E 使用 `pnpm --filter frontend exec playwright test --config playwright.config.ts avatar-decoration-manager.spec.ts --max-failures=1 --reporter=line`。前端工具链为 Node `24.22.0`，后端为匹配当前原生依赖的 Node `22.23.3`。成功上传、创建、更新、删除及目录读取均来自隔离后端；网络故障及取消时序只控制真实传输，没有生成成功业务 Mock。
 
 截图验收补充了亮色桌面和手机场景的真实挂件图片解码断言。截图前轮询有限动画的当前状态，避免折叠的图片地址输入框已结束动画仍持有未交付的 `finished` Promise；没有调整页面动画、截图样式或几何容差。网盘场景点击实际接收指针的文件卡片，并使用包含图标的“完成”按钮可访问名称；延迟上传场景在确认浏览器已中止请求后结束测试拦截，避免测试自身悬挂。
 
-本轮核查的实际截图如下：
+该次核查的实际截图如下：
 
 | 截图 | 环境与证据 |
 | --- | --- |
@@ -156,4 +160,4 @@ node scripts/check-shipping.mjs
 | [手机编辑](assets/avatar-decoration-manager-material-phone-dark.png) | `320×568`、移动模式；预览标签及删除、取消、保存按钮可达 |
 | [手机横屏失败](assets/avatar-decoration-manager-material-landscape-error.png) | `844×390`、打开后横屏；保存失败反馈与操作按钮可达 |
 
-以上截图使用本轮独立文件名，保留 ADR 引用的旧证据。本轮截图用于当前实现验收，没有重新建立或覆盖上一轮像素基线。
+以上截图使用该次独立文件名，保留 ADR 引用的旧证据。这些截图用于当时实现的验收，没有重新建立或覆盖此前像素基线。
