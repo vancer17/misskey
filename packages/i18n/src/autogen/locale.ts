@@ -8855,6 +8855,10 @@ export interface Locale extends ILocale {
          */
         "noFavorites": string;
         /**
+         * すべてのチャンネルを表示しました
+         */
+        "allShown": string;
+        /**
          * {n}人が参加中
          */
         "usersCount": ParameterizedString<"n">;
