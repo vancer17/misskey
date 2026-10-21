@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：既有帖子列表的 Twitter 展示适配。
+作用：宿主显式声明独立帖卡主作者的挂件场景，分页和业务事实继续归原列表机制。
+数据链：分页／流式帖子 → Twitter 主帖展示角色 → 头像包装；不根据回复关系改写展示角色。
+-->
+
 <template>
 <MkPagination :paginator="paginator" :direction="direction" :autoLoad="autoLoad" :pullToRefresh="pullToRefresh" :withControl="withControl" :forceDisableInfiniteScroll="forceDisableInfiniteScroll">
 	<template #empty>
@@ -31,7 +37,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 				</div>
 				<div v-else-if="note._shouldInsertAd_" :class="{ '_gaps': !noGap }" :data-scroll-anchor="note.id">
-					<TwitterNote v-if="isTwitter" :note="note" :withHardMute="true"/>
+					<TwitterNote v-if="isTwitter" decorationContext="note" :note="note" :withHardMute="true"/>
 					<MkNote v-else :class="$style.note" :note="note" :withHardMute="true"/>
 					<div :class="[$style.ad, { [$style.twitterAd]: isTwitter }]">
 						<MkAd :preferForms="['horizontal', 'horizontal-big']"/>
@@ -40,6 +46,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<TwitterNote
 					v-else-if="isTwitter"
 					:note="note"
+					decorationContext="note"
 					:withHardMute="true"
 					:data-scroll-anchor="note.id"
 				/>
@@ -57,7 +64,7 @@ import type { MkPaginationOptions } from '@/components/MkPagination.vue';
 import type { IPaginator } from '@/utility/paginator.js';
 import MkNote from '@/components/MkNote.vue';
 import MkPagination from '@/components/MkPagination.vue';
-import TwitterNote from '@/ui/twitter/Note.vue';
+import { TwitterNote } from '@/ui/twitter/index.js';
 import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
 import { i18n } from '@/i18n.js';
 import { useGlobalEvent } from '@/events.js';
