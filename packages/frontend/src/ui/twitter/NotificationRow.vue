@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter 紧凑身份展示。
+作用：保留原头像交互，将紧凑头像明确接入不显示挂件的展示场景。
+数据链：既有用户投影 → Twitter 头像包装 → 无装饰身份展示，不改写用户事实。
+-->
+
 <template>
 <component
 	:is="rootComponent"
@@ -52,7 +58,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:key="`${reaction.user.id}-${reaction.reaction}`"
 				:class="$style.userStackItem"
 			>
-				<MkAvatar :class="$style.avatar" :user="reaction.user"/>
+				<TwitterAvatar decorationContext="none" :class="$style.avatar" :user="reaction.user"/>
 				<span :class="$style.reactionBadge">
 					<MkReactionIcon
 						:reaction="reaction.reaction.replace(/^:(\w+):$/, ':$1@.:')"
@@ -71,7 +77,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:key="user.id"
 				:class="$style.userStackItem"
 			>
-				<MkAvatar :class="$style.avatar" :user="user"/>
+				<TwitterAvatar decorationContext="none" :class="$style.avatar" :user="user"/>
 			</span>
 			<span v-if="notification.users.length > visibleRenoteUsers.length" :class="$style.moreUsers">
 				+{{ notification.users.length - visibleRenoteUsers.length }}
@@ -91,6 +97,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import TwitterAvatar from './components/TwitterAvatar.vue';
 import { computed, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkA from '@/components/global/MkA.vue';

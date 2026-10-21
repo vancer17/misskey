@@ -35,6 +35,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				v-for="note in user.pinnedNotes"
 				:key="note.id"
 				:note="note"
+				decorationContext="note"
 				:pinned="true"
 				:withHardMute="true"
 			/>
@@ -63,7 +64,7 @@ import * as Misskey from 'misskey-js';
 import type { ComputedRef } from 'vue';
 import type { IPaginator } from '@/utility/paginator.js';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
-import TwitterNote from '@/ui/twitter/Note.vue';
+import { TwitterNote } from '@/ui/twitter/index.js';
 import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
 import { useTwitterLayout } from '@/ui/twitter/index.js';
 import { Paginator } from '@/utility/paginator.js';
