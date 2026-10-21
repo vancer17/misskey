@@ -26,3 +26,6 @@ export type { TwitterAvatarDecoration, TwitterAvatarDecorationContext } from './
 /** 静态素材制作规格与临时编辑坐标，不进入服务端佩戴协议。 */
 export { TWITTER_AVATAR_DECORATION_CALIBRATION } from './avatar-decoration.js';
 export type { TwitterAvatarDecorationCalibrationTransform, TwitterAvatarDecorationMaterialFailure } from './avatar-decoration.js';
+
+/** 频道页导航的唯一类型来源，不复制频道实体和分页事实。 */
+export type { TwitterCommunitiesTab, TwitterCommunityLibrary } from './communities.js';
