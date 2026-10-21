@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 文件领域：头像挂件管理 · 新增／编辑业务弹窗。
 作用：复用模态窗口的正文滚动区和独立操作区，维护未保存表单与角色选择草稿。
 数据链：管理页只读实体 → 局部草稿 → 可等待写入命令 → 管理页确认回执并刷新目录。
-素材链：本地文件上传／网盘选择／手动地址 → 唯一 URL 草稿 → 双背景佩戴预览。
+素材链：本地文件上传／网盘选择／手动地址 → 可选静态校准与派生图上传 → 唯一 URL 草稿 → 双背景佩戴预览。
 上传只准备素材；取消草稿不删除已上传文件，挂件目录仍由父页的写入回执确认。
 角色 ID 是选择的唯一依据；角色展示信息加载失败不得改变待保存的可用角色。
 -->
@@ -22,6 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div :class="$style.materialActions">
 				<MkButton primary rounded type="button" :disabled="busy" data-testid="decoration-manager-upload" @click="chooseLocalMaterial"><i class="ti ti-upload" aria-hidden="true"></i> {{ hasMaterial ? i18n.ts._avatarDecorationManager.replaceMaterial : i18n.ts._avatarDecorationManager.uploadMaterial }}</MkButton>
 				<MkButton rounded type="button" :disabled="busy" data-testid="decoration-manager-drive" @click="chooseDriveMaterial"><i class="ti ti-cloud" aria-hidden="true"></i> {{ i18n.ts._avatarDecorationManager.chooseFromDrive }}</MkButton>
+				<MkButton v-if="isTwitterUi && hasMaterial" rounded type="button" :disabled="busy" data-testid="decoration-manager-calibrate" @click="calibrateMaterial"><i class="ti ti-adjustments" aria-hidden="true"></i> {{ i18n.ts._avatarDecorationCalibration.open }}</MkButton>
 			</div>
 			<div v-if="operation === 'uploading-material'" :class="$style.uploadState" role="status" data-testid="decoration-manager-material-status">
 				<span>{{ i18n.ts._avatarDecorationManager.uploadingMaterial }}<span v-if="uploadProgress !== null"> {{ uploadProgress }}%</span></span>
@@ -126,10 +127,10 @@ import MkInput from '@/components/MkInput.vue';
 import MkModalWindow from '@/components/MkModalWindow.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import * as os from '@/os.js';
-import { ensureSignin } from '@/i.js';
+import { ensureSignin, $i as currentAccount } from '@/i.js';
 import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
-import { TwitterAvatarDecorationPreview, useIsTwitterUi } from '@/ui/twitter/index.js';
+import { TwitterAvatarDecorationCalibrationDialog, TwitterAvatarDecorationPreview, useIsTwitterUi } from '@/ui/twitter/index.js';
 import type { TwitterAvatarDecorationContext } from '@/ui/twitter/index.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { uploadFile, UploadAbortedError } from '@/utility/drive.js';
@@ -168,7 +169,7 @@ const materialStatus: Ref<string | null> = ref(null);
 const materialError: Ref<string | null> = ref(null);
 const uploadProgress: Ref<number | null> = ref(null);
 /** 单一临时操作状态同时约束提交、嵌套确认和关闭动画，防止重复写入。 */
-const operation: Ref<'saving' | 'confirming-delete' | 'deleting' | 'selecting-role' | 'selecting-material' | 'uploading-material' | 'closing' | null> = ref(null);
+const operation: Ref<'saving' | 'confirming-delete' | 'deleting' | 'selecting-role' | 'selecting-material' | 'uploading-material' | 'calibrating-material' | 'closing' | null> = ref(null);
 const busy: ComputedRef<boolean> = computed(/** 从当前交互阶段派生统一禁用状态。 */ (): boolean => operation.value !== null);
 const hasMaterial: ComputedRef<boolean> = computed(/** 三种素材入口共享同一地址草稿，预览有无素材也由该地址派生。 */ (): boolean => url.value.trim().length > 0);
 const canSubmit: ComputedRef<boolean> = computed(/** 仅约束现有协议的非空名称和素材地址，不追加图片可访问性规则。 */ (): boolean => name.value.trim().length > 0 && hasMaterial.value);
@@ -182,6 +183,8 @@ let disposed: boolean = false;
 
 let activeUpload: ReturnType<typeof uploadFile> | null = null;
 let disposeDriveDialog: (() => void) | null = null;
+/** 校准弹窗只保留本次生命周期句柄，不复制素材目录或账户事实。 */
+let disposeCalibrationDialog: (() => void) | null = null;
 
 /** 选择文件尚未开始传输；原生选择器取消时不锁定表单，也不丢弃当前素材。 */
 function chooseLocalMaterial(): void {
@@ -206,6 +209,51 @@ function applyMaterial(file: Misskey.entities.DriveFile, uploaded: boolean): voi
 	url.value = file.url;
 	materialError.value = null;
 	materialStatus.value = uploaded ? i18n.ts._avatarDecorationManager.materialUploaded : i18n.ts._avatarDecorationManager.materialSelected;
+}
+
+/** 校准仅生成素材草稿；真实上传回执确认前保留原 URL，目录仍由原保存入口负责。 */
+function calibrateMaterial(): void {
+	if (!isTwitterUi.value || busy.value || disposed || !hasMaterial.value || disposeCalibrationDialog !== null || currentAccount !== $i) return;
+	const sourceUrl: string = url.value.trim();
+	operation.value = 'calibrating-material';
+	materialError.value = null;
+	try {
+		const popup: ReturnType<typeof os.popup> = os.popup(TwitterAvatarDecorationCalibrationDialog, {
+			user: $i,
+			sourceUrl,
+			/** 导出后的 PNG 走现有原图上传，不从本地 Blob 地址伪造正式资源 URL。 */
+			submit: async (file: File): Promise<string | null> => {
+				if (disposed || operation.value !== 'calibrating-material' || currentAccount !== $i || url.value.trim() !== sourceUrl) return i18n.ts._avatarDecorationManager.changedElsewhere;
+				let uploading: ReturnType<typeof uploadFile> | null = null;
+				try {
+					uploading = uploadFile(file, { folderId: prefer.s.uploadFolder });
+					activeUpload = uploading;
+					const result: Misskey.entities.DriveFile = await uploading.filePromise;
+					if (disposed || activeUpload !== uploading || currentAccount !== $i || operation.value !== 'calibrating-material' || url.value.trim() !== sourceUrl) return i18n.ts._avatarDecorationManager.changedElsewhere;
+					if (result.type !== 'image/png' || result.url.trim().length === 0) return i18n.ts._avatarDecorationCalibration.uploadFailed;
+					applyMaterial(result, true);
+					materialStatus.value = i18n.ts._avatarDecorationCalibration.prepared;
+					return null;
+				} catch (error: unknown) {
+					return i18n.ts._avatarDecorationCalibration.uploadFailed;
+				} finally {
+					if (activeUpload === uploading) activeUpload = null;
+				}
+			},
+		}, {
+			/** 完成关闭动画后恢复原编辑器；取消和提交成功都只释放本轮弹窗。 */
+			closed: (): void => {
+				popup.dispose();
+				if (disposeCalibrationDialog !== popup.dispose) return;
+				disposeCalibrationDialog = null;
+				if (!disposed && operation.value === 'calibrating-material') operation.value = null;
+			},
+		});
+		disposeCalibrationDialog = popup.dispose;
+	} catch (error: unknown) {
+		operation.value = null;
+		materialError.value = i18n.ts._avatarDecorationCalibration.loadFailed;
+	}
 }
 
 /** 上传选中的原始素材；真实上传回执只更新地址草稿，挂件创建仍由保存命令负责。 */
@@ -431,6 +479,8 @@ onBeforeUnmount(/** 销毁时先撤销交付身份，再中止本轮上传、角
 	upload?.abort();
 	disposeDriveDialog?.();
 	disposeDriveDialog = null;
+	disposeCalibrationDialog?.();
+	disposeCalibrationDialog = null;
 });
 </script>
 

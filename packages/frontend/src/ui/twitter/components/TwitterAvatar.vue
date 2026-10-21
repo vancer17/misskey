@@ -113,7 +113,7 @@ const visibleDecorations: ComputedRef<readonly TwitterAvatarDecoration[]> = comp
 
 /** 保持 MkAvatar 的静态代理选择，静态偏好不能被预览强制显示覆盖。 */
 function getDecorationUrl(decoration: TwitterAvatarDecoration): string {
-	return staticImages.value ? getStaticImageUrl(decoration.url) : decoration.url;
+	return staticImages.value ? (decoration.staticUrl ?? getStaticImageUrl(decoration.url)) : decoration.url;
 }
 
 /** 保留旧画布上的独立 rotate／scale／translate 属性语义及其浏览器变换顺序。 */
