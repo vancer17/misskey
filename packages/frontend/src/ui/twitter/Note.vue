@@ -49,7 +49,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			type="button"
 			@click="renoteCollapsed = false"
 		>
-			<MkAvatar :class="$style.collapsedAvatar" :user="displayUser" :link="!mock" :preview="!mock"/>
+			<TwitterAvatar decorationContext="none" :class="$style.collapsedAvatar" :user="displayUser" :mock="mock" :link="!mock" :preview="!mock"/>
 			<span :class="$style.collapsedText">
 				<Mfm
 					:text="getNoteSummary(appearNote)"
@@ -63,6 +63,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<TwitterNote
 			v-else
 			:note="note.renote"
+			:decorationContext="decorationContext"
 			:mock="mock"
 			:withHardMute="withHardMute"
 			embedded
@@ -76,9 +77,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 		@contextmenu.stop="onContextmenu"
 	>
 		<div :class="$style.avatarColumn">
-			<MkAvatar
+			<TwitterAvatar
+				:decorationContext="decorationContext"
 				:class="$style.avatar"
 				:user="displayUser"
+				:mock="mock"
 				:link="!mock"
 				:preview="!mock"
 			/>
@@ -289,6 +292,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import type { TwitterAvatarDecorationContext } from './domain/index.js';
+import TwitterAvatar from './components/TwitterAvatar.vue';
 import type { TwitterNoteCounters } from '@/ui/twitter/index.js';
 import { useTwitterNoteCounters } from '@/ui/twitter/index.js';
 import { getAppearNote } from '@/utility/get-appear-note.js';
@@ -327,12 +332,15 @@ const props = withDefaults(defineProps<{
 	withHardMute?: boolean;
 	embedded?: boolean;
 	actionsVisible?: boolean;
+	/** 宿主声明主内容作者角色，纯转发递归继续传递，不从帖子事实推断。 */
+	decorationContext?: Exclude<TwitterAvatarDecorationContext, 'profile'>;
 }>(), {
 	pinned: false,
 	mock: false,
 	withHardMute: false,
 	embedded: false,
 	actionsVisible: true,
+	decorationContext: 'none',
 });
 
 const { isMobile } = useTwitterLayout();
@@ -517,14 +525,14 @@ const noteCounters: ComputedRef<TwitterNoteCounters> = useTwitterNoteCounters(
 	&.mobile {
 		.article {
 			/* nitter 无移动端头像收缩（PF-2 N-9 裁决：对齐 48px） */
-			grid-template-columns: 48px minmax(0, 1fr);
-			gap: 10px;
+			grid-template-columns: var(--twitter-avatar-note-size) minmax(0, 1fr);
+			gap: var(--twitter-avatar-note-mobile-gap);
 			padding: var(--twitter-space-3);
 		}
 
 		.avatar {
-			width: 48px;
-			height: 48px;
+			width: var(--twitter-avatar-note-size);
+			height: var(--twitter-avatar-note-size);
 		}
 
 		.muted {
@@ -602,8 +610,8 @@ const noteCounters: ComputedRef<TwitterNoteCounters> = useTwitterNoteCounters(
 	position: relative;
 	display: grid;
 	/* nitter 地面真值：tweet-avatar 48×48（tweet/_base.scss，PF-1 N-1） */
-	grid-template-columns: 48px minmax(0, 1fr);
-	gap: var(--twitter-space-3);
+	grid-template-columns: var(--twitter-avatar-note-size) minmax(0, 1fr);
+	gap: var(--twitter-avatar-note-gap);
 	/* nitter 地面真值：timeline-item 内距 0.75em = 12px 四向一致（PF-2 N-2 裁决：对齐） */
 	padding: var(--twitter-space-3);
 }
@@ -617,8 +625,8 @@ const noteCounters: ComputedRef<TwitterNoteCounters> = useTwitterNoteCounters(
 }
 
 .avatar {
-	width: 48px;
-	height: 48px;
+	width: var(--twitter-avatar-note-size);
+	height: var(--twitter-avatar-note-size);
 }
 
 .threadLine {
