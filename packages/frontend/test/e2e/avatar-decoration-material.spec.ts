@@ -6,7 +6,8 @@
 /**
  * 文件领域：头像挂件静态素材校准的真实后端验收。
  * 数据链：管理页选择原图 → Cropper 校准草稿 → 透明 PNG 真实上传 → 目录保存／佩戴 → 资料页回访。
- * 像素证据读取后端实际资源，校验透明度、非正方形补边与已知色块坐标；不伪造成功业务响应。
+ * 像素证据读取后端实际资源，校验透明度、非正方形补边与已知色块坐标；中文状态覆盖同一真实读写链。
+ * 日文独立场景确认翻译作用域；处理中仅延迟真实请求，不伪造成功业务响应。
  * 测试仅连接已准备好的隔离实例；截图及差异图是审阅证据，不自动批准视觉基线。
  */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -25,8 +26,10 @@ let account: RegisteredUser;
 let errors: string[];
 /** 1024×768 原图包含绿色圆环、红色实心锚点和蓝色半透明锚点。 */
 const materialPng: Buffer = readFileSync(new URL('./fixtures/avatar-decoration/calibration-non-square.png', import.meta.url));
-/** 两帧 APNG 使用 PNG MIME，防止仅凭 MIME 将动画静默展平。 */
+/** 两帧 APNG 以 PNG MIME 上传，后端识别为 image/apng 后仍必须显示明确的动画保留说明。 */
 const animatedPng: Buffer = readFileSync(new URL('./fixtures/avatar-decoration/calibration-animated.png', import.meta.url));
+/** 有效静态 SVG 由真实媒体服务识别，校准拒绝不能扩大允许导出的格式。 */
+const unsupportedSvg: Buffer = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><circle cx="64" cy="64" r="48" fill="none" stroke="#20d250" stroke-width="8"/></svg>');
 
 /** 浏览器解码实际后端文件后形成的只读像素证据，不作为业务事实。 */
 type PixelEvidence = Readonly<{
@@ -42,13 +45,13 @@ type PixelEvidence = Readonly<{
 }>;
 
 /** 登录只写入真实签发会话，页面启动和后续状态均访问后端。 */
-async function visit(page: Page, path: string = '/avatar-decorations'): Promise<void> {
+async function visit(page: Page, path: string = '/avatar-decorations', language: 'zh-CN' | 'ja-JP' = 'zh-CN'): Promise<void> {
 	const me: AccountWithToken = { ...await api(BASE_URL, 'i', { i: account.token }), token: account.token };
 	await page.goto(`${BASE_URL}/robots.txt`);
-	await page.evaluate(/** 保存现有会话协议和界面语言，不创建业务状态副本。 */ (value: AccountWithToken): void => {
-		localStorage.setItem('account', JSON.stringify(value));
-		localStorage.setItem('lang', 'zh-CN');
-	}, me);
+	await page.evaluate(/** 保存现有会话协议和界面语言，不创建业务状态副本。 */ (value: { me: AccountWithToken; language: 'zh-CN' | 'ja-JP' }): void => {
+		localStorage.setItem('account', JSON.stringify(value.me));
+		localStorage.setItem('lang', value.language);
+	}, { me, language });
 	await page.goto(`${BASE_URL}${path}?ui=twitter`);
 }
 
@@ -58,7 +61,7 @@ async function materialUrl(page: Page): Promise<string> {
 }
 
 /** 通过现有文件选择按钮上传原图，等待真实上传回执更新 URL 草稿。 */
-async function chooseMaterial(page: Page, buffer: Buffer = materialPng): Promise<Misskey.entities.DriveFile> {
+async function chooseMaterial(page: Page, buffer: Buffer = materialPng, mimeType: string = 'image/png', fileName: string = 'calibration-source.png'): Promise<Misskey.entities.DriveFile> {
 	const choosing: Promise<FileChooser> = page.waitForEvent('filechooser');
 	await page.getByTestId('decoration-manager-upload').click();
 	const chooser: FileChooser = await choosing;
@@ -66,7 +69,7 @@ async function chooseMaterial(page: Page, buffer: Buffer = materialPng): Promise
 		/** 原始素材上传与派生图上传使用同一真实接口。 */
 		(response: Response): boolean => response.url().endsWith('/api/drive/files/create') && response.request().method() === 'POST',
 	);
-	await chooser.setFiles({ name: 'calibration-source.png', mimeType: 'image/png', buffer });
+	await chooser.setFiles({ name: fileName, mimeType, buffer });
 	const response: Response = await uploading;
 	expect(response.ok()).toBe(true);
 	const file: Misskey.entities.DriveFile = await response.json();
@@ -83,11 +86,27 @@ async function prepare(page: Page, buffer: Buffer = materialPng): Promise<Misske
 	return await chooseMaterial(page, buffer);
 }
 
-/** 进入专用校准弹窗；确认按钮可用说明图片已解码且 Cropper 已准备。 */
+/** 逐项断言用户可见的中文操作信息，不复制产品翻译字典或依赖 i18n 内部状态。 */
+async function expectChineseCalibration(page: Page): Promise<void> {
+	const dialog: Locator = page.getByTestId('decoration-calibration');
+	await expect(page.getByText('调整头像挂件素材', { exact: true })).toBeVisible();
+	await expect(dialog.getByText('中央圆形表示头像范围。拖动素材或输入数值，调整位置与大小。导出画布为 1024×1024px，中央参考圆直径为 512px。', { exact: true })).toBeVisible();
+	await expect(dialog.getByText('原图将保留。调整结果会作为新的透明 PNG 上传，在管理页面保存后生效。', { exact: true })).toBeVisible();
+	await expect(dialog.getByRole('spinbutton', { name: '缩放（%）', exact: true })).toHaveAttribute('data-testid', 'decoration-calibration-scale');
+	await expect(dialog.getByRole('spinbutton', { name: '水平位置（px）', exact: true })).toHaveAttribute('data-testid', 'decoration-calibration-x');
+	await expect(dialog.getByRole('spinbutton', { name: '垂直位置（px）', exact: true })).toHaveAttribute('data-testid', 'decoration-calibration-y');
+	await expect(page.getByTestId('decoration-calibration-reset')).toHaveText('重置位置与大小');
+	await expect(page.getByTestId('decoration-calibration-apply')).toHaveText('使用调整后的图片');
+	await expect(page.getByTestId('decoration-calibration-preview').getByRole('heading', { name: '按实际显示尺寸预览', exact: true })).toBeVisible();
+}
+
+/** 进入中文校准弹窗；确认按钮可用说明图片已解码且 Cropper 已准备。 */
 async function calibrate(page: Page): Promise<void> {
+	await expect(page.getByTestId('decoration-manager-calibrate')).toHaveText('调整素材位置与大小');
 	await page.getByTestId('decoration-manager-calibrate').click();
 	await expect(page.getByTestId('decoration-calibration')).toBeVisible();
 	await expect(page.getByTestId('decoration-calibration-apply')).toBeEnabled();
+	await expectChineseCalibration(page);
 }
 
 /** 确认校准仅上传派生 PNG，目录保存仍须由父编辑器显式提交。 */
@@ -102,6 +121,7 @@ async function applyCalibration(page: Page): Promise<Misskey.entities.DriveFile>
 	const derived: Misskey.entities.DriveFile = await response.json();
 	await expect(page.getByTestId('decoration-calibration')).toHaveCount(0);
 	await expect.poll(/** 成功回执才允许替换管理草稿地址。 */ async (): Promise<string> => materialUrl(page)).toBe(derived.url);
+	await expect(page.getByTestId('decoration-manager-material-status')).toHaveText('调整后的图片已上传，在管理页面保存后生效。原图已保留。');
 	return derived;
 }
 
@@ -306,18 +326,36 @@ test('取消校准保留原素材并且不上传派生图或保存目录', /** �
 	await page.getByTestId('decoration-calibration-cancel').click();
 });
 
-test('PNG MIME 的多帧素材拒绝校准但保留原生保存路径', /** 真实上传 APNG，禁止以浏览器首帧替换动图。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+test('后端识别的 APNG 拒绝校准但保留原生保存路径', /** 真实上传 APNG，禁止以通用格式错误掩盖动画分类或以首帧替换动图。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
 	const original: Misskey.entities.DriveFile = await prepare(page, animatedPng);
+	expect(original.type).toBe('image/apng');
 	let uploads: number = 0;
 	page.on('request', /** 原素材读取不计入上传数量。 */ (request: Request): void => { if (request.url().endsWith('/api/drive/files/create')) uploads++; });
 	await page.getByTestId('decoration-manager-calibrate').click();
-	await expect(page.getByTestId('decoration-calibration-error')).toBeVisible();
+	await expect(page.getByTestId('decoration-calibration-error')).toHaveText('暂不支持调整动态图片。原始动画已保留，可以直接使用，不会自动转换为静态图片。');
 	await expect(page.getByTestId('decoration-calibration-apply')).toBeDisabled();
 	await page.getByTestId('decoration-calibration-cancel').click();
 	expect(await materialUrl(page)).toBe(original.url);
 	expect(uploads).toBe(0);
 	const saved: Misskey.entities.AdminAvatarDecorationsListResponse[number] = await saveNew(page);
 	expect(saved.url).toBe(original.url);
+});
+
+test('真实静态 SVG 显示中文格式限制并保留原素材', /** 先识别动画不能意外放行不支持的静态格式或生成派生文件。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	await visit(page);
+	await page.getByTestId('decoration-manager-add').click();
+	const original: Misskey.entities.DriveFile = await chooseMaterial(page, unsupportedSvg, 'image/svg+xml', 'unsupported-static.svg');
+	expect(original.type).toBe('image/svg+xml');
+	let uploads: number = 0;
+	page.on('request', /** 真实 SVG 上传完成后仅统计可能错误产生的派生图上传。 */ (request: Request): void => { if (request.url().endsWith('/api/drive/files/create')) uploads++; });
+	await page.getByTestId('decoration-manager-calibrate').click();
+	await expect(page.getByTestId('decoration-calibration-error')).toHaveText('仅支持调整静态 PNG、JPEG 和 WebP 图片。可以继续使用原图，或上传支持的静态图片。');
+	await expect(page.getByTestId('decoration-calibration-apply')).toBeDisabled();
+	await page.getByTestId('decoration-calibration-cancel').click();
+	await expect(page.getByTestId('decoration-calibration')).toHaveCount(0);
+	expect(await materialUrl(page)).toBe(original.url);
+	expect(uploads).toBe(0);
+	expect(await directory()).toHaveLength(0);
 });
 
 test('派生图片上传失败保留原 URL 与校准草稿，重试采用真实回执', /** 故障只中断真实上传，成功响应始终由后端生成。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
@@ -329,12 +367,86 @@ test('派生图片上传失败保留原 URL 与校准草稿，重试采用真实
 		if (!failed) { failed = true; await route.abort('failed'); } else await route.continue();
 	});
 	await page.getByTestId('decoration-calibration-apply').click();
-	await expect(page.getByTestId('decoration-calibration-error')).toBeVisible();
+	await expect(page.getByTestId('decoration-calibration-error')).toHaveText('调整后的图片上传失败，原图和调整内容已保留，请重试。');
 	await expect(page.getByTestId('decoration-calibration-apply')).toBeEnabled();
+	await expect(page.getByTestId('decoration-calibration-apply')).toHaveText('使用调整后的图片');
 	await expect(page.getByTestId('decoration-calibration-x')).toHaveValue('32');
 	expect(await materialUrl(page)).toBe(original.url);
 	const derived: Misskey.entities.DriveFile = await applyCalibration(page);
 	expectMaterial(await pixels(page, derived.url, 32));
+	expect(await directory()).toHaveLength(0);
+});
+
+test('读取与上传等待期间显示中文状态，成功提示仍要求管理保存', /** 仅延迟真实请求，处理中和完成文案必须对应实际写入阶段。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>, info: TestInfo): Promise<void> => {
+	const original: Misskey.entities.DriveFile = await prepare(page);
+	let releaseRead: () => void = /** 尚未开始读取时没有需要释放的请求。 */ (): void => {};
+	const readingGate: Promise<void> = new Promise(/** 暂停原图请求，保持真实读取等待阶段。 */ (resolve: () => void): void => { releaseRead = resolve; });
+	let markReading: () => void = /** 网络读取开始后通知界面断言继续。 */ (): void => {};
+	const reading: Promise<void> = new Promise(/** 以真实 fetch 请求到达为准，不使用任意等待时长。 */ (resolve: () => void): void => { markReading = resolve; });
+	let releaseUpload: () => void = /** 尚未开始上传时没有需要释放的请求。 */ (): void => {};
+	const uploadGate: Promise<void> = new Promise(/** 暂停派生图请求，原始 URL 必须保持不变。 */ (resolve: () => void): void => { releaseUpload = resolve; });
+	let markUploading: () => void = /** 派生 PNG 请求开始后通知处理中断言继续。 */ (): void => {};
+	const uploading: Promise<void> = new Promise(/** 上传请求被实际发送后再检查禁用状态。 */ (resolve: () => void): void => { markUploading = resolve; });
+	await page.route(original.url, /** 图片展示照常访问原图，仅延迟校准读取，不替换资源内容。 */ async (route: Route): Promise<void> => {
+		if (route.request().resourceType() === 'fetch') { markReading(); await readingGate; }
+		await route.continue();
+	});
+	await page.route('**/api/drive/files/create', /** 放行后由真实后端处理 PNG，不构造或改写成功回执。 */ async (route: Route): Promise<void> => {
+		markUploading();
+		await uploadGate;
+		await route.continue();
+	});
+	try {
+		await expect(page.getByTestId('decoration-manager-calibrate')).toHaveText('调整素材位置与大小');
+		await page.getByTestId('decoration-manager-calibrate').click();
+		await reading;
+		await expect(page.getByTestId('decoration-calibration').getByRole('status')).toHaveText('正在读取原始图片…');
+		await expect(page.getByTestId('decoration-calibration-apply')).toBeDisabled();
+		await expect(page.getByTestId('decoration-calibration-cancel')).toBeEnabled();
+		expect(await materialUrl(page)).toBe(original.url);
+		await page.screenshot({ path: info.outputPath('calibration-zh-cn-reading.png') });
+		releaseRead();
+		await expect(page.getByTestId('decoration-calibration-apply')).toBeEnabled();
+		await expectChineseCalibration(page);
+		const response: Promise<Response> = page.waitForResponse(
+			/** 仅接收放行之后后端实际生成的上传回执。 */
+			(value: Response): boolean => value.url().endsWith('/api/drive/files/create') && value.request().method() === 'POST',
+		);
+		await page.getByTestId('decoration-calibration-apply').click();
+		await uploading;
+		await expect(page.getByTestId('decoration-calibration-apply')).toHaveText('正在准备图片…');
+		await expect(page.getByTestId('decoration-calibration-apply')).toBeDisabled();
+		await expect(page.getByTestId('decoration-calibration-cancel')).toBeDisabled();
+		expect(await materialUrl(page)).toBe(original.url);
+		await page.screenshot({ path: info.outputPath('calibration-zh-cn-applying.png') });
+		releaseUpload();
+		const uploaded: Response = await response;
+		expect(uploaded.ok()).toBe(true);
+		const derived: Misskey.entities.DriveFile = await uploaded.json();
+		await expect(page.getByTestId('decoration-calibration')).toHaveCount(0);
+		await expect(page.getByTestId('decoration-manager-material-status')).toHaveText('调整后的图片已上传，在管理页面保存后生效。原图已保留。');
+		expect(await materialUrl(page)).toBe(derived.url);
+		expect(await directory()).toHaveLength(0);
+	} finally { releaseRead(); releaseUpload(); }
+});
+
+test('日文会话继续使用日文校准文案，不被中文补充覆盖', /** 真实账户与素材共用原流程，语言由既有会话偏好选择。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>, info: TestInfo): Promise<void> => {
+	await visit(page, '/avatar-decorations', 'ja-JP');
+	await page.getByTestId('decoration-manager-add').click();
+	const original: Misskey.entities.DriveFile = await chooseMaterial(page);
+	await expect(page.getByTestId('decoration-manager-calibrate')).toHaveText('画像の位置と大きさを調整');
+	await page.getByTestId('decoration-manager-calibrate').click();
+	await expect(page.getByText('デコレーション画像を調整', { exact: true })).toBeVisible();
+	await expect(page.getByTestId('decoration-calibration-apply')).toBeEnabled();
+	await expect(page.getByTestId('decoration-calibration-apply')).toHaveText('調整した画像を使用');
+	await expect(page.getByTestId('decoration-calibration').getByRole('spinbutton', { name: '大きさ（%）', exact: true })).toHaveValue('100');
+	await expect(page.getByTestId('decoration-calibration')).toContainText('中央の円がアバターの範囲です。');
+	await expect(page.getByText('调整头像挂件素材', { exact: true })).toHaveCount(0);
+	await waitForLayout(page);
+	await page.screenshot({ path: info.outputPath('calibration-ja-jp.png') });
+	await page.getByTestId('decoration-calibration-cancel').click();
+	await expect(page.getByTestId('decoration-calibration')).toHaveCount(0);
+	expect(await materialUrl(page)).toBe(original.url);
 	expect(await directory()).toHaveLength(0);
 });
 
@@ -416,7 +528,7 @@ test('地址读取失败保留草稿，网盘重选后静态偏好仍能预览�
 	page.on('request', /** 素材重选和读取失败不得产生派生文件。 */ (request: Request): void => { if (request.url().endsWith('/api/drive/files/create')) uploads++; });
 	await page.route(original.url, /** 只中断原图网络读取，不伪造可读取的资源或成功回执。 */ async (route: Route): Promise<void> => { await route.abort('failed'); });
 	await page.getByTestId('decoration-manager-calibrate').click();
-	await expect(page.getByTestId('decoration-calibration-error')).toBeVisible();
+	await expect(page.getByTestId('decoration-calibration-error')).toHaveText('无法读取原始图片。如外部网站不允许读取，请先下载图片，再重新上传。原图已保留。');
 	await expect(page.getByTestId('decoration-calibration-apply')).toBeDisabled();
 	await page.getByTestId('decoration-calibration-cancel').click();
 	expect(await materialUrl(page)).toBe(original.url);

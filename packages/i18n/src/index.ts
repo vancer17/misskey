@@ -1,5 +1,6 @@
 /*
- * 语言资源领域：合并各语言及其回退内容，按完整文件发布发生变化的前端语言资源。
+ * 语言资源领域：合并上游语言、原生回退与 fork 专属中文补充，发布前端共享语言资源。
+ * fork 补充在构建期校验和读取，不覆盖 Crowdin 原始文件，也不进入组件或运行时配置。
  * SPDX-FileCopyrightText: syuilo and misskey-project
  * SPDX-License-Identifier: AGPL-3.0-only
  */
@@ -21,6 +22,49 @@ type Language = typeof languages[number];
 type PrimaryLang = keyof typeof primaries;
 
 type Locales = Record<Language, ILocale>;
+
+/** fork 目前唯一允许补充的业务文案区域；叶子键始终由日文源和生成类型派生。 */
+const forkChineseNamespace: keyof Pick<Locale, '_avatarDecorationCalibration'> = '_avatarDecorationCalibration';
+
+/** 判断外部 JSON 是否为普通对象，避免数组、空值或标量被当作翻译字典。 */
+function isLocaleRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * 读取 fork 自有的中文补充，只补当前日文源存在而正式中文尚未提供的叶子键。
+ * 每次构建重新读取原始字节，避免常驻开发进程的 ESM 缓存冻结翻译；删除文件即回到原生回退。
+ */
+function loadForkChineseSupplement(rawLocales: Locales, moduleUrl: string): Partial<Locale[typeof forkChineseNamespace]> {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(fs.readFileSync(new URL('./resources/fork/zh-CN.json', moduleUrl), 'utf-8'));
+	} catch (error: unknown) {
+		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return {};
+		throw error;
+	}
+	if (!isLocaleRecord(parsed)) throw new Error('Fork zh-CN supplement must be an object.');
+	for (const namespace of Object.keys(parsed)) {
+		if (namespace !== forkChineseNamespace) throw new Error(`Fork zh-CN supplement has unsupported namespace: ${namespace}`);
+	}
+	if (!Object.hasOwn(parsed, forkChineseNamespace)) return {};
+	const section: unknown = parsed[forkChineseNamespace];
+	if (!isLocaleRecord(section)) throw new Error(`Fork zh-CN ${forkChineseNamespace} must be an object.`);
+	const source: unknown = rawLocales['ja-JP'][forkChineseNamespace];
+	if (!isLocaleRecord(source)) throw new Error(`Fork zh-CN source namespace is missing: ${forkChineseNamespace}`);
+	const nativeChinese: unknown = rawLocales['zh-CN'][forkChineseNamespace];
+	const supplement: Partial<Locale[typeof forkChineseNamespace]> = {};
+	for (const [key, value] of Object.entries(section)) {
+		if (!Object.hasOwn(source, key) || typeof source[key] !== 'string') throw new Error(`Fork zh-CN supplement has unknown key: ${forkChineseNamespace}.${key}`);
+		if (typeof value !== 'string' || value.trim().length === 0) throw new Error(`Fork zh-CN ${forkChineseNamespace}.${key} must be a nonempty string.`);
+		if (isLocaleRecord(nativeChinese) && Object.hasOwn(nativeChinese, key)) {
+			throw new Error(`Official zh-CN already contains ${forkChineseNamespace}.${key}; remove the fork supplement for this key.`);
+		}
+		const localeKey: keyof Locale[typeof forkChineseNamespace] = key as keyof Locale[typeof forkChineseNamespace];
+		supplement[localeKey] = value;
+	}
+	return supplement;
+}
 
 /**
  * オブジェクトを再帰的にマージする
@@ -59,44 +103,51 @@ function removeEmpty<T extends ILocale>(obj: T): T {
 	return obj;
 }
 
+/** 仅为 zh-CN 的目标副本添加已验证补充，再沿用原生回退链；其他语言继续继承原始资源。 */
 function build(): Record<Language, Locale> {
 	// vitestの挙動を調整するため、一度ローカル変数化する必要がある
 	// https://github.com/vitest-dev/vitest/issues/3988#issuecomment-1686599577
 	// https://github.com/misskey-dev/misskey/pull/14057#issuecomment-2192833785
-	const metaUrl = import.meta.url;
-	const locales = languages.reduce<Locales>((a, lang) => {
-		a[lang] = (loadYaml(clean(fs.readFileSync(new URL(`./locales/${lang}.yml`, metaUrl), 'utf-8'))) ?? {}) as ILocale;
-		return a;
-	}, {} as Locales);
+	const metaUrl: string = import.meta.url;
+	const rawLocales: Locales = languages.reduce<Locales>(
+		/** 原始语言仍由现有 YAML 入口读取，不把合并结果作为正式翻译来源。 */
+		(all: Locales, lang: Language): Locales => {
+			all[lang] = (loadYaml(clean(fs.readFileSync(new URL(`./locales/${lang}.yml`, metaUrl), 'utf-8'))) ?? {}) as ILocale;
+			return all;
+		}, {} as Locales,
+	);
 
-	removeEmpty(locales);
+	removeEmpty(rawLocales);
+	const forkChinese: Partial<Locale[typeof forkChineseNamespace]> = loadForkChineseSupplement(rawLocales, metaUrl);
 
-	return Object.entries(locales).reduce<Record<Language, Locale>>((a, [k, v]) => {
-		const lang = k.split('-')[0];
-		const key = k as Language;
+	return Object.entries(rawLocales).reduce<Record<Language, Locale>>(/** 保持各语言原有继承顺序，补充不会流入英文、日文或繁体中文。 */ (all: Record<Language, Locale>, [language, value]: [string, ILocale]): Record<Language, Locale> => {
+		const lang: string = language.split('-')[0];
+		const key: Language = language as Language;
+		/** 中文目标独享补充；不修改 rawLocales，避免 primaries.zh=CN 将 fork 文案传给繁体中文。 */
+		const target: ILocale = key === 'zh-CN' ? merge<ILocale>(value, { [forkChineseNamespace]: forkChinese as ILocale }) : value;
 
 		switch (key) {
 			case 'ja-JP':
-				a[key] = v as Locale;
+				all[key] = value as Locale;
 				break;
 			case 'ja-KS':
 			case 'en-US':
-				a[key] = merge<Locale>(locales['ja-JP'] as Locale, v);
+				all[key] = merge<Locale>(rawLocales['ja-JP'] as Locale, value);
 				break;
 			default: {
-				const primaryLang = lang as PrimaryLang;
-				const primaryKey = (lang in primaries ? `${lang}-${primaries[primaryLang]}` : undefined) as Language | undefined;
-				a[key] = merge<Locale>(
-					locales['ja-JP'] as Locale,
-					locales['en-US'],
-					primaryKey ? locales[primaryKey] : {},
-					v,
+				const primaryLang: PrimaryLang = lang as PrimaryLang;
+				const primaryKey: Language | undefined = (lang in primaries ? `${lang}-${primaries[primaryLang]}` : undefined) as Language | undefined;
+				all[key] = merge<Locale>(
+					rawLocales['ja-JP'] as Locale,
+					rawLocales['en-US'],
+					primaryKey ? rawLocales[primaryKey] : {},
+					target,
 				);
 				break;
 			}
 		}
 
-		return a;
+		return all;
 	}, {} as Record<Language, Locale>);
 }
 
