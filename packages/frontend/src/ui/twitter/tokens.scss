@@ -114,6 +114,14 @@ body[data-ui='twitter'] {
 	--twitter-sidebar-icon-width: 72px;
 	/* 主列宽度（nitter: timeline-container max-width） */
 	--twitter-main-width: 600px;
+	/* X 归档 Communities module 119474：space36 * 3 + space24，默认主题尺度。 */
+	--twitter-community-card-width: 132px;
+	/* X 归档主题 communityBanner：横幅宽高比。 */
+	--twitter-community-banner-ratio: 2.5;
+	/* X 归档主题 borderRadii.large：频道横条卡片圆角。 */
+	--twitter-community-card-radius: 12px;
+	/* X 归档 subtext2：频道名称单行行高。 */
+	--twitter-community-name-line-height: 16px;
 	/* 右侧信息栏宽度 */
 	--twitter-right-rail-width: 350px;
 

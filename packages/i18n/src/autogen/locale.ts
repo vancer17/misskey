@@ -8847,6 +8847,14 @@ export interface Locale extends ILocale {
          */
         "noFollowing": string;
         /**
+         * 管理しているチャンネルはありません
+         */
+        "noOwned": string;
+        /**
+         * お気に入りのチャンネルはありません
+         */
+        "noFavorites": string;
+        /**
          * {n}人が参加中
          */
         "usersCount": ParameterizedString<"n">;
