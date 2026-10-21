@@ -2316,6 +2316,8 @@ _channel:
   owned: "管理中"
   following: "フォロー中"
   noFollowing: "フォローしているチャンネルはありません"
+  noOwned: "管理しているチャンネルはありません"
+  noFavorites: "お気に入りのチャンネルはありません"
   usersCount: "{n}人が参加中"
   notesCount: "{n}投稿があります"
   nameAndDescription: "名前と説明"
