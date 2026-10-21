@@ -85,6 +85,10 @@ test.afterEach(/** 每次完整交互都必须没有未处理页面异常。 */ 
 
 test('零关注首页只呈现单一引导，发现不混入管理和收藏', /** 真实空集合与有内容的发现流分别验证。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
 	const channel: Misskey.entities.Channel = await createChannel('Explore channel');
+	let featuredReads: number = 0;
+	page.on('request', /** 发现只消费全频道帖子，不再预取推荐频道横条。 */ (request: Request): void => {
+		if (request.url().endsWith('/api/channels/featured')) featuredReads++;
+	});
 	const root: Locator = await open(page);
 	await expect(root.getByTestId('twitter-community-empty-following')).toBeVisible();
 	await expect(root.getByTestId('twitter-community-empty-following')).toHaveCount(1);
@@ -92,10 +96,42 @@ test('零关注首页只呈现单一引导，发现不混入管理和收藏', /*
 	await expect(root.getByText('None', { exact: true })).toHaveCount(0);
 	await expect(root.getByTestId('twitter-community-strip')).toHaveCount(0);
 	await root.getByRole('button', { name: 'Explore', exact: true }).click();
-	await expect(root.getByTestId('twitter-community-card').filter({ hasText: channel.name })).toHaveCount(1);
-	await expect(root.getByTestId('twitter-note')).toContainText('Post in Explore channel');
+	await expect(root.getByTestId('twitter-community-strip')).toHaveCount(0);
+	await expect(root.getByTestId('twitter-community-card')).toHaveCount(0);
+	await expect(root.getByTestId('twitter-note')).toContainText(`Post in ${channel.name}`);
+	expect(featuredReads).toBe(0);
 	await expect(page.getByTestId('twitter-community-library')).toHaveCount(0);
 	await expect(root.locator('a[href="/channels/new"]')).toHaveCount(0);
+});
+
+test('已有关注与新关注共同留在首页，所属与推荐不反向补作关注', /** 真实关系写入、缓存回访及整页重进共同验证集合语义。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	const historical: Misskey.entities.Channel = await createChannel('Existing membership');
+	await api(BASE_URL, 'channels/follow', { i: viewer.token, channelId: historical.id });
+	const next: Misskey.entities.Channel = await createChannel('New membership');
+	const owned: Misskey.entities.Channel = await api(BASE_URL, 'channels/create', { i: viewer.token, name: 'Owned without following', description: '' });
+	const root: Locator = await open(page);
+	await expect(root.getByTestId('twitter-community-card')).toHaveCount(1);
+	await expect(root.getByTestId('twitter-community-card')).toContainText(historical.name);
+	await root.getByRole('tab', { name: 'Explore', exact: true }).click();
+	await expect(root.getByTestId('twitter-note')).toHaveCount(2);
+	await expect(root.getByTestId('twitter-community-strip')).toHaveCount(0);
+	await page.getByTestId('twitter-sidebar').locator('a[href="/my/notifications"]').click();
+	await expect(page).toHaveURL(/\/my\/notifications/);
+	await api(BASE_URL, 'channels/follow', { i: viewer.token, channelId: next.id });
+	await page.goBack();
+	await root.getByRole('tab', { name: 'Home', exact: true }).click();
+	await expect(root.getByTestId('twitter-community-card')).toHaveCount(2);
+	await expect(root.getByTestId('twitter-community-card').filter({ hasText: historical.name })).toHaveCount(1);
+	await expect(root.getByTestId('twitter-community-card').filter({ hasText: next.name })).toHaveCount(1);
+	await page.reload();
+	await expect(root.getByTestId('twitter-community-card')).toHaveCount(2);
+	const followed: Misskey.entities.Channel[] = await api(BASE_URL, 'channels/followed', { i: viewer.token, limit: 100 });
+	const links: string[] = await root.getByTestId('twitter-community-card').evaluateAll(/** 可见导航直接对应真实关注集合。 */ (elements: (HTMLElement | SVGElement)[]): string[] => elements.map(
+		/** 路由仅携带服务端频道标识。 */ (element: HTMLElement | SVGElement): string => element.getAttribute('href') ?? '',
+	));
+	expect(links.sort()).toEqual(followed.map(/** 比较服务端权威频道标识。 */ (channel: Misskey.entities.Channel): string => `/channels/${channel.id}`).sort());
+	const ownedAfter: Misskey.entities.Channel = await api(BASE_URL, 'channels/show', { i: viewer.token, channelId: owned.id });
+	expect(ownedAfter.isFollowing).toBe(false);
 });
 
 for (const width of [1440, 390]) {
@@ -220,10 +256,15 @@ test('独立管理与收藏弹窗按需读取，关闭后主流保持原位', /*
 	await page.getByTestId('modal-window-close').click();
 	const favorites: Locator = await openLibrary(page, 'Favorites');
 	await expect(favorites.locator(`a[href="/channels/${channel.id}"]`)).toBeVisible();
+	await expect.poll(/** 未传主列坐标的收藏窗口仍以视口居中。 */ async (): Promise<number> => {
+		const bounds: ElementBox = await box(favorites.locator('../..'));
+		return Math.abs(bounds.x + bounds.width / 2 - (page.viewportSize()?.width ?? 0) / 2);
+	}).toBeLessThanOrEqual(1);
 	expect(reads['/api/channels/my-favorites']).toBe(1);
 	await page.getByTestId('modal-window-close').click();
 	await expect(root.getByRole('tab', { name: 'Explore', exact: true })).toHaveAttribute('aria-selected', 'true');
-	await expect(root.getByTestId('twitter-community-card')).toHaveCount(1);
+	await expect(root.getByTestId('twitter-community-card')).toHaveCount(0);
+	await expect(root.getByTestId('twitter-community-strip')).toHaveCount(0);
 	await expect(root.getByTestId('twitter-note')).toHaveCount(1);
 	const reopened: Locator = await openLibrary(page, 'Owned');
 	await reopened.locator(`a[href="/channels/${channel.id}"]`).click();
