@@ -47,7 +47,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<article v-else ref="rootEl" v-hotkey="keymap" :class="$style.article" tabindex="0">
 		<header :class="$style.header">
-			<MkAvatar :class="$style.avatar" :user="appearNote.user" link preview/>
+			<TwitterAvatar decorationContext="note" :class="$style.avatar" :user="appearNote.user" link preview/>
 			<div :class="$style.identity">
 				<div :class="$style.nameRow">
 					<MkA
@@ -340,6 +340,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import TwitterAvatar from './components/TwitterAvatar.vue';
 import { useInterval } from '@@/js/use-interval.js';
 import { store } from '@/store.js';
 import { prefer } from '@/preferences.js';
@@ -613,13 +614,13 @@ watch(/** 非实时轮询改变的反应数量也使当前名单失效。 */ ():
 
 	.header {
 		/* nitter 无移动端头像收缩（PF-2 N-11 裁决：对齐 48px） */
-		grid-template-columns: 48px minmax(0, 1fr) 32px;
-		gap: 10px;
+		grid-template-columns: var(--twitter-avatar-note-size) minmax(0, 1fr) 32px;
+		gap: var(--twitter-avatar-note-mobile-gap);
 	}
 
 	.avatar {
-		width: 48px;
-		height: 48px;
+		width: var(--twitter-avatar-note-size);
+		height: var(--twitter-avatar-note-size);
 	}
 
 	.text {
@@ -706,14 +707,14 @@ watch(/** 非实时轮询改变的反应数量也使当前名单失效。 */ ():
 
 .header {
 	display: grid;
-	grid-template-columns: 48px minmax(0, 1fr) 36px;
-	gap: var(--twitter-space-3);
+	grid-template-columns: var(--twitter-avatar-note-size) minmax(0, 1fr) 36px;
+	gap: var(--twitter-avatar-note-gap);
 	align-items: center;
 }
 
 .avatar {
-	width: 48px;
-	height: 48px;
+	width: var(--twitter-avatar-note-size);
+	height: var(--twitter-avatar-note-size);
 }
 
 .identity,
