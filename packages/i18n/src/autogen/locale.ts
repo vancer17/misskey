@@ -13708,6 +13708,80 @@ export interface Locale extends ILocale {
          */
         "removeAllConfirm": string;
     };
+    "_avatarDecorationCalibration": {
+        /**
+         * 画像の位置と大きさを調整
+         */
+        "open": string;
+        /**
+         * デコレーション画像を調整
+         */
+        "title": string;
+        /**
+         * 中央の円がアバターの範囲です。画像をドラッグするか、数値を入力して位置と大きさを合わせてください。出力は1024×1024px、中央の円は直径512pxです。
+         */
+        "description": string;
+        /**
+         * 元の画像を読み込み中…
+         */
+        "loading": string;
+        /**
+         * 大きさ（%）
+         */
+        "scale": string;
+        /**
+         * 横位置（px）
+         */
+        "horizontalPosition": string;
+        /**
+         * 縦位置（px）
+         */
+        "verticalPosition": string;
+        /**
+         * 元の位置と大きさに戻す
+         */
+        "reset": string;
+        /**
+         * 調整した画像を使用
+         */
+        "apply": string;
+        /**
+         * 画像を準備中…
+         */
+        "applying": string;
+        /**
+         * 実際の表示サイズで確認
+         */
+        "preview": string;
+        /**
+         * 元の画像は変更しません。調整結果は新しい透明PNGとしてアップロードされ、管理画面で保存すると反映されます。
+         */
+        "originalPreserved": string;
+        /**
+         * 元の画像を読み込めませんでした。外部サイトが読み取りを許可しない場合は、画像をダウンロードしてからアップロードしてください。元の画像は保持されています。
+         */
+        "loadFailed": string;
+        /**
+         * 調整できるのは静止画のPNG・JPEG・WebPです。元の画像をそのまま使用するか、対応する静止画をアップロードしてください。
+         */
+        "unsupportedFormat": string;
+        /**
+         * アニメーション画像は調整できません。元のアニメーションは保持されています。静止画に変換せず、そのまま使用できます。
+         */
+        "animatedNotSupported": string;
+        /**
+         * 画像を書き出せませんでした。調整内容は保持されています。再試行してください。
+         */
+        "exportFailed": string;
+        /**
+         * 調整した画像をアップロードできませんでした。元の画像と調整内容は保持されています。再試行してください。
+         */
+        "uploadFailed": string;
+        /**
+         * 調整した画像をアップロードしました。管理画面で保存すると反映されます。元の画像は変更していません。
+         */
+        "prepared": string;
+    };
     "_avatarDecorationManager": {
         /**
          * 保存結果は確定しましたが、装着中の画像を更新できませんでした。再読み込みしてください。

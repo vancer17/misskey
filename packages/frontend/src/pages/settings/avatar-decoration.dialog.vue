@@ -31,8 +31,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-if="previewFailed" :class="$style.error" role="status"><span>{{ i18n.ts._avatarDecorationSettings.imageFailed }}</span> <button type="button" class="_textButton" :disabled="busy" @click="retryPreview">{{ i18n.ts.retry }}</button></div>
 		<fieldset :disabled="busy" :class="$style.controls">
 			<label :class="$style.control"><span>{{ i18n.ts.angle }} <output>{{ formatAngle(angle) }}</output></span><input v-model.number="angle" data-testid="decoration-angle" type="range" min="-0.5" max="0.5" step="0.025"></label>
-			<label :class="$style.control"><span>{{ i18n.ts._avatarDecorationSettings.horizontalPosition }} <output>{{ formatOffset(offsetX) }}</output></span><input v-model.number="offsetX" data-testid="decoration-offset-x" type="range" min="-0.25" max="0.25" step="0.025"></label>
-			<label :class="$style.control"><span>{{ i18n.ts._avatarDecorationSettings.verticalPosition }} <output>{{ formatOffset(offsetY) }}</output></span><input v-model.number="offsetY" data-testid="decoration-offset-y" type="range" min="-0.25" max="0.25" step="0.025"></label>
+			<div :class="$style.control">
+				<label><span>{{ i18n.ts._avatarDecorationSettings.horizontalPosition }} <output>{{ formatOffset(offsetX) }}</output></span><input v-model.number="offsetX" data-testid="decoration-offset-x" type="range" min="-0.25" max="0.25" step="0.001"></label>
+				<input :value="offsetX" :aria-label="i18n.ts._avatarDecorationSettings.horizontalPosition" data-testid="decoration-offset-x-number" type="number" min="-0.25" max="0.25" step="0.001" @change="onOffsetInput($event, 'x')">
+			</div>
+			<div :class="$style.control">
+				<label><span>{{ i18n.ts._avatarDecorationSettings.verticalPosition }} <output>{{ formatOffset(offsetY) }}</output></span><input v-model.number="offsetY" data-testid="decoration-offset-y" type="range" min="-0.25" max="0.25" step="0.001"></label>
+				<input :value="offsetY" :aria-label="i18n.ts._avatarDecorationSettings.verticalPosition" data-testid="decoration-offset-y-number" type="number" min="-0.25" max="0.25" step="0.001" @change="onOffsetInput($event, 'y')">
+			</div>
 			<MkSwitch v-model="flipH" :disabled="busy" data-testid="decoration-flip">{{ i18n.ts._avatarDecorationSettings.horizontalFlip }}</MkSwitch>
 			<button type="button" class="_textButton" :class="$style.reset" :disabled="busy" data-testid="decoration-reset" @click="resetTransform">{{ i18n.ts._avatarDecorationSettings.resetPosition }}</button>
 		</fieldset>
@@ -101,8 +107,18 @@ const decorationsForPreview: ComputedRef<NonNullable<InstanceType<typeof MkAvata
 /** 角度展示沿用既有一周为 1 的协议，不更改写入单位。 */
 function formatAngle(value: number): string { return `${Math.round(value * 360)}°`; }
 
-/** 位移展示为百分比，写入仍使用既有比例值。 */
-function formatOffset(value: number): string { return `${Math.round(value * 100)}%`; }
+/** 百分比仅做展示精度处理，保留草稿中的原始比例，不把微小位移显示为整数零。 */
+function formatOffset(value: number): string { return `${Number((value * 100).toPrecision(12))}%`; }
+
+/** 数字输入只接受原协议范围内的有限值；无效输入还原为当前草稿，不生成第二份变换状态。 */
+function onOffsetInput(event: Event, axis: 'x' | 'y'): void {
+	if (busy.value || !(event.currentTarget instanceof HTMLInputElement)) return;
+	const input: HTMLInputElement = event.currentTarget;
+	const next: number = input.valueAsNumber;
+	const target: Ref<number> = axis === 'x' ? offsetX : offsetY;
+	if (Number.isFinite(next) && next >= -0.25 && next <= 0.25) target.value = next;
+	else input.value = String(target.value);
+}
 
 /** 用户主动恢复默认位置，只修改未保存的临时参数。 */
 function resetTransform(): void { if (busy.value) return; angle.value = 0; flipH.value = false; offsetX.value = 0; offsetY.value = 0; }
@@ -160,10 +176,12 @@ onBeforeUnmount(/** 页面离开后写入可以完成，但不能再操作已销
 .warning { color: var(--twitter-warning, var(--MI_THEME-warn)); line-height: 1.6; }
 .controls { min-width: 0; margin: 0; padding: 0; border: 0; display: grid; gap: var(--twitter-space-3, 12px); }
 .control { display: grid; gap: var(--twitter-space-1, 4px); font-size: var(--twitter-font-size-body, 14px); }
+.control label { display: grid; gap: var(--twitter-space-1, 4px); }
 .control span { display: flex; justify-content: space-between; }
 .control output { color: var(--twitter-secondary-fg, var(--MI_THEME-fgTransparentWeak)); font-variant-numeric: tabular-nums; }
 .control input { width: 100%; min-height: var(--twitter-touch-target, 44px); margin: 0; accent-color: var(--twitter-accent, var(--MI_THEME-accent)); cursor: pointer; }
 .control input:disabled { cursor: not-allowed; }
+.control input[type='number'] { box-sizing: border-box; min-width: 0; padding-inline: var(--twitter-space-2, 8px); border: 1px solid var(--twitter-border, var(--MI_THEME-divider)); border-radius: var(--twitter-radius-small, 4px); background: var(--twitter-panel, var(--MI_THEME-panel)); color: inherit; font: inherit; cursor: text; }
 .control input:focus-visible, .reset:focus-visible { outline: 2px solid var(--twitter-accent, var(--MI_THEME-accent)); outline-offset: 2px; }
 .reset { color: var(--twitter-accent, var(--MI_THEME-accent)); justify-self: start; min-height: var(--twitter-touch-target, 44px); }
 .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--twitter-space-2, 8px); }
