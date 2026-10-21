@@ -15,7 +15,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </div>
 <article v-else :class="$style.root" :aria-label="i18n.ts.quote">
 	<header v-if="displayUser" :class="$style.header">
-		<MkAvatar :class="$style.avatar" :user="displayUser" link preview/>
+		<TwitterAvatar decorationContext="none" :class="$style.avatar" :user="displayUser" link preview/>
 		<MkA
 			v-user-preview="displayUser.id"
 			:class="$style.name"
@@ -56,6 +56,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import TwitterAvatar from './components/TwitterAvatar.vue';
 import * as Misskey from 'misskey-js';
 import type { ComputedRef } from 'vue';
 import { useTwitterDisplayUser } from './composables/use-twitter-display-user.js';
