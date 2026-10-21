@@ -20,7 +20,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	tabindex="0"
 >
 	<div :class="$style.avatarColumn">
-		<MkAvatar :class="$style.avatar" :user="appearNote.user" link preview/>
+		<TwitterAvatar decorationContext="none" :class="$style.avatar" :user="appearNote.user" link preview/>
 		<div v-if="connected" :class="$style.threadLine" aria-hidden="true"></div>
 	</div>
 
@@ -126,6 +126,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import TwitterAvatar from './components/TwitterAvatar.vue';
 import type { ComputedRef } from 'vue';
 import type { TwitterNoteCounters } from '@/ui/twitter/index.js';
 import type { Ref } from 'vue';

@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：共享身份组件的 Twitter 表现适配。
+作用：通过公开头像属性关闭 Twitter 紧凑场景的挂件，保留原组件交互及默认 UI 表现。
+数据链：UI 展示上下文 → 头像装饰属性；不参与用户状态与业务判断。
+-->
+
 <template>
 <div
 	role="menu"
@@ -57,7 +63,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				@mouseleave.passive="onItemMouseLeave"
 			>
 				<i v-if="item.icon" class="ti-fw" :class="[$style.icon, item.icon]"></i>
-				<MkAvatar v-if="item.avatar" :user="item.avatar" :class="$style.avatar"/>
+				<MkAvatar v-if="item.avatar" :decorations="isTwitterUi ? [] : undefined" :user="item.avatar" :class="$style.avatar"/>
 				<div :class="$style.item_content">
 					<div :class="$style.item_content_text">
 						<div :class="$style.item_content_text_title">{{ item.text }}</div>
@@ -99,7 +105,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				@mouseenter.passive="onItemMouseEnter"
 				@mouseleave.passive="onItemMouseLeave"
 			>
-				<MkAvatar :user="item.user" :class="$style.avatar"/><MkUserName :user="item.user"/>
+				<MkAvatar :decorations="isTwitterUi ? [] : undefined" :user="item.user" :class="$style.avatar"/><MkUserName :user="item.user"/>
 				<div v-if="item.indicate" :class="$style.item_content">
 					<span :class="$style.indicator" class="_blink"><i class="_indicatorCircle"></i></span>
 				</div>
@@ -197,7 +203,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				@mouseleave.passive="onItemMouseLeave"
 			>
 				<i v-if="item.icon" class="ti-fw" :class="[$style.icon, item.icon]"></i>
-				<MkAvatar v-if="item.avatar" :user="item.avatar" :class="$style.avatar"/>
+				<MkAvatar v-if="item.avatar" :decorations="isTwitterUi ? [] : undefined" :user="item.avatar" :class="$style.avatar"/>
 				<div :class="$style.item_content">
 					<div :class="$style.item_content_text">
 						<div :class="$style.item_content_text_title">{{ item.text }}</div>

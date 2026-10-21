@@ -11,7 +11,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="[$style.root, { [$style.mobile]: isMobile }]">
-	<MkAvatar :class="$style.avatar" :user="displayUser" :link="!mock" :preview="!mock"/>
+	<TwitterAvatar decorationContext="none" :class="$style.avatar" :user="displayUser" :mock="mock" :link="!mock" :preview="!mock"/>
 	<i :class="['ti ti-repeat', $style.icon]" aria-hidden="true"></i>
 	<I18n :src="i18n.ts.renotedBy" tag="span" :class="$style.text">
 		<template #user>
@@ -34,6 +34,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import TwitterAvatar from './components/TwitterAvatar.vue';
 import * as Misskey from 'misskey-js';
 import type { ComputedRef } from 'vue';
 import { useTwitterDisplayUser } from './composables/use-twitter-display-user.js';

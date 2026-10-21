@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<h2 :class="$style.heading">{{ i18n.ts.whoToFollow }}</h2>
 	<article v-for="user in users" :key="user.id" :class="$style.item">
 		<MkA :class="$style.identity" :to="userPage(user)" :aria-label="acct(user)">
-			<MkAvatar :class="$style.avatar" :user="user"/>
+			<TwitterAvatar decorationContext="none" :class="$style.avatar" :user="user"/>
 			<span :class="$style.account">
 				<span :class="$style.name"><MkUserName :user="user" :nowrap="true"/></span>
 				<span :class="$style.acct">@{{ acct(user) }}</span>
@@ -53,6 +53,7 @@ SPDX-License-Identifier: AGPL-3.0-only
  * 不设「显示更多」入口（目标页 explore 未 Twitter 化，防止路由级泄漏回流）。
  */
 
+import TwitterAvatar from './TwitterAvatar.vue';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
 import { acct, userPage } from '@/filters/user.js';

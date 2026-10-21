@@ -12,7 +12,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <div :class="[$style.root, { [$style.twitter]: isTwitterUi }]" :data-decoration-id="decoration.id" data-testid="decoration-card">
 	<button type="button" class="_button" :class="$style.choose" :disabled="disabled" :aria-label="i18n.tsx._avatarDecorationSettings.previewName({ name: decoration.name })" @click="emit('click')">
 		<span :key="previewKey" :class="$style.preview" @error.capture="onPreviewError">
-			<MkAvatar :class="$style.avatar" :user="$i" :decorations="[{ url: decoration.url }]" forceShowDecoration/>
+			<TwitterAvatar v-if="isTwitterUi" :class="$style.avatar" :user="$i" :decorations="[{ url: decoration.url }]" decorationContext="note" forceShowDecoration/>
+			<MkAvatar v-else :class="$style.avatar" :user="$i" :decorations="[{ url: decoration.url }]" forceShowDecoration/>
 		</span>
 		<span :class="$style.name">{{ decoration.name }}</span>
 		<span :class="[$style.caption, { [$style.locked]: locked }]">
@@ -34,7 +35,7 @@ import type * as Misskey from 'misskey-js';
 import { ensureSignin } from '@/i.js';
 import { i18n } from '@/i18n.js';
 import { canUseAvatarDecoration } from '@/utility/avatar-decoration/index.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { TwitterAvatar, useIsTwitterUi } from '@/ui/twitter/index.js';
 
 const $i: ReturnType<typeof ensureSignin> = ensureSignin();
 /** 业务卡片直接接收既有权威目录类型；不复制实体字段声明。 */
@@ -90,6 +91,8 @@ watch(/** 目录刷新替换图片 URL 后重新显示真实图片结果。 */ (
 .locked { color: var(--twitter-warning, var(--MI_THEME-warn)); }
 .imageError { display: grid; justify-items: center; gap: var(--twitter-space-1, 4px); padding: 0 var(--twitter-space-2, 8px) var(--twitter-space-2, 8px); color: var(--twitter-secondary-fg, var(--MI_THEME-fgTransparentWeak)); font-size: var(--twitter-font-size-caption, 12px); }
 .imageError button { color: var(--twitter-accent, var(--MI_THEME-accent)); min-height: var(--twitter-touch-target, 44px); }
-.twitter { color: var(--twitter-fg); }
+.twitter { color: var(--twitter-fg);
+	.avatar { width: var(--twitter-avatar-note-size); height: var(--twitter-avatar-note-size); }
+}
 @media (prefers-reduced-motion: reduce) { .root { transition: none; } }
 </style>

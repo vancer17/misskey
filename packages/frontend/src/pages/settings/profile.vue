@@ -19,7 +19,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<section v-if="isTwitterUi" :class="[$style.twitterCard, $style.twitterIdentityCard]">
 			<div :class="$style.twitterBanner" :style="bannerStyle" role="presentation"></div>
 			<div :class="$style.twitterIdentityBody">
-				<MkAvatar :class="$style.twitterAvatar" :user="$i" forceShowDecoration/>
+				<TwitterAvatar decorationContext="none" :class="$style.twitterAvatar" :user="$i"/>
 				<div :class="$style.twitterIdentityButtons">
 					<MkButton primary rounded data-testid="profile-change-banner" @click="changeBanner">{{ i18n.ts._profile.changeBanner }}</MkButton>
 					<MkButton primary rounded data-testid="profile-change-avatar" @click="changeAvatar">{{ i18n.ts._profile.changeAvatar }}</MkButton>
@@ -213,7 +213,7 @@ import MkInfo from '@/components/MkInfo.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import { genId } from '@/utility/id.js';
 import { DI } from '@/di.js';
-import { useTwitterLayout } from '@/ui/twitter/index.js';
+import { TwitterAvatar, useTwitterLayout } from '@/ui/twitter/index.js';
 
 const $i = ensureSignin();
 
