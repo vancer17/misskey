@@ -23,3 +23,6 @@ export type { TwitterNoteCounters } from './note-counters.js';
 
 /** 头像挂件展示场景及既有佩戴实体的只读预览投影。 */
 export type { TwitterAvatarDecoration, TwitterAvatarDecorationContext } from './avatar-decoration.js';
+/** 静态素材制作规格与临时编辑坐标，不进入服务端佩戴协议。 */
+export { TWITTER_AVATAR_DECORATION_CALIBRATION } from './avatar-decoration.js';
+export type { TwitterAvatarDecorationCalibrationTransform, TwitterAvatarDecorationMaterialFailure } from './avatar-decoration.js';
