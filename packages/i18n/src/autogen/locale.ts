@@ -13552,6 +13552,22 @@ export interface Locale extends ILocale {
     };
     "_avatarDecorationSettings": {
         /**
+         * 投稿アバターのプレビュー
+         */
+        "notePreview": string;
+        /**
+         * プロフィールアバターのプレビュー
+         */
+        "profilePreview": string;
+        /**
+         * 実際の表示サイズと描画範囲です。点線の外側は表示されません。
+         */
+        "previewGeometryHint": string;
+        /**
+         * 正方形の透明キャンバスを保ち、中央に幅・高さが各半分のアバター基準領域を置いてください（例：1024 × 1024 内の中央 512 × 512）。上半分だけの飾りでも透明な下半分を切り取らないでください。
+         */
+        "materialCanvasHint": string;
+        /**
          * 現在のアバター
          */
         "currentAvatar": string;
@@ -13693,6 +13709,10 @@ export interface Locale extends ILocale {
         "removeAllConfirm": string;
     };
     "_avatarDecorationManager": {
+        /**
+         * 保存結果は確定しましたが、装着中の画像を更新できませんでした。再読み込みしてください。
+         */
+        "accountRefreshFailed": string;
         /**
          * アバターデコレーション管理
          */
