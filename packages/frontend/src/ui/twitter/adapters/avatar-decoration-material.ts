@@ -21,7 +21,7 @@ export class AvatarDecorationMaterialError extends Error {
 	}
 }
 
-/** 读取原始字节并拒绝动画；跨域不可读时由调用方保留原有图片地址。 */
+/** 读取原始字节并先识别动画，再校验静态格式；APNG 等媒体类型也获得准确提示，原地址保持不变。 */
 export async function loadAvatarDecorationMaterial(sourceUrl: string, signal: AbortSignal): Promise<Blob> {
 	let blob: Blob;
 	try {
@@ -31,13 +31,13 @@ export async function loadAvatarDecorationMaterial(sourceUrl: string, signal: Ab
 	} catch (error: unknown) {
 		throw new AvatarDecorationMaterialError('load');
 	}
-	if (!TWITTER_AVATAR_DECORATION_CALIBRATION.staticMimeTypes.includes(blob.type)) throw new AvatarDecorationMaterialError('unsupported');
 	try {
 		if (await isAnimated(blob)) throw new AvatarDecorationMaterialError('animated');
 	} catch (error: unknown) {
 		if (error instanceof AvatarDecorationMaterialError) throw error;
 		throw new AvatarDecorationMaterialError('load');
 	}
+	if (!TWITTER_AVATAR_DECORATION_CALIBRATION.staticMimeTypes.includes(blob.type)) throw new AvatarDecorationMaterialError('unsupported');
 	return blob;
 }
 
