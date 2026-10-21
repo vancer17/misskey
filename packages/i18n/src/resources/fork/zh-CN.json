@@ -1,0 +1,22 @@
+{
+	"_avatarDecorationCalibration": {
+		"open": "调整素材位置与大小",
+		"title": "调整头像挂件素材",
+		"description": "中央圆形表示头像范围。拖动素材或输入数值，调整位置与大小。导出画布为 1024×1024px，中央参考圆直径为 512px。",
+		"loading": "正在读取原始图片…",
+		"scale": "缩放（%）",
+		"horizontalPosition": "水平位置（px）",
+		"verticalPosition": "垂直位置（px）",
+		"reset": "重置位置与大小",
+		"apply": "使用调整后的图片",
+		"applying": "正在准备图片…",
+		"preview": "按实际显示尺寸预览",
+		"originalPreserved": "原图将保留。调整结果会作为新的透明 PNG 上传，在管理页面保存后生效。",
+		"loadFailed": "无法读取原始图片。如外部网站不允许读取，请先下载图片，再重新上传。原图已保留。",
+		"unsupportedFormat": "仅支持调整静态 PNG、JPEG 和 WebP 图片。可以继续使用原图，或上传支持的静态图片。",
+		"animatedNotSupported": "暂不支持调整动态图片。原始动画已保留，可以直接使用，不会自动转换为静态图片。",
+		"exportFailed": "图片导出失败，调整内容已保留，请重试。",
+		"uploadFailed": "调整后的图片上传失败，原图和调整内容已保留，请重试。",
+		"prepared": "调整后的图片已上传，在管理页面保存后生效。原图已保留。"
+	}
+}
