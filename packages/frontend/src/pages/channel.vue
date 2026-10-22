@@ -12,11 +12,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <TwitterChannel
 	v-if="isTwitterUi"
-	v-model:tab="tab"
+	v-model:tab="twitterTab"
 	:channelId="channelId"
-	:channel="channel"
-	:favorited="favorited"
-	:featuredPaginator="featuredPaginator"
+	:state="channelState"
+	:featuredState="featuredState"
 	:notesSearchAvailable="notesSearchAvailable"
 	:searchPaginator="searchPaginator"
 	:searchKey="searchKey"
@@ -26,6 +25,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:onFavorite="favorite"
 	:onUnfavorite="unfavorite"
 	:onSearch="searchFromTwitter"
+	:featuredRefresher="refreshFeatured"
+	@retry="retryChannel"
+	@featuredMore="loadMoreFeatured"
+	@featuredRetry="retryFeatured"
+	@featuredRefresh="refreshFeatured"
 />
 <PageWithHeader v-else v-model:tab="tab" :actions="headerActions" :tabs="headerTabs" :swipable="true">
 	<div class="_spacer" style="--MI_SPACER-w: 700px;">
@@ -64,7 +68,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkStreamingNotesTimeline :key="channelId" src="channel" :channel="channelId"/>
 		</div>
 		<div v-else-if="tab === 'featured'">
-			<MkNotesTimeline :paginator="featuredPaginator"/>
+			<MkNotesTimeline v-if="featuredPaginator != null" :paginator="featuredPaginator"/>
 		</div>
 		<div v-else-if="tab === 'search'">
 			<div v-if="notesSearchAvailable" class="_gaps">
@@ -94,10 +98,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import type { Ref } from 'vue';
+import type { ComputedRef, Ref } from 'vue';
 import { onBeforeUnmount } from 'vue';
 import { useGlobalEvent } from '@/events.js';
-import { useTwitterRefresh, useTwitterPaginatorRefresh } from '@/ui/twitter/index.js';
+import { createChannelDetailQuery, createChannelFeaturedQuery, resolveChannelCommunityTab, useTwitterRefresh, useTwitterPaginatorRefresh } from '@/ui/twitter/index.js';
+import type { ChannelCommunityTab, ChannelDetailState, ChannelDetailQuery, ChannelFeaturedState, ChannelFeaturedQuery } from '@/ui/twitter/index.js';
+import { loadTwitterChannelPage } from '@/ui/twitter/routing/index.js';
 import { computed, watch, ref, markRaw, shallowRef, defineAsyncComponent, inject } from 'vue';
 import * as Misskey from 'misskey-js';
 import { url } from '@@/js/config.js';
@@ -107,7 +113,6 @@ import MkPostForm from '@/components/MkPostForm.vue';
 import MkStreamingNotesTimeline from '@/components/MkStreamingNotesTimeline.vue';
 import XChannelFollowButton from '@/components/MkChannelFollowButton.vue';
 import * as os from '@/os.js';
-import { misskeyApi } from '@/utility/misskey-api.js';
 import { $i, iAmModerator } from '@/i.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
@@ -129,7 +134,7 @@ import { Paginator } from '@/utility/paginator.js';
 import { DI } from '@/di.js';
 
 /** Twitter UI 页面变体（异步加载，default UI 不承担其分包成本）。 */
-const TwitterChannel = defineAsyncComponent(() => import('./TwitterChannel.vue'));
+const TwitterChannel = defineAsyncComponent(loadTwitterChannelPage);
 
 const router = useRouter();
 
@@ -137,10 +142,18 @@ const props = defineProps<{
 	channelId: string;
 }>();
 
-const tab = ref('overview');
-
-const channel = ref<Misskey.entities.Channel | null>(null);
-const favorited = ref(false);
+/** Legacy 标签沿用原路由行为；Twitter 标签由 domain 规则单向校正。 */
+const tab: Ref<string> = ref<string>('overview');
+/** 标签为临时 UI 选择，频道未确认时不猜测关注关系。 */
+const twitterTab: Ref<ChannelCommunityTab | null> = ref<ChannelCommunityTab | null>(null);
+/** 两种界面共享唯一频道资料所有者，不在页面再持有实体副本。 */
+const channelQuery: ChannelDetailQuery = createChannelDetailQuery();
+const channelState: ComputedRef<ChannelDetailState> = channelQuery.state;
+const channel: ComputedRef<Misskey.entities.Channel | null> = computed(/** 展示从确认实体派生。 */ (): Misskey.entities.Channel | null => channelState.value.channel);
+const favorited: ComputedRef<boolean> = computed(/** 收藏事实来自确认实体，不作为关注关系使用。 */ (): boolean => channel.value?.isFavorited ?? false);
+/** Twitter 热门集合取代其原 Paginator；legacy 分支继续使用原分页器。 */
+const featuredQuery: ChannelFeaturedQuery = createChannelFeaturedQuery();
+const featuredState: ComputedRef<ChannelFeaturedState> = featuredQuery.state;
 const searchQuery = ref('');
 
 /** 频道内笔记搜索结果分页器（null = 尚未搜索；Twitter 变体经 prop 消费）。 */
@@ -150,7 +163,7 @@ const searchKey = ref('');
 /** 当前 UI 样式（由 Twitter Shell 注入；非 Twitter 场景回退 'default'）。 */
 const uiStyle = inject(DI.uiStyle, ref('default'));
 const isTwitterUi = computed(() => uiStyle.value === 'twitter');
-const featuredPaginator = markRaw(new Paginator('notes/featured', {
+const featuredPaginator: Paginator<'notes/featured'> | null = isTwitterUi.value ? null : markRaw(new Paginator('notes/featured', {
 	limit: 10,
 	computedParams: computed(() => ({
 		channelId: props.channelId,
@@ -165,71 +178,64 @@ useInterval(() => {
 	afterMounted: true,
 });
 
-/** 首次频道请求仍归本页；新范围取消旧请求。 */
-let initialChannelRequest: AbortController | null = null;
-const channelLoading: Ref<boolean> = ref<boolean>(false);
-watch(/** 路由频道 ID 只用于选择查询范围。 */ (): string => props.channelId,
-	/** 首次进入应用原有默认标签和已读处理，回访不重复这些副作用。 */ async (channelId: string): Promise<void> => {
-	initialChannelRequest?.abort();
-	const request: AbortController = new AbortController();
-	initialChannelRequest = request;
-	channelLoading.value = true;
-	try {
-		const _channel: Misskey.entities.Channel = await misskeyApi('channels/show', { channelId }, undefined, request.signal);
-		if (request.signal.aborted || props.channelId !== channelId || initialChannelRequest !== request) return;
+/** 新范围同步撤下旧频道，资料与热门集合各自只有一个查询所有者。 */
+watch(/** 路由只负责选择实体身份。 */ (): string => props.channelId,
+	/** 初次请求沿用 legacy 默认标签；Twitter 由确认关系规则决定。 */ (channelId: string): void => {
+		tab.value = 'overview';
+		featuredQuery.select(channelId);
+		void channelQuery.select(channelId);
+	}, { immediate: true, flush: 'sync' });
 
-	favorited.value = _channel.isFavorited ?? false;
-	if (favorited.value || _channel.isFollowing) {
-		/* 初始 tab 按 UI 分派：legacy 落 timeline；Twitter Communities 落ホーム（P-26） */
-		tab.value = isTwitterUi.value ? 'home' : 'timeline';
-	} else if (isTwitterUi.value) {
-		/* join-gate：未关注默认みつける（ADR-0005 D7） */
-		tab.value = 'explore';
+watch(channel, /** 已确认实体驱动标签与原已读记录，不从路由或 DTO 反推关系。 */ (current: Misskey.entities.Channel | null, previous: Misskey.entities.Channel | null): void => {
+	twitterTab.value = resolveChannelCommunityTab(current, twitterTab.value, previous?.isFollowing);
+	if (current == null || previous != null) return;
+	if (current.isFavorited || current.isFollowing) tab.value = 'timeline';
+	if ((current.isFavorited || current.isFollowing) && current.lastNotedAt) {
+		const lastReadedAt: number = miLocalStorage.getItemAsJson(`channelLastReadedAt:${current.id}`) ?? 0;
+		const lastNotedAt: number = Date.parse(current.lastNotedAt);
+		if (lastNotedAt > lastReadedAt) miLocalStorage.setItemAsJson(`channelLastReadedAt:${current.id}`, lastNotedAt);
 	}
+}, { flush: 'sync' });
 
-	if ((favorited.value || _channel.isFollowing) && _channel.lastNotedAt) {
-		const lastReadedAt: number = miLocalStorage.getItemAsJson(`channelLastReadedAt:${_channel.id}`) ?? 0;
-		const lastNotedAt = Date.parse(_channel.lastNotedAt);
+/** 热门页只在真实可见时首拉，不因重新挂载展示组件重复初始化。 */
+watch(/** 等待频道关系确认后再选择默认集合。 */ (): boolean => isTwitterUi.value && channel.value != null && twitterTab.value === 'explore',
+	/** 成功空集合与失败均由 store 阻止隐式重拉。 */ (visible: boolean): void => { if (visible) void featuredQuery.initialize(); },
+	{ immediate: true, flush: 'post' });
 
-		if (lastNotedAt > lastReadedAt) {
-			miLocalStorage.setItemAsJson(`channelLastReadedAt:${_channel.id}`, lastNotedAt);
-		}
-	}
-
-	channel.value = _channel;
-	} catch (error: unknown) {
-		if (!request.signal.aborted) console.error(error);
-	} finally {
-		if (initialChannelRequest === request) { initialChannelRequest = null; channelLoading.value = false; }
-	}
-}, { immediate: true });
-onBeforeUnmount(/** 不让首次查询写入销毁的频道页面。 */ (): void => { initialChannelRequest?.abort(); });
-
-/** 频道实体只成功回填；归属与取消保证迟到请求不覆盖其他频道。 */
-async function refetchChannel(signal: AbortSignal): Promise<boolean> {
-	const channelId: string = props.channelId;
-	try {
-		const fetched: Misskey.entities.Channel = await misskeyApi('channels/show', { channelId }, undefined, signal);
-		if (signal.aborted || props.channelId !== channelId) return false;
-		channel.value = fetched;
-		favorited.value = fetched.isFavorited ?? false;
-		return true;
-	} catch (error: unknown) {
-		if (!signal.aborted) console.error(error);
-		return false;
-	}
-}
-
-/** 不触碰 Home 的既有流式分页器，避免相同新帖重复取数。 */
-const invalidateChannel: () => void = useTwitterRefresh(refetchChannel, { busy: /** 等待首次查询，避免旧实体覆盖新统计。 */ (): boolean => channelLoading.value });
-useGlobalEvent('notePosted', /** 实际发布到本频道才更新统计。 */ (note: Misskey.entities.Note): void => {
+/** 资料刷新继续经既有回访调度，store 在同范围内保留已确认内容。 */
+const invalidateChannel: () => void = useTwitterRefresh(channelQuery.reload, {
+	busy: /** 等待当前资料请求结束。 */ (): boolean => channelState.value.status === 'loading',
+});
+useTwitterRefresh(featuredQuery.reload, {
+	visible: /** 热门查询只在对应 Twitter 标签可见时重新确认。 */ (): boolean => isTwitterUi.value && channel.value != null && twitterTab.value === 'explore',
+	busy: /** 在途首拉、刷新和追加由同一所有者串行协调。 */ (): boolean => featuredState.value.status === 'loading',
+	initializing: /** 子树首拉已覆盖此前排队的回访。 */ (): boolean => featuredState.value.status === 'loading' && featuredState.value.snapshot == null,
+});
+useGlobalEvent('notePosted', /** 本频道发帖成功只更新资料统计，Home 继续使用原流式机制。 */ (note: Misskey.entities.Note): void => {
 	if (note.channelId === props.channelId) invalidateChannel();
 });
-useGlobalEvent('noteDeleted', /** 删除只携带 ID，当前频道统计交回服务端确认。 */ (): void => { invalidateChannel(); });
-useTwitterPaginatorRefresh(/** 热门集合仍只在回访／手动时刷新。 */ (): typeof featuredPaginator => featuredPaginator,
-	/** 与当前 UI 的实际标签保持一致。 */ (): boolean => isTwitterUi.value ? tab.value === 'explore' : tab.value === 'featured');
-useTwitterPaginatorRefresh(/** 已提交搜索不因发帖自动重排。 */ (): typeof searchPaginator.value => searchPaginator.value,
-	/** 原搜索面板的回访范围。 */ (): boolean => tab.value === 'search');
+useGlobalEvent('noteDeleted', /** 已明确删除的身份从唯一热门集合撤下，同时重新确认统计。 */ (noteId: string): void => {
+	featuredQuery.remove(noteId);
+	invalidateChannel();
+});
+useTwitterPaginatorRefresh(/** legacy 热门集合继续复用原分页器。 */ (): typeof featuredPaginator => featuredPaginator,
+	/** Twitter 热门集合已有独立唯一所有者，不再刷新无消费者分页器。 */ (): boolean => !isTwitterUi.value && tab.value === 'featured');
+useTwitterPaginatorRefresh(/** 已提交搜索仍交给原分页器。 */ (): typeof searchPaginator.value => searchPaginator.value,
+	/** 仅刷新实际可见的搜索结果。 */ (): boolean => isTwitterUi.value ? twitterTab.value === 'search' : tab.value === 'search');
+
+/** 用户重试资料请求，失败不把已有频道内容清空。 */
+function retryChannel(): void { void channelQuery.reload(); }
+
+/** 下拉与菜单共用热门集合的原子刷新动作。 */
+async function refreshFeatured(): Promise<void> { await featuredQuery.reload(); }
+
+/** 加载更多交给查询所有者检查游标和忙闲。 */
+function loadMoreFeatured(): void { void featuredQuery.loadMore(); }
+
+/** 按失败用途重试，不把追加失败误作首拉。 */
+function retryFeatured(): void { void featuredQuery.retry(); }
+
+onBeforeUnmount(/** 页面销毁时取消其唯一查询，不让响应写入已卸载页面。 */ (): void => { channelQuery.dispose(); featuredQuery.dispose(); });
 
 /** Twitter 变体 Join（P-26 join-gate）：关注频道并回填实体（变体据 isFollowing 翻转落ホーム）。 */
 function joinChannel(): void {
@@ -269,38 +275,43 @@ function openPostForm() {
 	});
 }
 
-function favorite() {
-	if (!channel.value) return;
+/** 收藏命令成功后仅由查询所有者更新确认实体。 */
+function favorite(): void {
+	const channelId: string | undefined = channel.value?.id;
+	if (channelId == null) return;
 
 	os.apiWithDialog('channels/favorite', {
-		channelId: channel.value.id,
-	}).then(() => {
-		favorited.value = true;
+		channelId,
+	}).then(/** 命令结果按发起时的身份归属。 */ (): void => {
+		channelQuery.confirmFavorite(channelId, true);
 		favoritedChannelsCache.delete();
 	});
 }
 
-async function unfavorite() {
-	if (!channel.value) return;
+/** 取消收藏经确认对话框成功后提交至唯一实体所有者。 */
+async function unfavorite(): Promise<void> {
+	const channelId: string | undefined = channel.value?.id;
+	if (channelId == null) return;
 
-	const confirm = await os.confirm({
+	const confirm: Awaited<ReturnType<typeof os.confirm>> = await os.confirm({
 		type: 'warning',
 		text: i18n.ts.unfavoriteConfirm,
 	});
 	if (confirm.canceled) return;
 	os.apiWithDialog('channels/unfavorite', {
-		channelId: channel.value.id,
-	}).then(() => {
-		favorited.value = false;
+		channelId,
+	}).then(/** 取消收藏结果不能更新已切换的频道。 */ (): void => {
+		channelQuery.confirmFavorite(channelId, false);
 		favoritedChannelsCache.delete();
 	});
 }
 
-async function mute() {
-	if (!channel.value) return;
-	const _channel = channel.value;
+/** 静音命令沿用原协议，确认字段由 store 更新。 */
+async function mute(): Promise<void> {
+	const channelId: string | undefined = channel.value?.id;
+	if (channelId == null) return;
 
-	const { canceled, result: period } = await os.select({
+	const { canceled, result: period }: Awaited<ReturnType<typeof os.select<string>>> = await os.select({
 		title: i18n.ts.mutePeriod,
 		items: [{
 			value: 'indefinitely', label: i18n.ts.indefinitely,
@@ -317,7 +328,7 @@ async function mute() {
 	});
 	if (canceled) return;
 
-	const expiresAt = period === 'indefinitely' ? null
+	const expiresAt: number | null = period === 'indefinitely' ? null
 		: period === 'tenMinutes' ? Date.now() + (1000 * 60 * 10)
 		: period === 'oneHour' ? Date.now() + (1000 * 60 * 60)
 		: period === 'oneDay' ? Date.now() + (1000 * 60 * 60 * 24)
@@ -325,21 +336,22 @@ async function mute() {
 		: null;
 
 	os.apiWithDialog('channels/mute/create', {
-		channelId: _channel.id,
+		channelId,
 		expiresAt,
-	}).then(() => {
-		_channel.isMuting = true;
+	}).then(/** 静音成功后按原身份提交确认事实。 */ (): void => {
+		channelQuery.confirmMuted(channelId, true);
 	});
 }
 
-async function unmute() {
-	if (!channel.value) return;
-	const _channel = channel.value;
+/** 取消静音复用原接口，组件不直接修改领域实体。 */
+async function unmute(): Promise<void> {
+	const channelId: string | undefined = channel.value?.id;
+	if (channelId == null) return;
 
 	os.apiWithDialog('channels/mute/delete', {
-		channelId: _channel.id,
-	}).then(() => {
-		_channel.isMuting = false;
+		channelId,
+	}).then(/** 取消静音只更新该命令的频道。 */ (): void => {
+		channelQuery.confirmMuted(channelId, false);
 	});
 }
 
@@ -463,11 +475,12 @@ const headerTabs = computed(() => [{
 
 /** Twitter 变体头部动作：发帖预填（O-3 裁决延伸：替代内联表单与 legacy 页脚按钮）
  *  + legacy 头部动作复用；业务 handler 均留在此层（规范第 12 条）。 */
-const twitterActions = computed<PageHeaderItem[]>(() => [
+const twitterActions: ComputedRef<PageHeaderItem[]> = computed<PageHeaderItem[]>(/** 资料未确认时不提供可能发往错误频道的动作。 */ (): PageHeaderItem[] => channel.value == null ? [] : [
 	{
 		icon: 'ti ti-pencil',
 		text: i18n.ts.postToTheChannel,
-		handler: () => {
+		/** 发帖入口继续复用原频道上下文。 */
+		handler: (): void => {
 			openPostForm();
 		},
 	},
