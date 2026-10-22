@@ -29,3 +29,8 @@ export type { TwitterAvatarDecorationCalibrationTransform, TwitterAvatarDecorati
 
 /** 频道页导航、所属频道分页事实与资料库只读展示的唯一类型来源。 */
 export type { TwitterCommunitiesTab, TwitterCommunityLibrary, TwitterCommunityLibraryView, OwnedChannelsPage, OwnedChannelsOperation, OwnedChannelsState } from './communities.js';
+/** 频道详情与热门集合的查询状态及标签规则。 */
+export { getChannelCommunityTabs, resolveChannelCommunityTab } from './channel-detail.js';
+export type { ChannelDetailState, ChannelCommunityTab, ChannelFeaturedOperation, ChannelFeaturedPage, ChannelFeaturedState } from './channel-detail.js';
+/** 用户主页标签及其独立查询范围。 */
+export type { TwitterUserTimelineTab } from './user-timeline.js';
