@@ -10,7 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div ref="rootEl" class="_pageScrollable" :class="$style.root">
+<div ref="rootEl" class="_pageScrollable" :class="$style.root" data-testid="twitter-notifications">
 	<MkStickyContainer>
 		<template #header>
 			<TwitterNotificationsHeader

@@ -6,13 +6,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 <!--
 文件领域：Twitter UI · 频道详情页（P-26 / ADR-0005 D7，/channels/:channelId 页面变体，Communities IA）
 
-作用：消费页面层（channel.vue）持有的频道实体、分页器与业务回调，呈现
+作用：消费页面层（channel.vue）查询 store 的只读状态与业务回调，呈现
 X Communities 社区页——社区头（banner + 名称 + 统计 + Join / 收藏动作行）+
 按关注态派生的 tab 集合：已关注 = ホーム / みつける / 情報 / 検索（默认ホーム），
 未关注 = みつける / 情報 / 検索（join-gate：默认みつける，Join 后落ホーム）。
 
-数据链角色：页面层（频道拉取 / join / favorite / mute / paginator，单向传入）→
-本组件（壳与社区头呈现）；tab 选择与搜索输入为组件临时 UI 状态（规范第 12 条）。
+数据链角色：查询 store（频道资料 / 热门集合，单向传入）→
+本组件（壳与社区头呈现）；tab 选择与搜索输入为临时 UI 状态；关系校正规则只归 domain。
 O-3 裁决延伸：不渲染内联发帖表单，发帖入口 = 头部 pencil（os.post 带 channel 上下文）。
 布局真值：社区头映射 nitter views/community.nim + profile/card.scss（banner 3:1、
 卡身 12px、fullname 16px/700、控件入流不叠压 U-7 先例）；join-gate 与 Home / Explore
@@ -20,10 +20,10 @@ O-3 裁决延伸：不渲染内联发帖表单，发帖入口 = 头部 pencil（
 -->
 
 <template>
-<div ref="rootEl" :class="[$style.root, { [$style.mobile]: isMobile }]" class="_pageScrollable">
+<div ref="rootEl" data-testid="twitter-channel" :class="[$style.root, { [$style.mobile]: isMobile }]" class="_pageScrollable">
 	<MkStickyContainer>
 		<template #header>
-			<header :class="$style.header">
+			<header data-testid="twitter-channel-header" :class="$style.header">
 				<button
 					:class="$style.back"
 					class="_button"
@@ -67,15 +67,28 @@ O-3 裁决延伸：不渲染内联发帖表单，发帖入口 = 头部 pencil（
 					{{ item.title }}
 				</button>
 			</nav>
+			<div v-else-if="state.status === 'idle' || state.status === 'loading'" :class="$style.loadingTabs" aria-hidden="true"><span v-for="placeholder in 3" :key="placeholder" :class="$style.skeletonLine"></span></div>
 		</template>
 
 		<div
 			:id="`twitter-channel-panel-${tab}`"
 			:class="$style.body"
 			role="tabpanel"
-			:aria-labelledby="`twitter-channel-tab-${tab}`"
+			:aria-labelledby="channel != null && tab != null ? `twitter-channel-tab-${tab}` : undefined"
 		>
-			<template v-if="channel != null">
+			<div v-if="channel == null && (state.status === 'idle' || state.status === 'loading')" data-testid="twitter-channel-loading" role="status" :aria-label="i18n.ts.loading">
+				<div :class="[$style.banner, $style.skeletonBlock]"></div>
+				<div :class="$style.identityCard">
+					<div :class="[$style.skeletonLine, $style.skeletonName]"></div>
+					<div :class="$style.skeletonLine"></div>
+					<div :class="[$style.skeletonLine, $style.skeletonDescription]"></div>
+					<div :class="[$style.actionRow, $style.skeletonActions]"><span :class="$style.skeletonBlock"></span><span :class="$style.skeletonBlock"></span></div>
+				</div>
+				<TwitterPageSkeleton variant="timeline"/>
+			</div>
+			<TwitterPageState v-else-if="channel == null" data-testid="twitter-channel-error" :type="state.status === 'notFound' ? 'notFound' : 'error'" @retry="emit('retry')"/>
+			<template v-else>
+				<div v-if="state.status === 'error'" :class="$style.refreshStatus" role="status">{{ i18n.ts.error }} <button class="_textButton" type="button" @click="emit('retry')">{{ i18n.ts.retry }}</button></div>
 				<!-- 社区头：nitter profile/card 真值 + Join / 收藏动作行入流（U-7：无控件叠压） -->
 				<div :class="$style.banner" :style="bannerStyle">
 					<div :class="$style.bannerStatus">
@@ -107,13 +120,13 @@ O-3 裁决延伸：不渲染内联发帖表单，发帖入口 = 头部 pencil（
 							rounded
 							:class="$style.joinButton"
 							@click="props.onJoin()"
-						><i class="ti ti-plus"></i> {{ i18n.ts.follow }}</MkButton>
+							><i class="ti ti-plus" aria-hidden="true"></i> {{ i18n.ts.follow }}</MkButton>
 						<MkButton
 							v-else
 							rounded
 							:class="$style.joinButton"
 							@click="props.onLeave()"
-						><i class="ti ti-minus"></i> {{ i18n.ts.unfollow }}</MkButton>
+							><i class="ti ti-minus" aria-hidden="true"></i> {{ i18n.ts.unfollow }}</MkButton>
 						<MkButton
 							v-if="favorited"
 							v-tooltip="i18n.ts.unfavorite"
@@ -143,11 +156,18 @@ O-3 裁决延伸：不渲染内联发帖表单，发帖入口 = 头部 pencil（
 					</div>
 				</section>
 
-				<MkStreamingNotesTimeline :key="channelId" src="channel" :channel="channelId"/>
+				<MkStreamingNotesTimeline :key="channelId" src="channel" :channel="channelId" variant="twitter"/>
 			</div>
-			<div v-else-if="tab === 'explore'">
+			<div v-else-if="channel != null && tab === 'explore'">
 				<!-- Communities 流不带控制条（A-1：X 参照无排序/控制组件，CH-12 登记） -->
-				<MkNotesTimeline :paginator="featuredPaginator" variant="twitter" :withControl="false"/>
+				<TwitterChannelFeatured
+					data-testid="twitter-channel-featured"
+					:state="featuredState"
+					:refresher="props.featuredRefresher"
+					@more="emit('featuredMore')"
+					@retry="emit('featuredRetry')"
+					@refresh="emit('featuredRefresh')"
+				/>
 			</div>
 			<div v-else-if="tab === 'about' && channel != null">
 				<section :class="$style.aboutCard">
@@ -172,7 +192,7 @@ O-3 裁决延伸：不渲染内联发帖表单，发帖入口 = 头部 pencil（
 					</div>
 				</section>
 			</div>
-			<div v-else-if="tab === 'search'">
+			<div v-else-if="channel != null && tab === 'search'">
 				<div v-if="notesSearchAvailable" :class="$style.searchForm">
 					<MkInput v-model="searchQuery" @enter="submit">
 						<template #label>{{ i18n.ts.search }}</template>
@@ -191,7 +211,8 @@ O-3 裁决延伸：不渲染内联发帖表单，发帖入口 = 头部 pencil（
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, useTemplateRef, watch } from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
+import type { ComputedRef, CSSProperties, Ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
@@ -199,25 +220,24 @@ import MkInfo from '@/components/MkInfo.vue';
 import MkStreamingNotesTimeline from '@/components/MkStreamingNotesTimeline.vue';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
-import { TwitterNote, useTwitterLayout } from '@/ui/twitter/index.js';
+import { getChannelCommunityTabs, TwitterChannelFeatured, TwitterNote, TwitterPageSkeleton, TwitterPageState, useTwitterLayout } from '@/ui/twitter/index.js';
+import type { ChannelCommunityTab, ChannelDetailState, ChannelFeaturedState } from '@/ui/twitter/index.js';
 import { useTwitterScrollPositionKeeper } from '@/ui/twitter/index.js';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import type { Paginator } from '@/utility/paginator.js';
 
-/** 频道社区页 tab 值（X Communities IA；派生规则见 tabs computed）。 */
-type ChannelCommunityTab = 'home' | 'explore' | 'about' | 'search';
-
+/** 只读消费权威查询状态；全部业务变更交还页面动作。 */
 const props = defineProps<{
 	/** 路由参数中的频道 ID（流式时间线 :key 重建用）。 */
 	channelId: string;
-	/** 频道实体（页面层拉取；null = 加载中，仅渲染壳）。 */
-	channel: Misskey.entities.Channel | null;
-	/** 当前用户是否已收藏该频道。 */
-	favorited: boolean;
-	/** みつける tab 数据源（notes/featured + channelId，页面层持有）。 */
-	featuredPaginator: Paginator<'notes/featured'>;
+	/** 唯一频道查询状态，区分首拉、刷新和终态。 */
+	state: ChannelDetailState;
+	/** みつける集合的唯一查询状态，刷新时继续呈现已确认内容。 */
+	featuredState: ChannelFeaturedState;
+	/** 下拉刷新等待实际请求完成，业务仍由查询所有者处理。 */
+	featuredRefresher: () => Promise<void>;
 	/** 站内全文搜索是否可用（検索 tab 门控，能力探测留页面层）。 */
 	notesSearchAvailable: boolean;
 	/** 频道内搜索结果数据源（null = 尚未搜索）。 */
@@ -239,45 +259,37 @@ const props = defineProps<{
 }>();
 
 /** 当前选中 tab（页面层 v-model 双向绑定；初始值由页面层按关注态设定）。 */
-const tab = defineModel<string>('tab');
+const tab = defineModel<ChannelCommunityTab | null>('tab', { required: true });
+/** 组件事件只表达重试或集合查询意图，不直接修改业务状态。 */
+const emit = defineEmits<{ (ev: 'retry' | 'featuredMore' | 'featuredRetry' | 'featuredRefresh'): void }>();
+/** 实体与收藏视图均从唯一状态派生，不保存可写副本。 */
+const channel: ComputedRef<Misskey.entities.Channel | null> = computed(/** 原实体透传。 */ (): Misskey.entities.Channel | null => props.state.channel);
+const favorited: ComputedRef<boolean> = computed(/** 收藏关系只影响收藏控件。 */ (): boolean => channel.value?.isFavorited ?? false);
 
 const { isMobile } = useTwitterLayout();
-const rootEl = useTemplateRef<HTMLDivElement>('rootEl');
+const rootEl: Readonly<Ref<HTMLDivElement | null>> = useTemplateRef<HTMLDivElement>('rootEl');
 
 /** 保留详情页滚动位置（返回导航后恢复）。 */
 useTwitterScrollPositionKeeper(rootEl);
 
-/** tab 集合按关注态派生（join-gate，ADR-0005 D7 / ADR-0002 补记）：
- *  已关注 = ホーム / みつける / 情報 / 検索；未关注 = みつける / 情報 / 検索。 */
-const tabs = computed(() => {
-	const following = props.channel?.isFollowing ?? false;
-	const base: Array<{ value: ChannelCommunityTab; title: string }> = [
-		{ value: 'explore', title: i18n.ts.explore },
-		{ value: 'about', title: i18n.ts.about },
-		{ value: 'search', title: i18n.ts.search },
-	];
-	return following
-		? [{ value: 'home', title: i18n.ts.home }, ...base]
-		: base;
-});
-
-/** join 落ホーム：关注态由未关注翻转为已关注时切换到ホーム（X Communities join 行为）。 */
-watch(() => props.channel?.isFollowing ?? false, (following, prev) => {
-	if (following && prev === false) {
-		tab.value = 'home';
+/** 标签文案为权威标签的展示映射，合法集合只由 domain 按确认关注关系派生。 */
+function tabTitle(value: ChannelCommunityTab): string {
+	switch (value) {
+		case 'home': return i18n.ts.home;
+		case 'explore': return i18n.ts.explore;
+		case 'about': return i18n.ts.about;
+		case 'search': return i18n.ts.search;
 	}
-});
+}
 
-/** banner 背景样式（无 banner 时回退面板底色，由 CSS 类默认承担）。 */
-const bannerStyle = computed(() => {
-	if (props.channel?.bannerUrl != null) {
-		return { backgroundImage: `url(${props.channel.bannerUrl})` };
-	}
-	return undefined;
-});
+/** 未确认频道时不构造业务标签，也不将未知关注关系当作未关注。 */
+const tabs: ComputedRef<ReadonlyArray<{ value: ChannelCommunityTab; title: string }>> = computed(/** 只为合法标签附加展示文案。 */ (): ReadonlyArray<{ value: ChannelCommunityTab; title: string }> => getChannelCommunityTabs(channel.value).map(/** 标签标题只用于显示。 */ (value: ChannelCommunityTab): { value: ChannelCommunityTab; title: string } => ({ value, title: tabTitle(value) })));
+
+/** banner 样式由唯一实体单向派生，无 banner 时复用面板背景。 */
+const bannerStyle: ComputedRef<CSSProperties | undefined> = computed(/** 仅输出样式，不改变实体。 */ (): CSSProperties | undefined => channel.value?.bannerUrl == null ? undefined : { backgroundImage: `url(${channel.value.bannerUrl})` });
 
 /** 搜索词草稿（组件临时 UI 状态，提交后才回传页面层）。 */
-const searchQuery = ref('');
+const searchQuery: Ref<string> = ref<string>('');
 
 /** 提交搜索：转发页面层回调（业务 funnel 单点，规范第 12 条）。 */
 function submit(): void {
@@ -286,8 +298,9 @@ function submit(): void {
 
 /** tab 键盘巡游（左右 / Home / End；与 TwitterSearch 同构的 roving tabindex）。 */
 function onTabKeydown(ev: KeyboardEvent): void {
-	const currentIndex = tabs.value.findIndex(item => item.value === tab.value);
+	const currentIndex: number = tabs.value.findIndex(/** 寻找当前临时选择。 */ (item: { value: ChannelCommunityTab; title: string }): boolean => item.value === tab.value);
 	let nextIndex: number | null = null;
+	if (tabs.value.length === 0) return;
 
 	if (ev.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.value.length;
 	else if (ev.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.value.length) % tabs.value.length;
@@ -560,4 +573,42 @@ function goBack(): void {
 .searchUnavailable {
 	padding: var(--twitter-space-3) var(--twitter-space-4);
 }
+/* 频道请求阶段使用与真实社区头相同的 banner 和 identityCard 布局。 */
+.loadingTabs {
+	display: flex;
+	align-items: center;
+	justify-content: space-around;
+	height: 50px;
+	border-bottom: solid 1px var(--twitter-border);
+
+	.skeletonLine { width: 48px; }
+}
+
+.skeletonBlock,
+.skeletonLine {
+	background: var(--twitter-skeleton-block);
+}
+
+.skeletonLine {
+	height: 10px;
+	border-radius: var(--twitter-radius-pill);
+}
+
+.skeletonName { width: 40%; height: 20px; }
+.skeletonDescription { width: 70%; }
+.skeletonActions {
+	min-height: 38px;
+
+	span {
+		width: 96px;
+		border-radius: var(--twitter-radius-pill);
+	}
+}
+
+.refreshStatus {
+	padding: var(--twitter-space-2) var(--twitter-space-4);
+	font-size: var(--twitter-font-size-meta);
+	color: var(--twitter-secondary-fg);
+}
+
 </style>
