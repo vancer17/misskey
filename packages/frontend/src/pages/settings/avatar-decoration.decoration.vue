@@ -35,7 +35,8 @@ import type * as Misskey from 'misskey-js';
 import { ensureSignin } from '@/i.js';
 import { i18n } from '@/i18n.js';
 import { canUseAvatarDecoration } from '@/utility/avatar-decoration/index.js';
-import { TwitterAvatar, useIsTwitterUi } from '@/ui/twitter/index.js';
+import { TwitterAvatar } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const $i: ReturnType<typeof ensureSignin> = ensureSignin();
 /** 业务卡片直接接收既有权威目录类型；不复制实体字段声明。 */

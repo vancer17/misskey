@@ -93,7 +93,8 @@ import { definePage } from '@/page.js';
 import type { PageMetadata } from '@/page.js';
 import { updateCurrentAccountPartial } from '@/accounts.js';
 import { serializeAvatarDecorations } from '@/utility/avatar-decoration/index.js';
-import { TwitterAvatar, useIsTwitterUi, useTwitterLayout, TwitterPageState } from '@/ui/twitter/index.js';
+import { TwitterAvatar, TwitterPageState } from '@/ui/twitter/index.js';
+import { useIsTwitterUi, useTwitterLayout } from '@/ui/twitter/context/index.js';
 
 /** 账户唯一来源：不把已佩戴数组复制到页面业务状态。 */
 const $i: ReturnType<typeof ensureSignin> = ensureSignin();
