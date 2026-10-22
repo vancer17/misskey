@@ -65,7 +65,7 @@ export type PageHeaderProps = {
 
 <script lang="ts" setup>
 import type { ComputedRef } from 'vue';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 import { onMounted, onUnmounted, ref, inject, useTemplateRef, computed } from 'vue';
 import { scrollToTop } from '@@/js/scroll.js';
 import XTabs from './MkPageHeader.tabs.vue';

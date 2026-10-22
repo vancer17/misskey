@@ -15,9 +15,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 	ref="rootEl"
 	v-hotkey="keymap"
 	data-testid="twitter-thread-note"
+	data-twitter-note-card
 	:data-note-id="appearNote.id"
 	:class="[$style.root, { [$style.mobile]: isMobile }]"
 	tabindex="0"
+	@click="onNoteClick"
+	@auxclick="onNoteAuxClick"
+	@keydown="onNoteKeydown"
 >
 	<div :class="$style.avatarColumn">
 		<TwitterAvatar decorationContext="none" :class="$style.avatar" :user="appearNote.user" link preview/>
@@ -61,7 +65,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:emojiUrls="appearNote.emojis"
 					class="_selectable"
 				/>
-				<div v-if="appearNote.files?.length" :class="$style.media">
+				<div v-if="appearNote.files?.length" :class="$style.media" data-twitter-note-interactive>
 					<MkMediaList :mediaList="appearNote.files" :user="appearNote.user"/>
 				</div>
 				<TwitterNoteQuote v-if="appearNote.renoteId" :note="appearNote.renote ?? null"/>
@@ -85,7 +89,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		/>
 
 		<button
-			v-if="canExpand && !repliesExpanded && !repliesLoading && !repliesError"
+			v-if="canExpand && !repliesExpanded"
 			:class="$style.showReplies"
 			class="_button"
 			type="button"
@@ -93,21 +97,38 @@ SPDX-License-Identifier: AGPL-3.0-only
 		>
 			<i class="ti ti-message-circle" aria-hidden="true"></i>{{ i18n.ts.loadReplies }}
 		</button>
-		<MkLoading v-else-if="repliesLoading" mini :class="$style.loading"/>
-		<div v-else-if="repliesError" :class="$style.repliesError">
-			<span>{{ i18n.ts.error }}</span>
-			<button class="_button" type="button" @click="expandReplies">{{ i18n.ts.retry }}</button>
-		</div>
 
-		<div v-if="replies.length > 0" :class="$style.children">
-			<TwitterThreadNote
-				v-for="(child, index) in replies"
-				:key="child.id"
-				:note="child"
-				:connected="index < replies.length - 1"
-				:actionsVisible="true"
-				:depth="depth + 1"
-			/>
+		<div
+			v-if="repliesExpanded && depth < maxDepth"
+			:class="$style.children"
+			:aria-busy="repliesPaginator.fetching.value || repliesPaginator.refreshing.value || repliesPaginator.fetchingOlder.value"
+			data-twitter-note-interactive
+		>
+			<div v-if="repliesPaginator.refreshError.value" :class="$style.repliesError" role="alert">
+				<span>{{ i18n.ts.error }}</span>
+				<button class="_button" type="button" @click="repliesPaginator.reload">{{ i18n.ts.retry }}</button>
+			</div>
+			<MkPagination :paginator="repliesPaginator" :pullToRefresh="false" :forceDisableInfiniteScroll="true">
+				<template #empty>
+					<div :class="$style.more">{{ i18n.ts.noNotes }}</div>
+				</template>
+				<template #default="{ items }">
+					<div>
+						<TwitterThreadNote
+							v-for="(child, index) in items"
+							:key="child.id"
+							:note="child"
+							:connected="index < items.length - 1"
+							:actionsVisible="true"
+							:depth="depth + 1"
+						/>
+					</div>
+				</template>
+			</MkPagination>
+			<div v-if="repliesPaginator.pageError.value" :class="$style.repliesError" role="alert">
+				<span>{{ i18n.ts.error }}</span>
+				<button class="_button" type="button" @click="repliesPaginator.fetchOlder">{{ i18n.ts.retry }}</button>
+			</div>
 		</div>
 		<div v-else-if="depth >= maxDepth && noteCounters.repliesCount > 0" :class="$style.more">
 			<MkA :to="notePage(appearNote)">{{ i18n.ts.continueThread }} <i class="ti ti-chevron-double-right" aria-hidden="true"></i></MkA>
@@ -128,12 +149,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import TwitterAvatar from './components/TwitterAvatar.vue';
 import type { ComputedRef } from 'vue';
-import type { TwitterNoteCounters } from '@/ui/twitter/index.js';
+import type { TwitterNoteCounters } from './domain/note-counters.js';
 import type { Ref } from 'vue';
-import { onBeforeUnmount } from 'vue';
 import { useGlobalEvent } from '@/events.js';
-import { useTwitterRefresh } from '@/ui/twitter/index.js';
-import { useTwitterNoteCounters } from '@/ui/twitter/index.js';
+import { useTwitterNoteCounters } from './store/note-counters.js';
 import { getAppearNote } from '@/utility/get-appear-note.js';
 import type { ComponentPublicInstance } from 'vue';
 import { computed, provide, ref, shallowRef, useTemplateRef } from 'vue';
@@ -142,17 +161,19 @@ import { useNote } from '@/composables/use-note.js';
 import { i18n } from '@/i18n.js';
 import { notePage } from '@/filters/note.js';
 import { userPage } from '@/filters/user.js';
-import { misskeyApi } from '@/utility/misskey-api.js';
 import { DI } from '@/di.js';
 import type { Keymap } from '@/utility/hotkey.js';
 import MkCwButton from '@/components/MkCwButton.vue';
 import MkMediaList from '@/components/MkMediaList.vue';
+import MkPagination from '@/components/MkPagination.vue';
 import TwitterNoteActions from './NoteActions.vue';
 import TwitterNoteHeader from './NoteHeader.vue';
 import TwitterNoteQuote from './NoteQuote.vue';
 /* 递归自引用：回复线程树逐层渲染子回复 */
 import TwitterThreadNote from './ThreadNote.vue';
 import { useTwitterLayout } from './composables/use-twitter-layout.js';
+import { useNoteReplies } from './composables/use-note-replies.js';
+import { useNoteNavigation } from './composables/use-note-navigation.js';
 
 const { isMobile } = useTwitterLayout();
 
@@ -171,9 +192,6 @@ const rootEl = useTemplateRef('rootEl');
 const menuButton = useTemplateRef('menuButton');
 const renoteButton = shallowRef<HTMLElement | null>(null);
 const reactButton = shallowRef<HTMLElement | null>(null);
-const replies = ref<Misskey.entities.Note[]>([]);
-const repliesLoading = ref(false);
-const repliesError = ref(false);
 /** 保留展开意图，不以返回条目数量代表是否展开。 */
 const repliesExpanded: Ref<boolean> = ref<boolean>(false);
 const maxDepth = 3;
@@ -201,41 +219,21 @@ const {
 
 provide(DI.mfmEmojiReactCallback, reactViaMfmEmoji);
 
+/** 卡片导航只使用实际显示的帖子，纯转发指向原帖。 */
+const navigationNote: ComputedRef<Misskey.entities.Note> = computed(
+	/** 只读实体投影，与 useNote 保持一致。 */ (): Misskey.entities.Note => getAppearNote(props.note) ?? props.note,
+);
+const { onNoteClick, onNoteAuxClick, onNoteKeydown } = useNoteNavigation(navigationNote);
+
+/** 每个父帖只有一份分页集合，未展开的子线程不预取。 */
+const repliesPaginator: ReturnType<typeof useNoteReplies> = useNoteReplies(
+	appearNote.id,
+	10,
+	/** 深度边界保留既有继续对话入口。 */ (): boolean => repliesExpanded.value && props.depth < maxDepth,
+);
+
 /** 只由深度展示限制与已确认计数决定展开入口，不建立回复事实副本。 */
 const canExpand: ComputedRef<boolean> = computed(/** 只读 UI 可展开状态。 */ (): boolean => props.depth < maxDepth && noteCounters.value.repliesCount > 0);
-
-/** 当前回复请求归属，不允许卸载或资源切换后回填。 */
-let repliesRequest: AbortController | null = null;
-
-/** 使用真实查询更新既有集合；失败保留旧回复，错误由页面原重试入口呈现。 */
-async function loadReplies(): Promise<void> {
-	if (repliesLoading.value) return;
-	const id: string = (getAppearNote(props.note) ?? props.note).id;
-	const controller: AbortController = new AbortController();
-	repliesRequest = controller;
-	repliesLoading.value = true;
-	repliesError.value = false;
-	try {
-		const fetched: Misskey.entities.Note[] = await misskeyApi('notes/children', { noteId: id, limit: 10 }, undefined, controller.signal);
-		if (controller.signal.aborted || (getAppearNote(props.note) ?? props.note).id !== id || repliesRequest !== controller) return;
-		replies.value = fetched;
-	} catch (error: unknown) {
-		if (!controller.signal.aborted) { console.error(error); repliesError.value = true; }
-	} finally {
-		if (repliesRequest === controller) { repliesRequest = null; repliesLoading.value = false; }
-	}
-}
-
-onBeforeUnmount(/** 回复请求只属于当前节点，不取消全局业务。 */ (): void => { repliesRequest?.abort(); });
-
-/** 复用现有回复集合，不建立另一份线程缓存。 */
-const invalidateReplies: () => void = useTwitterRefresh(
-	/** 加载失败不冒充成功，不在后台循环重试。 */ async (): Promise<boolean> => { await loadReplies(); return !repliesError.value; },
-	{
-		busy: /** 首拉和手动重试也是同一请求占用。 */ (): boolean => repliesLoading.value,
-		visible: /** 未展开的线程不预取；已展开的空集合仍应更新。 */ (): boolean => repliesExpanded.value && props.depth < maxDepth,
-	},
-);
 
 function setRenoteButton(element: Element | ComponentPublicInstance | null) {
 	renoteButton.value = element as HTMLElement | null;
@@ -263,15 +261,11 @@ const noteCounters: ComputedRef<TwitterNoteCounters> = useTwitterNoteCounters(
 );
 
 /** 用户主动展开只加载此节点，不扩大递归深度。 */
-function expandReplies(): void { repliesExpanded.value = true; invalidateReplies(); }
+function expandReplies(): void { repliesExpanded.value = true; }
 
 useGlobalEvent('notePosted', /** 本人原地回复时打开对应父节点，其余节点不受影响。 */ (created: Misskey.entities.Note): void => {
 	if (created.replyId !== appearNote.id) return;
 	if (props.depth < maxDepth) repliesExpanded.value = true;
-	invalidateReplies();
-});
-useGlobalEvent('noteDeleted', /** 已有直接子回复删除后更新该集合。 */ (id: string): void => {
-	if (replies.value.some(/** 只定位当前集合成员。 */ (child: Misskey.entities.Note): boolean => child.id === id)) invalidateReplies();
 });
 
 </script>
@@ -279,6 +273,7 @@ useGlobalEvent('noteDeleted', /** 已有直接子回复删除后更新该集合�
 <style lang="scss" module>
 .root {
 	position: relative;
+	cursor: pointer;
 	display: grid;
 	/* nitter 地面真值：thread 行复用 tweet-avatar 48×48（PF-2 N-11 裁决：对齐） */
 	grid-template-columns: 48px minmax(0, 1fr);

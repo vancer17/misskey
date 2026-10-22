@@ -41,7 +41,7 @@ import { noteEvents } from '@/composables/use-note-capture.js';
 import { mute as muteEmoji, unmute as unmuteEmoji, checkMuted as isEmojiMuted } from '@/utility/emoji-mute.js';
 import { addToEmojiPalette } from '@/utility/emoji-palette.js';
 import { haptic } from '@/utility/haptic.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const props = defineProps<{
 	noteId: Misskey.entities.Note['id'];

@@ -3,10 +3,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * 文件领域：偏好设置 · 会话实例。
+ * 作用：装配偏好存储、跨标签页同步与定期备份；备份操作按需加载界面依赖。
+ */
+
 import { BroadcastChannel } from 'broadcast-channel';
 import { createVisibilityAwareInterval } from '@@/js/interval.js';
 import type { StorageProvider } from '@/preferences/manager.js';
-import { cloudBackup } from '@/preferences/utility.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { isSameScope, PreferencesManager } from '@/preferences/manager.js';
 import { store } from '@/store.js';
@@ -142,21 +146,40 @@ preferencesChannel.addEventListener('message', (msg) => {
 //#endregion
 
 //#region 定期クラウドバックアップ
-let latestBackupAt = 0;
+let latestBackupAt: number = 0;
 
-// documentが非表示の間は実行されない (同期されていない古い値がバックアップされるのを防ぐ意味もある)
-createVisibilityAwareInterval(() => {
+/** 执行备份时才加载工具模块，避免初始化偏好实例时进入界面依赖。 */
+async function cloudBackup(): Promise<void> {
+	const backupModule: typeof import('@/preferences/utility.js') = await import('@/preferences/utility.js');
+	await backupModule.cloudBackup();
+}
+
+/** 仅在登录、自动备份开启且偏好已有更新时提交备份。 */
+function backupModifiedPreferences(): void {
 	if ($i == null) return;
 	if (!store.s.enablePreferencesAutoCloudBackup) return;
 	if (prefer.profile.modifiedAt <= latestBackupAt) return;
 
-	cloudBackup().then(() => {
-		latestBackupAt = Date.now();
-	});
-}, 1000 * 60 * 3);
+	cloudBackup().then(
+		/** 备份成功后更新检查时间，失败时保留下一次备份机会。 */
+		(): void => {
+			latestBackupAt = Date.now();
+		},
+	);
+}
+
+// documentが非表示の間は実行されない (同期されていない古い値がバックアップされるのを防ぐ意味もある)
+createVisibilityAwareInterval(backupModifiedPreferences, 1000 * 60 * 3);
 //#endregion
 
+/** 开发模式下提供的偏好调试入口，备份与定时任务共用按需加载实现。 */
+type PreferencesDebugWindow = Window & {
+	prefer?: PreferencesManager;
+	cloudBackup?: typeof cloudBackup;
+};
+
 if (_DEV_) {
-	(window as any).prefer = prefer;
-	(window as any).cloudBackup = cloudBackup;
+	const debugWindow: PreferencesDebugWindow = window;
+	debugWindow.prefer = prefer;
+	debugWindow.cloudBackup = cloudBackup;
 }

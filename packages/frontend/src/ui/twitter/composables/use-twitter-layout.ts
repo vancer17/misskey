@@ -21,7 +21,7 @@ import { ref } from 'vue';
 import type { Ref } from 'vue';
 import type { DeviceKind } from '@/utility/device-kind.js';
 import { deviceKind } from '@/utility/device-kind.js';
-import { TWITTER_LAYOUT_BREAKPOINTS } from '../domain/index.js';
+import { TWITTER_LAYOUT_BREAKPOINTS } from '../domain/layout.js';
 
 /**
  * Twitter UI 布局状态：三项均为只读消费语义，组件不得回写。

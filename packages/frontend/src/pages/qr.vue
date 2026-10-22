@@ -59,7 +59,8 @@ import { i18n } from '@/i18n.js';
 import { ensureSignin } from '@/i.js';
 import MkButton from '@/components/MkButton.vue';
 import MkPolkadots from '@/components/MkPolkadots.vue';
-import { TwitterSettingsShell, useIsTwitterUi } from '@/ui/twitter/index.js';
+import { TwitterSettingsShell } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 // 路由已要求登录，在页面入口沿用账户前置条件。
 ensureSignin();

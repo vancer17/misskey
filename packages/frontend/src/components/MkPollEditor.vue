@@ -54,7 +54,7 @@ import { formatDateTimeString } from '@/utility/format-time-string.js';
 import { addTime } from '@/utility/time.js';
 import { i18n } from '@/i18n.js';
 import { useMkSelect } from '@/composables/use-mkselect.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 export type PollEditorModelValue = {
 	expiresAt: number | null;

@@ -43,7 +43,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import type { ComputedRef } from 'vue';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 import * as Misskey from 'misskey-js';
 import MkFollowButton from '@/components/MkFollowButton.vue';
 import number from '@/filters/number.js';
