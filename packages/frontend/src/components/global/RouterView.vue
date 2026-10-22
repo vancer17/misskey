@@ -1,6 +1,10 @@
 <!--
 SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
+
+文件领域：通用主路由出口。
+作用：沿用既有路由和页面缓存，仅允许宿主定制加载展示与出口背景。
+数据链：路由解析结果 → 页面实例；加载插槽向嵌套出口传递，不产生业务事实。
 -->
 
 <template>
@@ -10,7 +14,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<component :is="currentPageComponent" :key="key" v-bind="Object.fromEntries(currentPageProps)"/>
 
 			<template #fallback>
-				<MkLoading/>
+				<slot name="fallback">
+					<component :is="routeFallback" v-if="routeFallback"/>
+					<MkLoading v-else/>
+				</slot>
 			</template>
 		</Suspense>
 	</KeepAlive>
@@ -18,7 +25,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { inject, nextTick, onMounted, provide, ref, shallowRef, useTemplateRef } from 'vue';
+import { inject, provide, ref, shallowRef, useSlots } from 'vue';
+import type { Slot, Slots } from 'vue';
+import { routerViewFallbackKey } from './router-view-fallback.js';
 import type { Router } from '@/router.js';
 import { prefer } from '@/preferences.js';
 import MkLoadingPage from '@/pages/_loading_.vue';
@@ -29,6 +38,12 @@ import { deepEqual } from '@/utility/deep-equal.js';
 const props = defineProps<{
 	router?: Router;
 }>();
+
+/** 宿主提供的展示插槽只沿当前出口子树继承，不改变路由解析及缓存。 */
+const slots: Slots = useSlots();
+/** 将当前宿主占位透传给后代出口，避免嵌套加载回落到另一套视觉风格。 */
+const routeFallback: Slot | undefined = slots.fallback ?? inject(routerViewFallbackKey, undefined);
+provide(routerViewFallbackKey, routeFallback);
 
 const _router = props.router ?? inject(DI.router);
 
@@ -68,7 +83,7 @@ function getPageViewKey(route: typeof current.route, fullPath: string): string {
 <style lang="scss" module>
 .root {
 	height: 100%;
-	background-color: var(--MI_THEME-bg);
+	background-color: var(--MI-router-view-background, var(--MI_THEME-bg));
 
 	/**
 	 * FIXME: Safari 26 で contain: layout を指定するとバグるので、hotfixとして _pageContainer の content: strict を上書き
