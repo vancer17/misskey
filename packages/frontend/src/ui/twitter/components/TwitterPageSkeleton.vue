@@ -62,8 +62,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 import { computed } from 'vue';
 import type { ComputedRef } from 'vue';
-import { useTwitterLayout } from '@/ui/twitter/index.js';
-import type { TwitterLayoutState, TwitterPageSkeletonVariant } from '@/ui/twitter/index.js';
+import { useTwitterLayout } from '@/ui/twitter/context/index.js';
+import type { TwitterLayoutState, TwitterPageSkeletonVariant } from '@/ui/twitter/context/index.js';
 import { i18n } from '@/i18n.js';
 
 /** 页面只传入公开骨架变体，尺寸继续由既有布局状态和 Token 派生。 */
