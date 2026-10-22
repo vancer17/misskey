@@ -17,7 +17,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { i18n } from '@/i18n.js';
 import { shouldSuggestReload } from '@/utility/reload-suggest.js';
 import { unisonReload } from '@/utility/unison-reload.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const isTwitterUi = useIsTwitterUi();
 

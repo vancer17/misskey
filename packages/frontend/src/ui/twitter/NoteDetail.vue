@@ -45,7 +45,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		{{ i18n.ts.deletedNote }}
 	</div>
 
-	<article v-else ref="rootEl" v-hotkey="keymap" :class="$style.article" tabindex="0">
+	<article v-else ref="rootEl" :class="$style.article" tabindex="0" @keydown.self="handleNoteHotkey">
 		<header :class="$style.header">
 			<TwitterAvatar decorationContext="note" :class="$style.avatar" :user="appearNote.user" link preview/>
 			<div :class="$style.identity">
@@ -254,29 +254,49 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:canRenote="canRenote"
 			:setRenoteButton="setRenoteButton"
 			:setReactButton="setReactButton"
-			@reply="reply"
+			@reply="focusReply"
 			@renote="renote"
 			@react="toggleReact"
 			@menu="showMenu"
 		/>
 	</article>
 
+	<TwitterReplyComposer
+		v-show="tab === 'replies'"
+		ref="replyComposer"
+		:note="appearNote"
+	/>
+
 	<div :class="$style.results">
-		<div v-if="tab === 'replies'">
-			<TwitterPageSkeleton v-if="repliesLoading" variant="timeline"/>
-			<TwitterPageState
-				v-else-if="repliesError"
-				type="error"
-				@retry="loadReplies"
-			/>
-			<TwitterPageState v-else-if="repliesLoaded && replies.length === 0" type="empty" :title="i18n.ts.noNotes"/>
-			<TwitterThreadNote
-				v-for="(replyNote, index) in replies"
-				:key="replyNote.id"
-				:note="replyNote"
-				:connected="index < replies.length - 1"
-				:actionsVisible="true"
-			/>
+		<div
+			v-if="tab === 'replies'"
+			data-testid="twitter-note-replies"
+			:aria-busy="repliesPaginator.fetching.value || repliesPaginator.refreshing.value || repliesPaginator.fetchingOlder.value"
+		>
+			<div v-if="repliesPaginator.refreshError.value" :class="$style.contextError" role="alert">
+				<span>{{ i18n.ts.error }}</span>
+				<button class="_button" type="button" @click="repliesPaginator.reload">{{ i18n.ts.retry }}</button>
+			</div>
+			<MkPagination :paginator="repliesPaginator" :pullToRefresh="false" :forceDisableInfiniteScroll="true">
+				<template #empty>
+					<TwitterPageState type="empty" :title="i18n.ts.noNotes"/>
+				</template>
+				<template #default="{ items }">
+					<div>
+						<TwitterThreadNote
+							v-for="(replyNote, index) in items"
+							:key="replyNote.id"
+							:note="replyNote"
+							:connected="index < items.length - 1"
+							:actionsVisible="true"
+						/>
+					</div>
+				</template>
+			</MkPagination>
+			<div v-if="repliesPaginator.pageError.value" :class="$style.contextError" role="alert">
+				<span>{{ i18n.ts.error }}</span>
+				<button class="_button" type="button" @click="repliesPaginator.fetchOlder">{{ i18n.ts.retry }}</button>
+			</div>
 		</div>
 
 		<div v-else-if="tab === 'renotes'" :class="$style.people">
@@ -345,24 +365,26 @@ import { useInterval } from '@@/js/use-interval.js';
 import { store } from '@/store.js';
 import { prefer } from '@/preferences.js';
 import type { ComputedRef } from 'vue';
-import type { TwitterNoteCounters } from '@/ui/twitter/index.js';
+import type { TwitterNoteCounters } from './domain/note-counters.js';
 import { noteEvents } from '@/composables/use-note-capture.js';
 import { onBeforeUnmount } from 'vue';
 import { useGlobalEvent } from '@/events.js';
-import { useTwitterRefresh, useTwitterPaginatorRefresh } from '@/ui/twitter/index.js';
-import { useTwitterNoteCounters } from '@/ui/twitter/index.js';
+import { useTwitterPaginatorRefresh } from './composables/use-twitter-refresh.js';
+import { useTwitterNoteCounters } from './store/note-counters.js';
 import { getAppearNote } from '@/utility/get-appear-note.js';
 import type { ComponentPublicInstance } from 'vue';
-import { computed, inject, markRaw, onMounted, provide, ref, shallowRef, useTemplateRef, watch } from 'vue';
+import { computed, inject, markRaw, nextTick, onMounted, provide, ref, shallowRef, useTemplateRef, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import { useNote } from '@/composables/use-note.js';
 import { i18n } from '@/i18n.js';
+import { $i } from '@/i.js';
 import { userPage } from '@/filters/user.js';
 import { isEnabledUrlPreview } from '@/utility/url-preview.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import number from '@/filters/number.js';
 import { Paginator } from '@/utility/paginator.js';
 import { DI } from '@/di.js';
+import { makeHotkey } from '@/utility/hotkey.js';
 import type { Keymap } from '@/utility/hotkey.js';
 import MkCwButton from '@/components/MkCwButton.vue';
 import MkInstanceTicker from '@/components/MkInstanceTicker.vue';
@@ -378,7 +400,8 @@ import TwitterNoteQuote from './NoteQuote.vue';
 import TwitterNoteRepostLabel from './NoteRepostLabel.vue';
 import TwitterThreadNote from './ThreadNote.vue';
 import TwitterPageState from './components/TwitterPageState.vue';
-import TwitterPageSkeleton from './components/TwitterPageSkeleton.vue';
+import TwitterReplyComposer from './components/TwitterReplyComposer.vue';
+import { useNoteReplies } from './composables/use-note-replies.js';
 import { useTwitterLayout } from './composables/use-twitter-layout.js';
 
 const { isMobile } = useTwitterLayout();
@@ -397,6 +420,8 @@ const renoteButton = shallowRef<HTMLElement | null>(null);
 const renoteTime = useTemplateRef('renoteTime');
 const reactButton = shallowRef<HTMLElement | null>(null);
 const galleryEl = useTemplateRef<InstanceType<typeof MkMediaList>>('galleryEl');
+/** 主帖回复动作只转发焦点，不新建第二个编辑器。 */
+const replyComposer = useTemplateRef<InstanceType<typeof TwitterReplyComposer>>('replyComposer');
 
 const {
 	note,
@@ -438,10 +463,12 @@ const reactionTabType = ref<string | null>(null);
 const conversation = ref<Misskey.entities.Note[]>([]);
 const conversationLoading = ref(false);
 const conversationError = ref(false);
-const replies = ref<Misskey.entities.Note[]>([]);
-const repliesLoaded = ref(false);
-const repliesLoading = ref(false);
-const repliesError = ref(false);
+/** 当前父帖的唯一回复分页集合；标签隐藏时仅保留刷新意图。 */
+const repliesPaginator: ReturnType<typeof useNoteReplies> = useNoteReplies(
+	appearNote.id,
+	30,
+	/** 仅可见回复标签执行写入后的刷新。 */ (): boolean => tab.value === 'replies',
+);
 
 const renotesPaginator = markRaw(new Paginator('notes/renotes', {
 	limit: 10,
@@ -474,65 +501,53 @@ watch(reactionTypes, (types) => {
 	immediate: true,
 });
 
-onMounted(() => {
-	loadConversation();
-	loadReplies();
+/** 祖先查询的请求归属，页面离开时取消且不再回填。 */
+let conversationRequest: AbortController | null = null;
+
+onMounted(/** 回复首屏由 MkPagination 初始化；这里只查询祖先链。 */ (): void => {
+	void loadConversation();
 });
 
-async function loadConversation() {
-	conversation.value = [];
-
-	if (appearNote.replyId == null) return;
-
+/** 原地重试保留已有祖先，仅当前页面仍持有的请求可以提交结果。 */
+async function loadConversation(): Promise<void> {
+	if (appearNote.replyId == null || conversationRequest != null) return;
+	const controller: AbortController = new AbortController();
+	conversationRequest = controller;
 	conversationLoading.value = true;
 	conversationError.value = false;
-
 	try {
-		const ancestors = await misskeyApi('notes/conversation', {
+		const ancestors: Misskey.entities.Note[] = await misskeyApi('notes/conversation', {
 			noteId: appearNote.id,
-		});
+		}, undefined, controller.signal);
+		if (controller.signal.aborted || conversationRequest !== controller) return;
 		conversation.value = ancestors.reverse();
-	} catch (error) {
-		console.error(error);
-		conversationError.value = true;
-	} finally {
-		conversationLoading.value = false;
-	}
-}
-
-/** 当前回复请求归属，不允许卸载或资源切换后回填。 */
-let repliesRequest: AbortController | null = null;
-
-/** 使用真实查询更新既有集合；失败保留旧回复，错误由页面原重试入口呈现。 */
-async function loadReplies(): Promise<void> {
-	if (repliesLoading.value) return;
-	const id: string = (getAppearNote(props.note) ?? props.note).id;
-	const controller: AbortController = new AbortController();
-	repliesRequest = controller;
-	repliesLoading.value = true;
-	repliesError.value = false;
-	try {
-		const fetched: Misskey.entities.Note[] = await misskeyApi('notes/children', { noteId: id, limit: 30 }, undefined, controller.signal);
-		if (controller.signal.aborted || (getAppearNote(props.note) ?? props.note).id !== id || repliesRequest !== controller) return;
-		replies.value = fetched;
-		repliesLoaded.value = true;
 	} catch (error: unknown) {
-		if (!controller.signal.aborted) { console.error(error); repliesError.value = true; }
+		if (!controller.signal.aborted) {
+			console.error(error);
+			conversationError.value = true;
+		}
 	} finally {
-		if (repliesRequest === controller) { repliesRequest = null; repliesLoading.value = false; }
+		if (conversationRequest === controller) {
+			conversationRequest = null;
+			conversationLoading.value = false;
+		}
 	}
 }
 
-onBeforeUnmount(/** 回复请求只属于当前节点，不取消全局业务。 */ (): void => { repliesRequest?.abort(); });
+onBeforeUnmount(/** 祖先请求不跨帖子页面生效。 */ (): void => {
+	conversationRequest?.abort();
+});
 
-/** 复用现有回复集合，不建立另一份线程缓存。 */
-const invalidateReplies: () => void = useTwitterRefresh(
-	/** 加载失败不冒充成功，不在后台循环重试。 */ async (): Promise<boolean> => { await loadReplies(); return !repliesError.value; },
-	{
-		busy: /** 首拉和手动重试也是同一请求占用。 */ (): boolean => repliesLoading.value,
-		visible: /** 隐藏标签只保留意图。 */ (): boolean => tab.value === 'replies',
-	},
-);
+/** 已登录用户聚焦内联回复；匿名访问沿用原回复动作的登录提示。 */
+async function focusReply(): Promise<void> {
+	tab.value = 'replies';
+	await nextTick();
+	if ($i == null) {
+		await reply();
+		return;
+	}
+	replyComposer.value?.focus();
+}
 
 function setRenoteButton(element: Element | ComponentPublicInstance | null) {
 	renoteButton.value = element as HTMLElement | null;
@@ -543,7 +558,7 @@ function setReactButton(element: Element | ComponentPublicInstance | null) {
 }
 
 const keymap = {
-	'r': () => reply(),
+	'r': /** 主帖快捷键与回复按钮聚焦同一表单。 */ (): Promise<void> => focusReply(),
 	'e|a|plus': () => react(),
 	'q': () => renote(),
 	'm': () => showMenu(),
@@ -556,6 +571,9 @@ const keymap = {
 		callback: () => blur(),
 	},
 } as const satisfies Keymap;
+/** 复用既有热键映射；模板仅在容器自身持有焦点时调用，保留后代链接与按钮的原生按键。 */
+const handleNoteHotkey: (event: KeyboardEvent) => void = makeHotkey(keymap);
+
 /** 仅渲染服务端计数；共享 useNote 的动作与权限输入不被展示投影改写。 */
 const noteCounters: ComputedRef<TwitterNoteCounters> = useTwitterNoteCounters(
 	/** 纯转发显示原帖计数，而不是转发外壳计数。 */ (): Misskey.entities.Note => getAppearNote(props.note) ?? props.note,
@@ -573,11 +591,9 @@ const invalidateReactions: () => void = useTwitterPaginatorRefresh(
 	/** 同一反应类型的人员变化也需要更新。 */ (): boolean => tab.value === 'reactions' && reactionTabType.value != null,
 );
 useGlobalEvent('notePosted', /** 回执只定位受影响原帖，不插入未经过滤的回复或名单。 */ (created: Misskey.entities.Note): void => {
-	if (created.replyId === appearNote.id) invalidateReplies();
 	if (created.renoteId === appearNote.id) invalidateRenotes();
 });
-useGlobalEvent('noteDeleted', /** 删除已有直接回复／转发时分别重取集合。 */ (id: string): void => {
-	if (replies.value.some(/** 直接回复归属。 */ (child: Misskey.entities.Note): boolean => child.id === id)) invalidateReplies();
+useGlobalEvent('noteDeleted', /** 删除已有转发时重取当前转发名单；回复由其分页组合负责。 */ (id: string): void => {
 	if (renotesPaginator.items.value.some(/** 已载入转发归属。 */ (item: Misskey.entities.Note): boolean => item.id === id)) invalidateRenotes();
 });
 /** 非实时模式的人员名单沿用既有轮询档位；不能用总数未变证明成员未变。 */
