@@ -45,8 +45,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<XAnnouncements/>
 						<XStatusBars :class="$style.statusbars"/>
 					</div>
-					<StackingRouterView v-if="isStacked" :class="$style.content"/>
-					<RouterView v-else :class="[$style.content, $style.flowOutlet]" data-twitter-route-outlet/>
+					<StackingRouterView v-if="isStacked" :class="$style.content">
+						<template #fallback><TwitterRouteLoading/></template>
+					</StackingRouterView>
+					<RouterView v-else :class="[$style.content, $style.flowOutlet]" data-twitter-route-outlet>
+						<template #fallback><TwitterRouteLoading/></template>
+					</RouterView>
 				</main>
 				<TwitterRightRail
 					v-if="$i && showRightRail && !pageMetadata?.needWideArea"
@@ -78,7 +82,7 @@ import XPreferenceRestore from './_common_/PreferenceRestore.vue';
 import XReloadSuggestion from './_common_/ReloadSuggestion.vue';
 import XThemePreviewing from './_common_/ThemePreviewing.vue';
 import XTitlebar from './_common_/titlebar.vue';
-import { TwitterAuthButtons, provideTwitterScrollHost, useTwitterLayout } from './twitter/index.js';
+import { TwitterAuthButtons, TwitterRouteLoading, provideTwitterScrollHost, useTwitterLayout } from './twitter/index.js';
 import type { PageMetadata } from '@/page.js';
 import { isPreviewMode as isThemePreviewMode } from '@/theme.js';
 import * as os from '@/os.js';
@@ -176,6 +180,7 @@ function onContextmenu(ev: PointerEvent): void {
 
 <style lang="scss" module>
 .root {
+	--MI-router-view-background: var(--twitter-bg);
 	display: flex;
 	flex-direction: column;
 	height: 100dvh;
@@ -190,6 +195,7 @@ function onContextmenu(ev: PointerEvent): void {
 }
 
 .entrance {
+	--MI-router-view-background: var(--twitter-entry-bg);
 	flex: 1;
 	min-height: 0;
 	background: var(--twitter-entry-bg);
