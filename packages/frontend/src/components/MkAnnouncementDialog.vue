@@ -39,7 +39,7 @@ import MkButton from '@/components/MkButton.vue';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
 import { updateCurrentAccountPartial } from '@/accounts.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const props = defineProps<{
 	announcement: Misskey.entities.Announcement;
