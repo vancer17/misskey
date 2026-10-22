@@ -41,6 +41,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 			/>
 		</div>
 
+		<div v-if="paginators[tab.key].refreshError.value" :class="$style.refreshError" role="status">
+			<span>{{ i18n.ts.error }}</span>
+			<button class="_button" type="button" :class="$style.retry" @click="retryTab(tab.key)">{{ i18n.ts.retry }}</button>
+		</div>
+
 		<MkNotesTimeline
 			:key="user.id + ':' + tab.key"
 			:class="$style.timeline"
@@ -48,6 +53,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:noGap="true"
 			:pullToRefresh="false"
 			:variant="'twitter'"
+			:aria-busy="paginators[tab.key].refreshing.value"
 		>
 			<template #empty>
 				<TwitterPageState type="empty" :title="i18n.ts.noNotes"/>
@@ -59,15 +65,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { useGlobalEvent } from '@/events.js';
-import { computed, markRaw, onActivated, onDeactivated, watch } from 'vue';
+import { computed, markRaw, onActivated, onDeactivated, onBeforeUnmount, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { ComputedRef } from 'vue';
-import type { IPaginator } from '@/utility/paginator.js';
+import type { TwitterLayoutState, TwitterUserTimelineTab } from '@/ui/twitter/index.js';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
-import { TwitterNote } from '@/ui/twitter/index.js';
+import { TwitterNote, TwitterUserTimelinePaginator } from '@/ui/twitter/index.js';
 import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
 import { useTwitterLayout } from '@/ui/twitter/index.js';
-import { Paginator } from '@/utility/paginator.js';
 import { userPage } from '@/filters/user.js';
 import { i18n } from '@/i18n.js';
 
@@ -79,13 +84,10 @@ const props = withDefaults(defineProps<{
 });
 
 /** Twitter 布局状态（移动端 class 驱动，ADR-0001 决策 4）。 */
-const { isMobile } = useTwitterLayout();
-
-/** 本页既有展示标签的联合，不定义新的领域状态。 */
-type TimelineTab = 'notes' | 'replies' | 'files' | 'featured';
+const { isMobile }: TwitterLayoutState = useTwitterLayout();
 
 /** 标签文案与路由段，仅用于本页展示。 */
-const tabs: ReadonlyArray<{ key: TimelineTab; title: string }> = [{
+const tabs: ReadonlyArray<{ key: TwitterUserTimelineTab; title: string }> = [{
 	/** 用户帖子标签。 */
 	key: 'notes',
 	title: i18n.ts.notes,
@@ -102,14 +104,14 @@ const tabs: ReadonlyArray<{ key: TimelineTab; title: string }> = [{
 	key: 'featured',
 	title: i18n.ts.featured,
 }] as const satisfies ReadonlyArray<{
-	key: TimelineTab;
+	key: TwitterUserTimelineTab;
 	title: string;
 }>;
 
 /** 由路由页签派生当前面板。 */
-const activeTab: ComputedRef<TimelineTab> = computed(
+const activeTab: ComputedRef<TwitterUserTimelineTab> = computed(
 	/** home 与 notes 共用帖子面板。 */
-	(): TimelineTab => {
+	(): TwitterUserTimelineTab => {
 	switch (props.page) {
 		case 'replies':
 		case 'files':
@@ -122,65 +124,34 @@ const activeTab: ComputedRef<TimelineTab> = computed(
 	}
 });
 
-/** 首次初始化由既有 MkPagination 负责，不额外创建列表副本。 */
-const paginators: Record<TimelineTab, IPaginator<Misskey.entities.Note>> = {
-	/** notes 面板的既有分页器。 */
-	notes: markRaw(new Paginator('users/notes', {
-		limit: 20,
-		params: {
-			userId: props.user.id,
-			withRenotes: true,
-			withReplies: false,
-			withChannelNotes: true,
-		},
-	})),
-	/** replies 面板的既有分页器。 */
-	replies: markRaw(new Paginator('users/notes', {
-		limit: 20,
-		params: {
-			userId: props.user.id,
-			withRenotes: false,
-			withReplies: true,
-			withChannelNotes: false,
-		},
-	})),
-	/** files 面板的既有分页器。 */
-	files: markRaw(new Paginator('users/notes', {
-		limit: 20,
-		params: {
-			userId: props.user.id,
-			withRenotes: false,
-			// users/notes 不支持同时开启 withFiles 与 withReplies。
-			withReplies: false,
-			withChannelNotes: true,
-			withFiles: true,
-		},
-	})),
-	/** featured 面板的既有分页器。 */
-	featured: markRaw(new Paginator('users/featured-notes', {
-		limit: 20,
-		params: {
-			userId: props.user.id,
-		},
-	})),
+/** 每标签仅有一个分页所有者；首拉由既有 MkPagination 触发，回访保留同一已确认集合。 */
+const paginators: Record<TwitterUserTimelineTab, TwitterUserTimelinePaginator> = {
+	/** 用户普通帖的唯一查询。 */
+	notes: markRaw(new TwitterUserTimelinePaginator(props.user.id, 'notes')),
+	/** 用户回复的唯一查询。 */
+	replies: markRaw(new TwitterUserTimelinePaginator(props.user.id, 'replies')),
+	/** 用户附件帖的唯一查询。 */
+	files: markRaw(new TwitterUserTimelinePaginator(props.user.id, 'files')),
+	/** 用户热门帖的唯一查询。 */
+	featured: markRaw(new TwitterUserTimelinePaginator(props.user.id, 'featured')),
 };
 
 /** 待消费的 UI 刷新意图；不作为业务数据成功/失败的第二份事实。 */
-const pendingTabs: Set<TimelineTab> = new Set();
+const pendingTabs: Set<TwitterUserTimelineTab> = new Set();
 /** 本组件发起的刷新占用，避免与首拉、翻页、标签切换并发 init。 */
-const refreshingTabs: Set<TimelineTab> = new Set();
+const refreshingTabs: Set<TwitterUserTimelineTab> = new Set();
 /** 晚挂载子组件默认可见，实际停用后暂停调度。 */
 let active: boolean = true;
 
 /** 使用分页器公开状态判断占用，不以条目数量推断是否加载过。 */
-function isBusy(paginator: IPaginator): boolean {
-	return paginator.fetching.value || paginator.fetchingOlder.value || paginator.fetchingNewer.value;
+function isBusy(paginator: TwitterUserTimelinePaginator): boolean {
+	return paginator.fetching.value || paginator.fetchingOlder.value || paginator.fetchingNewer.value || paginator.refreshing.value;
 }
 
 /** 每次消费一个活动面板刷新意图，错误与手动重试仍归既有分页器。 */
 async function refreshActiveTab(): Promise<void> {
-	const tab: TimelineTab = activeTab.value;
-	const paginator: IPaginator = paginators[tab];
+	const tab: TwitterUserTimelineTab = activeTab.value;
+	const paginator: TwitterUserTimelinePaginator = paginators[tab];
 	if (!active || !pendingTabs.has(tab) || refreshingTabs.has(tab) || isBusy(paginator)) return;
 	pendingTabs.delete(tab);
 	refreshingTabs.add(tab);
@@ -190,7 +161,7 @@ async function refreshActiveTab(): Promise<void> {
 		refreshingTabs.delete(tab);
 	}
 	// 新的回访可能在请求期间排队；错误不被视为成功，也不形成自动重试循环。
-	if (!paginator.error.value) void refreshActiveTab();
+	if (!paginator.error.value && !paginator.refreshError.value) void refreshActiveTab();
 }
 
 onDeactivated(
@@ -206,8 +177,8 @@ onActivated(
 );
 watch(activeTab,
 	/** v-show 不重新挂载；消费待刷新意图，或重试用户重新访问的错误面板。 */
-	async (tab: TimelineTab): Promise<void> => {
-		if (paginators[tab].error.value) pendingTabs.add(tab);
+	async (tab: TwitterUserTimelineTab): Promise<void> => {
+		if (paginators[tab].error.value || paginators[tab].refreshError.value) pendingTabs.add(tab);
 		await refreshActiveTab();
 	},
 );
@@ -215,7 +186,7 @@ watch(
 	/** 初始加载或翻页结束后处理回访期间排队的请求。 */
 	(): boolean => isBusy(paginators[activeTab.value]),
 	async (busy: boolean): Promise<void> => {
-		if (!busy && !paginators[activeTab.value].error.value) await refreshActiveTab();
+		if (!busy && !paginators[activeTab.value].error.value && !paginators[activeTab.value].refreshError.value) await refreshActiveTab();
 	},
 );
 
@@ -226,7 +197,16 @@ function invalidatePostedUser(note: Misskey.entities.Note): void {
 	void refreshActiveTab();
 }
 
+/** 显式重试当前失败集合；仍由原查询所有者决定替换时机。 */
+async function retryTab(tab: TwitterUserTimelineTab): Promise<void> {
+	pendingTabs.add(tab);
+	await refreshActiveTab();
+}
+
 useGlobalEvent('notePosted', invalidatePostedUser);
+onBeforeUnmount(/** 最终驱逐缓存页时撤销所有首批请求归属。 */ (): void => {
+	for (const tab of tabs) paginators[tab.key].dispose();
+});
 
 </script>
 
@@ -309,7 +289,27 @@ useGlobalEvent('notePosted', invalidatePostedUser);
 }
 
 .timelinePane {
+	position: relative;
 	min-height: 50vh;
+}
+
+.refreshError {
+	position: sticky;
+	top: calc(var(--twitter-header-height) + 48px);
+	z-index: 8;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--twitter-space-2);
+	padding: var(--twitter-space-2) var(--twitter-space-4);
+	color: var(--twitter-fg);
+	background: var(--twitter-bg);
+	border-bottom: 1px solid var(--twitter-border);
+}
+
+.retry {
+	color: var(--twitter-accent);
+	font-weight: 700;
 }
 
 .timeline {

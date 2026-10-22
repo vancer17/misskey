@@ -1,6 +1,10 @@
 <!--
 SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
+
+文件领域：通用嵌套路由出口。
+作用：沿用子路由解析，加载期间优先消费 UI 宿主传入的展示插槽。
+数据链：父出口加载上下文 → 子路由占位；不持有页面或业务状态副本。
 -->
 
 <template>
@@ -8,13 +12,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<component :is="currentPageComponent" :key="key" v-bind="Object.fromEntries(currentPageProps)"/>
 
 	<template #fallback>
-		<MkLoading/>
+		<slot name="fallback">
+			<component :is="routeFallback" v-if="routeFallback"/>
+			<MkLoading v-else/>
+		</slot>
 	</template>
 </Suspense>
 </template>
 
 <script lang="ts" setup>
-import { inject, provide, ref, shallowRef } from 'vue';
+import { inject, provide, ref, shallowRef, useSlots } from 'vue';
+import type { Slot, Slots } from 'vue';
+import { routerViewFallbackKey } from './router-view-fallback.js';
 import type { Router } from '@/router.js';
 import type { PathResolvedResult } from '@/lib/nirax.js';
 import MkLoadingPage from '@/pages/_loading_.vue';
@@ -23,6 +32,12 @@ import { DI } from '@/di.js';
 const props = defineProps<{
 	router?: Router;
 }>();
+
+/** 局部展示插槽可覆盖继承的加载画面，其他情况沿用父出口契约。 */
+const slots: Slots = useSlots();
+/** 继承与透传仅影响展示，不新增路径判断或页面注册表。 */
+const routeFallback: Slot | undefined = slots.fallback ?? inject(routerViewFallbackKey, undefined);
+provide(routerViewFallbackKey, routeFallback);
 
 const router = props.router ?? inject(DI.router);
 
