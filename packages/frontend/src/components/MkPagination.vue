@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：既有分页器的列表展示。
+作用：消费原分页状态；Twitter 变体直接交接加载态和结果，避免整区淡出后才挂载下一状态。
+数据链：分页器权威状态 → 加载／错误／空态／条目；不改变分页、重取或业务数据所有权。
+-->
+
 <template>
 <component :is="prefer.s.enablePullToRefresh && pullToRefresh ? MkPullToRefresh : 'div'" :refresher="() => paginator.reload()" @contextmenu.prevent.stop="onContextmenu">
 	<div>
@@ -10,11 +16,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 		<!-- :css="prefer.s.animation" にしたいけどバグる(おそらくvueのバグ) https://github.com/misskey-dev/misskey/issues/16078 -->
 		<Transition
-			:enterActiveClass="prefer.s.animation ? $style.transition_fade_enterActive : ''"
-			:leaveActiveClass="prefer.s.animation ? $style.transition_fade_leaveActive : ''"
-			:enterFromClass="prefer.s.animation ? $style.transition_fade_enterFrom : ''"
-			:leaveToClass="prefer.s.animation ? $style.transition_fade_leaveTo : ''"
-			:mode="prefer.s.animation ? 'out-in' : undefined"
+				:enterActiveClass="prefer.s.animation && !isTwitterUi ? $style.transition_fade_enterActive : ''"
+				:leaveActiveClass="prefer.s.animation && !isTwitterUi ? $style.transition_fade_leaveActive : ''"
+				:enterFromClass="prefer.s.animation && !isTwitterUi ? $style.transition_fade_enterFrom : ''"
+				:leaveToClass="prefer.s.animation && !isTwitterUi ? $style.transition_fade_leaveTo : ''"
+				:mode="prefer.s.animation && !isTwitterUi ? 'out-in' : undefined"
 		>
 			<TwitterPageSkeleton v-if="isTwitterUi && paginator.fetching.value" variant="timeline"/>
 			<MkLoading v-else-if="paginator.fetching.value"/>

@@ -53,6 +53,11 @@ async function openProfile(page: Page): Promise<void> {
 	await page.goto(`${BASE_URL}/@${account.username}?ui=twitter`);
 	await expect(page.getByTestId('twitter-profile')).toBeVisible();
 	await expect(page.getByTestId('twitter-user-timeline-notes').getByTestId('twitter-note').first()).toBeVisible();
+	// 滚动基线必须取在启动主题切换完成后，避免点击重试的自动滚动改变已保存位置。
+	await expect(page.locator('html')).not.toHaveClass(/_themeChanging_/);
+	await page.evaluate(/** 等待实际字体就绪后再测量几何，不用固定延迟猜测排版完成。 */ async (): Promise<void> => {
+		await document.fonts.ready;
+	});
 }
 
 /** 当前主滚动宿主的唯一定位点。 */

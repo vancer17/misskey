@@ -39,6 +39,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { useTwitterRefresh, useTwitterUserEvents } from '@/ui/twitter/index.js';
+import { loadTwitterUserPage } from '@/ui/twitter/routing/index.js';
 import { defineAsyncComponent, computed, inject, watch, ref, onDeactivated, onBeforeUnmount } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { Ref } from 'vue';
@@ -62,7 +63,8 @@ const XPages = defineAsyncComponent(() => import('./pages.vue'));
 const XFlashs = defineAsyncComponent(() => import('./flashs.vue'));
 const XGallery = defineAsyncComponent(() => import('./gallery.vue'));
 const XRaw = defineAsyncComponent(() => import('./raw.vue'));
-const TwitterHome = defineAsyncComponent(() => import('./TwitterHome.vue'));
+/** 内层 Twitter 用户视图与意图预加载共享正式代码加载入口。 */
+const TwitterHome: ReturnType<typeof defineAsyncComponent> = defineAsyncComponent(loadTwitterUserPage);
 
 // contextは非ログイン状態の情報しかないためログイン時は利用できない
 const CTX_USER = !$i && assertServerContext(serverContext, 'user') ? serverContext.user : null;
