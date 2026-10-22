@@ -89,9 +89,9 @@ import {
 	TwitterPageSkeleton,
 	TwitterUserResult,
 	twitterUserErrorStateType,
-	useTwitterLayout,
 } from '@/ui/twitter/index.js';
-import type { TwitterPageStateType } from '@/ui/twitter/index.js';
+import { useTwitterLayout } from '@/ui/twitter/context/index.js';
+import type { TwitterPageStateType } from '@/ui/twitter/context/index.js';
 import { useTwitterScrollPositionKeeper } from '@/ui/twitter/index.js';
 import number from '@/filters/number.js';
 import { userPage } from '@/filters/user.js';
