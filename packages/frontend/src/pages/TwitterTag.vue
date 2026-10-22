@@ -60,7 +60,7 @@ MkNotesTimeline(variant=twitter) → TwitterNote（行），
 import { useTemplateRef } from 'vue';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
-import { useTwitterLayout } from '@/ui/twitter/index.js';
+import { useTwitterLayout } from '@/ui/twitter/context/index.js';
 import { useTwitterScrollPositionKeeper } from '@/ui/twitter/index.js';
 import { i18n } from '@/i18n.js';
 import type { PageHeaderItem } from '@/types/page-header.js';

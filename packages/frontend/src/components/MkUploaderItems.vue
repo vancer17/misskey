@@ -59,7 +59,7 @@ import { isPreviewable, getType } from '@/utility/lightbox.js';
 import bytes from '@/filters/bytes.js';
 import * as os from '@/os.js';
 import type { Content } from '@/components/MkLightbox.item.vue';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const props = defineProps<{
 	items: UploaderItem[];
