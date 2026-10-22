@@ -5,19 +5,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <!--
 文件领域：Twitter 业务帖子组件。
-作用：复用既有 useNote 动作与订阅，仅将用户身份展示绑定到响应式引用。
-数据链：帖子事实留在 useNote；账户更新单向派生至展示，不反馈至业务动作。
+作用：复用既有 useNote 动作与订阅，将身份展示和实体卡片导航绑定到只读帖子引用。
+数据链：帖子事实留在 useNote；账户更新单向派生至展示，卡片事件仅调用既有路由，不反馈至业务动作。
 -->
 
 <template>
 <div
 	v-if="!isDeleted && !hardMuted && !hideByPlugin && muted === false"
 	ref="rootEl"
-	v-hotkey="keymap"
 	data-testid="twitter-note"
 	:data-note-id="note.id"
 		:class="[$style.root, { [$style.embedded]: embedded, [$style.mobile]: isMobile }]"
 	tabindex="0"
+	@keydown.self="handleNoteHotkey"
 >
 	<div v-if="pinned" :class="$style.context">
 		<i class="ti ti-pin" aria-hidden="true"></i>{{ i18n.ts.pinnedNote }}
@@ -73,7 +73,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<article
 		v-else
+		data-twitter-note-card
 		:class="$style.article"
+		@click="onNoteClick"
+		@auxclick="onNoteAuxClick"
 		@contextmenu.stop="onContextmenu"
 	>
 		<div :class="$style.avatarColumn">
@@ -173,12 +176,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</template>
 					</div>
 
-					<div v-if="appearNote.files?.length" :class="$style.media">
+					<div v-if="appearNote.files?.length" data-twitter-note-interactive :class="$style.media">
 						<MkMediaList ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user"/>
 					</div>
 
 					<MkPoll
 						v-if="appearNote.poll"
+						data-twitter-note-interactive
 						:class="$style.poll"
 						:noteId="appearNote.id"
 						:multiple="appearNote.poll.multiple"
@@ -191,6 +195,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkUrlPreview
 							v-for="url in urls"
 							:key="url"
+							data-twitter-note-interactive
 							:class="$style.urlPreview"
 							:url="url"
 							compact
@@ -294,8 +299,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import type { TwitterAvatarDecorationContext } from './domain/index.js';
 import TwitterAvatar from './components/TwitterAvatar.vue';
-import type { TwitterNoteCounters } from '@/ui/twitter/index.js';
-import { useTwitterNoteCounters } from '@/ui/twitter/index.js';
+import type { TwitterNoteCounters } from './domain/note-counters.js';
+import { useTwitterNoteCounters } from './store/note-counters.js';
 import { getAppearNote } from '@/utility/get-appear-note.js';
 import type { ComponentPublicInstance } from 'vue';
 import { computed, inject, provide, ref, shallowRef, useTemplateRef } from 'vue';
@@ -310,6 +315,7 @@ import { getNoteSummary } from '@/utility/get-note-summary.js';
 import { isEnabledUrlPreview } from '@/utility/url-preview.js';
 import { focusPrev, focusNext } from '@/utility/focus.js';
 import { DI } from '@/di.js';
+import { makeHotkey } from '@/utility/hotkey.js';
 import type { Keymap } from '@/utility/hotkey.js';
 import MkCwButton from '@/components/MkCwButton.vue';
 import MkInstanceTicker from '@/components/MkInstanceTicker.vue';
@@ -324,6 +330,7 @@ import TwitterNoteHeader from './NoteHeader.vue';
 import TwitterNoteQuote from './NoteQuote.vue';
 import TwitterNoteRepostLabel from './NoteRepostLabel.vue';
 import { useTwitterLayout } from './composables/use-twitter-layout.js';
+import { useNoteNavigation } from './composables/use-note-navigation.js';
 
 const props = withDefaults(defineProps<{
 	note: Misskey.entities.Note;
@@ -410,6 +417,14 @@ const {
 	currentAntenna,
 });
 
+/** 仅为实际展示的实体卡片派生导航输入；样本保持不可导航。 */
+const navigationNote: ComputedRef<Misskey.entities.Note | null> = computed(
+	/** 从既有 useNote 的显示帖子单向派生导航目标。 */
+	(): Misskey.entities.Note | null => props.mock ? null : appearNote,
+);
+/** 卡片导航不接管根节点既有 Enter／v 的 CW 与长文快捷键。 */
+const { onNoteClick, onNoteAuxClick }: ReturnType<typeof useNoteNavigation> = useNoteNavigation(navigationNote);
+
 /** 展示作者响应账户变更；useNote 的事实和动作参数保持原样。 */
 const displayUser: ComputedRef<Readonly<Misskey.entities.UserLite>> = useTwitterDisplayUser(
 	/** 提取帖子真实显示的作者。 */
@@ -481,6 +496,9 @@ const keymap = {
 		callback: () => focusNext(rootEl.value),
 	},
 } as const satisfies Keymap;
+/** 复用既有热键映射；模板仅在容器自身持有焦点时调用，保留后代链接与按钮的原生按键。 */
+const handleNoteHotkey: (event: KeyboardEvent) => void = makeHotkey(keymap);
+
 /** 仅渲染服务端计数；共享 useNote 的动作与权限输入不被展示投影改写。 */
 const noteCounters: ComputedRef<TwitterNoteCounters> = useTwitterNoteCounters(
 	/** 纯转发显示原帖计数，而不是转发外壳计数。 */ (): Misskey.entities.Note => getAppearNote(props.note) ?? props.note,
