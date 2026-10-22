@@ -4,14 +4,15 @@
  */
 
 /**
- * Twitter 主滚动真实后端回归：窗口边缘几何、原生滚动、路由位置恢复和模态交互。
+ * Twitter 主滚动真实后端回归：窗口边缘几何、原生滚动、路由位置恢复和模态／附件交互。
  * 只使用隔离测试实例；网络延迟保留真实响应，布局数据来自实际 DOM，不探测运维状态。
  */
 import { test, expect } from '@playwright/test';
-import { writeFile } from 'node:fs/promises';
-import type { Locator, Page, PlaywrightTestArgs, Route, TestInfo } from '@playwright/test';
+import { readFile, writeFile } from 'node:fs/promises';
+import type { APIResponse, JSHandle, Locator, Page, PlaywrightTestArgs, Route, TestInfo } from '@playwright/test';
 import type * as Misskey from 'misskey-js';
 import type { AccountWithToken } from '../../src/accounts/index.js';
+import type { PreferencesProfile } from '../../src/preferences/manager.js';
 import { api, registerUser, resetState } from './shared.js';
 import type { RegisteredUser } from './shared.js';
 import { BASE_URL } from './utils.js';
@@ -68,6 +69,160 @@ async function scrollTop(page: Page): Promise<number> {
 async function scrollTo(page: Page, top: number): Promise<void> {
 	await viewport(page).evaluate(/** 原生滚动 API。 */ (element: HTMLElement, position: number): void => { element.scrollTo({ top: position, behavior: 'instant' }); }, top);
 	await expect.poll(/** 等待浏览器位置生效。 */ async (): Promise<number> => Math.abs(await scrollTop(page) - top)).toBeLessThan(2);
+}
+
+/** 浏览器观测结果仅描述滚动和帖子锚点的几何偏差，不复制领域状态。 */
+type ScrollDrift = Readonly<{
+	maxTopDelta: number;
+	maxAnchorDelta: number;
+	anchorConnected: boolean;
+}>;
+
+/** 单次交互的浏览器采样器，结束后移除监听及动画帧任务。 */
+type ScrollObservation = Readonly<{
+	finish: () => Promise<ScrollDrift>;
+	dispose: () => void;
+}>;
+
+/** 从交互基线开始逐帧采样，结束后继续观察 60 帧，捕获延迟启动和平滑回顶的中间帧。 */
+async function observeScroll(card: Locator): Promise<JSHandle<ScrollObservation>> {
+	return card.evaluateHandle(/** 只观测实际主视口与当前可见帖子，不向产品状态注入测试字段。 */ (anchor: HTMLElement): ScrollObservation => {
+		const host: HTMLElement | null = anchor.closest('[data-testid="twitter-scroll-viewport"]');
+		if (host == null) throw new Error('Expected a main scroll viewport');
+		const savedTop: number = host.scrollTop;
+		const savedAnchor: number = anchor.getBoundingClientRect().top - host.getBoundingClientRect().top;
+		let maxTopDelta: number = 0;
+		let maxAnchorDelta: number = 0;
+		let frame: number = 0;
+		/** 同时记录最大位置偏差，防止最终回到原处掩盖中途跳动。 */
+		const sample: () => void = (): void => {
+			maxTopDelta = Math.max(maxTopDelta, Math.abs(host.scrollTop - savedTop));
+			maxAnchorDelta = Math.max(maxAnchorDelta, Math.abs(anchor.getBoundingClientRect().top - host.getBoundingClientRect().top - savedAnchor));
+		};
+		/** 逐帧读取与 scroll 事件互补，覆盖浏览器布局与原生平滑滚动。 */
+		const tick: () => void = (): void => {
+			sample();
+			frame = requestAnimationFrame(tick);
+		};
+		/** 清理单次浏览器观测，不保留跨交互的可变测试状态。 */
+		const dispose: () => void = (): void => {
+			host.removeEventListener('scroll', sample);
+			cancelAnimationFrame(frame);
+		};
+		host.addEventListener('scroll', sample, { passive: true });
+		frame = requestAnimationFrame(tick);
+		return {
+			dispose,
+			/** 弹层退出后继续采样固定帧数，避免立即成功的轮询漏掉稍后启动的滚动。 */
+			finish: async (): Promise<ScrollDrift> => {
+				for (let index: number = 0; index < 60; index++) {
+					await new Promise<void>(/** 将下一帧作为稳定观察边界。 */ (resolve: () => void): void => {
+						requestAnimationFrame(/** 保留整帧供浏览器布局及滚动提交。 */ (): void => { resolve(); });
+					});
+				}
+				sample();
+				dispose();
+				return { maxTopDelta, maxAnchorDelta, anchorConnected: anchor.isConnected };
+			},
+		};
+	});
+}
+
+/** 结束并核对交互全过程的位置与锚点，允许浏览器不足两个像素的取整误差。 */
+async function expectStableScroll(observation: JSHandle<ScrollObservation>): Promise<void> {
+	const drift: ScrollDrift = await observation.evaluate(/** 等待弹层之后的完整稳定窗口。 */ async (monitor: ScrollObservation): Promise<ScrollDrift> => monitor.finish());
+	expect(drift.anchorConnected).toBe(true);
+	expect(drift.maxTopDelta).toBeLessThanOrEqual(2);
+	expect(drift.maxAnchorDelta).toBeLessThanOrEqual(2);
+}
+
+/** 即使用例在关闭前失败，也移除浏览器采样资源。 */
+async function disposeObservation(observation: JSHandle<ScrollObservation>): Promise<void> {
+	await observation.evaluate(/** 清理当前观测，不影响产品滚动行为。 */ (monitor: ScrollObservation): void => { monitor.dispose(); });
+	await observation.dispose();
+}
+
+/** 从仓库固定媒体上传至真实 Drive，返回服务端文件实体。 */
+async function uploadAttachment(page: Page, path: string, name: string, mimeType: 'image/png' | 'video/mp4'): Promise<Misskey.entities.DriveFile> {
+	const buffer: Buffer = await readFile(new URL(path, import.meta.url));
+	const response: APIResponse = await page.request.post(`${BASE_URL}/api/drive/files/create`, {
+		multipart: { i: account.token, file: { name, mimeType, buffer } },
+	});
+	expect(response.ok()).toBe(true);
+	return await response.json();
+}
+
+/** 建立真实双附件帖子，再发布较新的内容使目标位于列表中段。 */
+async function createAttachmentNote(page: Page, channelId?: string): Promise<Misskey.entities.Note> {
+	const image: Misskey.entities.DriveFile = await uploadAttachment(page, './fixtures/avatar-decoration-frame.png', 'scroll-image.png', 'image/png');
+	const video: Misskey.entities.DriveFile = await uploadAttachment(page, './fixtures/video-upload/video-silent.mp4', 'scroll-video.mp4', 'video/mp4');
+	const created: Misskey.Endpoints['notes/create']['res'] = await api(BASE_URL, 'notes/create', {
+		i: account.token, text: 'Real image and video attachment scroll regression', fileIds: [image.id, video.id], ...(channelId == null ? {} : { channelId }),
+	});
+	for (let index: number = 0; index < 10; index++) {
+		await api(BASE_URL, 'notes/create', {
+			i: account.token, text: `Newer attachment context ${index}\n${'Stable real backend content for scroll geometry.\n'.repeat(3)}`, ...(channelId == null ? {} : { channelId }),
+		});
+	}
+	return created.createdNote;
+}
+
+/** 本次回归覆盖的原生附件关闭入口，仅属于测试交互策略。 */
+type AttachmentCloseMethod = 'button' | 'blank' | 'escape' | 'history';
+
+/** 从实际入口打开附件，以打开后的实际位置为基线核对整个关闭过程。 */
+async function expectAttachmentCloseStable(page: Page, card: Locator, file: Misskey.entities.DriveFile, method: AttachmentCloseMethod): Promise<void> {
+	await page.evaluate(/** 以实际字体加载完成作为几何测量前提，不用固定延迟猜测排版稳定。 */ async (): Promise<void> => { await document.fonts.ready; });
+	const source: Locator = file.type.startsWith('image/') ? card.locator(`img[title="${file.name}"]`).first() : card.locator('i.ti-player-play').first();
+	await source.scrollIntoViewIfNeeded();
+	await expect(source).toBeVisible();
+	// 实际输入前先完成可点击性检查，保留基础组件自身的焦点定位行为。
+	await source.click({ trial: true });
+	const sourceBox: Awaited<ReturnType<Locator['boundingBox']>> = await source.boundingBox();
+	if (sourceBox == null) throw new Error('Expected a visible attachment entrance');
+	expect(await scrollTop(page)).toBeGreaterThan(400);
+	const originalUrl: string = page.url();
+	await page.mouse.click(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+	await expect(page).toHaveURL(`${originalUrl}#pswp`);
+	const lightbox: Locator = page.locator('div:has(> ._modalBg)').filter({ has: page.getByText(file.name, { exact: true }) });
+	await expect(lightbox).toBeVisible();
+	await expect(viewport(page)).toHaveAttribute('inert', '');
+	await lightbox.evaluate(/** 等待实际打开过渡结束，关闭采样不包含仍在完成的打开动画。 */ async (element: HTMLElement): Promise<void> => {
+		const animations: Animation[] = element.getAnimations({ subtree: true });
+		for (const animation of animations) {
+			if (animation.effect?.getComputedTiming().iterations === Infinity) continue;
+			try {
+				await animation.finished;
+			} catch {
+				// 被取消的打开过渡同样已结束，不阻止后续真实关闭操作。
+			}
+		}
+	});
+	// 打开过程中的原生焦点定位完成后再记录关闭基线，关闭导致的任何回顶仍须被捕获。
+	expect(await scrollTop(page)).toBeGreaterThan(400);
+	const observation: JSHandle<ScrollObservation> = await observeScroll(card);
+	try {
+		if (method === 'button') {
+			const title: Locator = lightbox.locator('div:has(> button > i.ti-x)').filter({ has: page.getByText(file.name, { exact: true }) });
+			await title.getByRole('button').filter({ has: page.locator('i.ti-x') }).click();
+		} else if (method === 'blank') {
+			const size: ReturnType<Page['viewportSize']> = page.viewportSize();
+			if (size == null) throw new Error('Expected a fixed browser viewport');
+			// 首末附件分别使用没有上一张／下一张导航按钮的一侧空白。
+			const hasPrevious: boolean = await lightbox.getByRole('button').filter({ has: page.locator('i.ti-arrow-left') }).count() > 0;
+			await page.mouse.click(hasPrevious ? size.width - 20 : 20, Math.round(size.height / 2));
+		} else if (method === 'escape') {
+			await page.keyboard.press('Escape');
+		} else {
+			await page.goBack();
+		}
+		await expect(page).toHaveURL(originalUrl);
+		await expect(lightbox).toHaveCount(0);
+		await expect(viewport(page)).not.toHaveAttribute('inert', '');
+		await expectStableScroll(observation);
+	} finally {
+		await disposeObservation(observation);
+	}
 }
 
 /** 校验所有标准页面根没有自己的纵向滚动容器。 */
@@ -156,22 +311,71 @@ test('编辑页保留独立滚动位置和未保存输入', /** 多个缓存页�
 	await page.screenshot({ path: info.outputPath('editor-restored.png'), animations: 'disabled' });
 });
 
+/** 附件回访所覆盖的页面入口，复用各页面真实数据查询。 */
+type AttachmentPage = 'profile' | 'timeline' | 'channel';
+
+/** 仅枚举测试范围，不构造另一份业务路由配置。 */
+const attachmentPages: readonly AttachmentPage[] = ['profile', 'timeline', 'channel'];
+
+for (const location of attachmentPages) {
+	test(`${location} 图片与视频附件通过关闭按钮或空白退出后保持帖子位置`, /** 三类页面分别消费真实附件帖子，共同核查主宿主的同地址回访。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+		let channelId: string | undefined;
+		if (location === 'channel') {
+			const channel: Misskey.entities.Channel = await api(BASE_URL, 'channels/create', { i: account.token, name: 'Attachment scroll channel', description: '' });
+			await api(BASE_URL, 'channels/follow', { i: account.token, channelId: channel.id });
+			channelId = channel.id;
+		}
+		const note: Misskey.entities.Note = await createAttachmentNote(page, channelId);
+		const path: string = location === 'profile' ? `/@${account.username}` : location === 'timeline' ? '/' : `/channels/${channelId}`;
+		await page.goto(`${BASE_URL}${path}?ui=twitter`);
+		const card: Locator = page.locator('[data-twitter-route-outlet] article:visible').filter({ has: page.locator(`a[href="/notes/${note.id}"]`) }).first();
+		await expect(card).toBeVisible();
+		const files: Misskey.entities.DriveFile[] = note.files ?? [];
+		expect(files).toHaveLength(2);
+		for (const file of files) {
+			await expectAttachmentCloseStable(page, card, file, 'button');
+			await expectAttachmentCloseStable(page, card, file, 'blank');
+		}
+		if (location === 'profile') {
+			await expectAttachmentCloseStable(page, card, files[0], 'escape');
+			await expectAttachmentCloseStable(page, card, files[1], 'history');
+		}
+	});
+}
+
+test('移动视口重复打开附件后仍保持原帖子且不多退历史', /** 使用真实图片和现有关闭入口验证窄屏共享回访链。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	const note: Misskey.entities.Note = await createAttachmentNote(page);
+	await page.setViewportSize({ width: 390, height: 844 });
+	await openProfile(page);
+	const card: Locator = page.getByTestId('twitter-user-timeline-notes').locator(`[data-testid="twitter-note"][data-note-id="${note.id}"]:visible`).first();
+	const image: Misskey.entities.DriveFile | undefined = note.files?.find(/** 直接选择真实服务端实体，不复制附件协议。 */ (file: Misskey.entities.DriveFile): boolean => file.type.startsWith('image/'));
+	if (image == null) throw new Error('Expected an uploaded image');
+	await expectAttachmentCloseStable(page, card, image, 'button');
+	await expectAttachmentCloseStable(page, card, image, 'button');
+});
+
 test('模态框打开时背景不可滚动并在关闭后恢复交互', /** 不改动共享弹层实现，背景宿主仍可被滚动工具发现。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
 	await openProfile(page);
 	await scrollTo(page, 600);
-	await page.getByTestId('open-post-form').click();
-	await expect(page.getByTestId('post-form-text')).toBeVisible();
-	await expect(viewport(page)).toHaveAttribute('inert', '');
 	const saved: number = await scrollTop(page);
-	await page.mouse.move(40, 400);
-	await page.mouse.wheel(0, 600);
-	await page.keyboard.press('PageDown');
-	expect(await scrollTop(page)).toBe(saved);
-	await page.keyboard.press('Escape');
-	await expect(page.getByTestId('post-form-text')).toHaveCount(0);
-	await expect(viewport(page)).not.toHaveAttribute('inert', '');
-	await page.mouse.move(700, 600); await page.mouse.wheel(0, 400);
-	await expect.poll(/** 弹层关闭后恢复原生滚动。 */ async (): Promise<number> => scrollTop(page)).toBeGreaterThan(saved + 100);
+	const observation: JSHandle<ScrollObservation> = await observeScroll(page.getByTestId('twitter-user-timeline-notes').getByTestId('twitter-note').first());
+	try {
+		await page.getByTestId('open-post-form').click();
+		await expect(page.getByTestId('post-form-text')).toBeVisible();
+		await expect(viewport(page)).toHaveAttribute('inert', '');
+		await page.mouse.move(40, 400);
+		await page.mouse.wheel(0, 600);
+		await page.keyboard.press('PageDown');
+		expect(await scrollTop(page)).toBe(saved);
+		await page.keyboard.press('Escape');
+		await expect(page.getByTestId('post-form-text')).toHaveCount(0);
+		await expect(viewport(page)).not.toHaveAttribute('inert', '');
+		await expectStableScroll(observation);
+		await page.mouse.move(700, 600); await page.mouse.wheel(0, 400);
+		await expect.poll(/** 弹层关闭后恢复原生滚动。 */ async (): Promise<number> => scrollTop(page)).toBeGreaterThan(saved + 100);
+	} finally {
+		await disposeObservation(observation);
+	}
 });
 
 test('移动底栏独立于长内容且保留视口右缘滚动', /** 断点消费现有布局状态，不复制前端断点实现。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>, info: TestInfo): Promise<void> => {
@@ -205,20 +409,26 @@ test('异步回访恢复遇到用户滚动后不再强行拉回旧位置', /** �
 	} finally { gate.resolve(); }
 });
 
-/** 设置测试浏览器已有偏好，使用真实偏好模块，不生成第二套运行时配置。 */
+/** 更新浏览器已有偏好档案后重载，由实际启动链读取同一持久化协议。 */
 async function setViewPreference(page: Page, key: 'showTitlebar' | 'experimental.stackingRouterView', value: boolean): Promise<void> {
-	await page.evaluate(/** 调用现有客户端偏好 API，限定这两个已存在的 UI 选项。 */ async (input: { key: 'showTitlebar' | 'experimental.stackingRouterView'; value: boolean }): Promise<void> => {
-		const modulePath: string | undefined = performance.getEntriesByType('resource').map(/** 使用应用实际加载的模块 URL，避免 Vite 时间戳产生第二个单例。 */ (entry: PerformanceEntry): string => entry.name).find(/** 定位原偏好模块而不是自行创建状态。 */ (name: string): boolean => new URL(name).pathname === '/vite/src/preferences.ts');
-		if (modulePath == null) throw new Error('Preferences module was not loaded');
-		const module: typeof import('../../src/preferences.js') = await import(modulePath);
-		module.prefer.commit(input.key, input.value);
+	await page.evaluate(/** 只修改真实启动已持久化的两个 UI 偏好，不创建替代档案。 */ (input: { key: 'showTitlebar' | 'experimental.stackingRouterView'; value: boolean }): void => {
+		const stored: string | null = localStorage.getItem('preferences');
+		if (stored == null) throw new Error('Expected a persisted preferences profile');
+		const profile: PreferencesProfile = JSON.parse(stored) as PreferencesProfile;
+		const records: PreferencesProfile['preferences'][typeof input.key] = profile.preferences[input.key];
+		if (records == null || records.length === 0) throw new Error('Expected an existing preference record');
+		for (const record of records) record[1] = input.value;
+		profile.modifiedAt = Date.now();
+		localStorage.setItem('preferences', JSON.stringify(profile));
 	}, { key, value });
+	await page.reload();
 }
 
 test('时间线原生分页与新帖排队回顶在带标题栏时保持有效', /** 验证共享组件实际绑定的滚动坐标，而不是仅看条的位置。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
 	await page.goto(`${BASE_URL}/?ui=twitter`);
 	await expect(page.locator('[data-twitter-route-outlet]').getByTestId('twitter-note').first()).toBeVisible();
 	await setViewPreference(page, 'showTitlebar', true);
+	await expect(page.locator('[data-twitter-route-outlet]').getByTestId('twitter-note').first()).toBeVisible();
 	await expect.poll(/** 标题栏确实进入布局。 */ async (): Promise<number> => viewport(page).evaluate((node: HTMLElement): number => node.getBoundingClientRect().top)).toBeGreaterThan(0);
 	expect(await viewport(page).evaluate(/** 局部原点不受应用标题栏影响。 */ (node: HTMLElement): number => node.offsetTop)).toBe(0);
 	await expectSingleMainScroll(page);
@@ -227,8 +437,12 @@ test('时间线原生分页与新帖排队回顶在带标题栏时保持有效',
 	await expect(page.locator('[data-twitter-route-outlet]').getByTestId('twitter-note').filter({ hasText: 'queued while reading older notes' })).toHaveCount(0);
 	await expect(page.locator('button').filter({ has: page.locator('i.ti-circle-arrow-up') }).first()).toBeAttached();
 	await page.getByTestId('twitter-sidebar').getByRole('link', { name: 'Timeline', exact: true }).last().click();
-	await expect.poll(/** 主导航重选通过同一宿主回顶。 */ async (): Promise<number> => scrollTop(page)).toBeLessThan(2);
+	await expect(page).toHaveURL(`${BASE_URL}/`);
+	await expect.poll(/** 去除 UI 参数的同位置键导航仍通过主宿主回顶。 */ async (): Promise<number> => scrollTop(page)).toBeLessThan(2);
 	await expect(page.locator(`[data-twitter-route-outlet] [data-note-id="${created.createdNote.id}"]`)).toBeVisible();
+	await scrollTo(page, 900);
+	await page.getByTestId('twitter-sidebar').getByRole('link', { name: 'Timeline', exact: true }).last().click();
+	await expect.poll(/** 完整地址也相同的主动重选仍由 same 事件回顶。 */ async (): Promise<number> => scrollTop(page)).toBeLessThan(2);
 	// 滚动到底部触发真实分页，不能只移动一个装饰性的滚动条。
 	await viewport(page).evaluate(/** 原生滚动到已加载部分的底部。 */ (node: HTMLElement): void => { node.scrollTop = node.scrollHeight; });
 	await expect.poll(/** 列表条目来自下一页真实 API 响应。 */ async (): Promise<number> => page.locator('[data-twitter-route-outlet]').getByTestId('twitter-note').count()).toBeGreaterThan(20);
@@ -251,8 +465,14 @@ test('通知社区搜索和标签页共享主出口且不残留内部滚动', /*
 
 test('独立页面窗口保留自己的滚动边界且不改变主页面位置', /** 页面窗口是实际存量容器，不受主出口 CSS 或位置表接管。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
 	await openProfile(page);
+	await page.evaluate(/** 字体排版完成后再记录吸顶头的真实点击坐标。 */ async (): Promise<void> => { await document.fonts.ready; });
+	const header: Locator = page.getByTestId('twitter-profile').locator(':scope > header');
+	await header.click({ trial: true, button: 'right', position: { x: 220, y: 25 } });
 	await scrollTo(page, 500);
-	await page.getByTestId('twitter-profile').locator(':scope > header').click({ button: 'right', position: { x: 220, y: 25 } });
+	const headerBox: Awaited<ReturnType<Locator['boundingBox']>> = await header.boundingBox();
+	if (headerBox == null) throw new Error('Expected a visible profile header');
+	// 在当前吸顶头上右击，避免定位器为了整个 header 自动回滚主页面。
+	await page.mouse.click(headerBox.x + 220, headerBox.y + 25, { button: 'right' });
 	await page.getByRole('menuitem', { name: /Open in window/ }).click();
 	await expect(page.getByRole('button', { name: 'Edit profile', exact: true })).toHaveCount(2);
 	await page.getByRole('button', { name: 'Edit profile', exact: true }).last().click();
