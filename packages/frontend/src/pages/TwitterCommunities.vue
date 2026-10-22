@@ -8,6 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 作用：以标题／搜索、主标签、横向频道卡片和帖子流组织内容，管理与收藏使用独立窗口。
 数据链：channels.vue 持有唯一查询并调度请求 → 本组件只读呈现 → 交互事件返回页面所有者。
 布局依据：X 归档的首页成员社区横条；发现仅呈现全频道帖子，颜色与主列沿用 Nitter Token。
+主标签沿用 Nitter 等分空间关系，指示条随单元伸展并与时间线／搜索页保持相同内缩。
 -->
 
 <template>
@@ -293,7 +294,7 @@ function retryLibrary(): void { emit('retryLibrary'); }
 /** 窗口追加请求交回页面持有的所属频道查询，不由弹层重新取数。 */
 function loadMoreLibrary(): void { emit('loadMoreLibrary'); }
 
-/** 标签键盘巡游同步选择和焦点。 */
+/** 标签键盘巡游将同一目标提交给页面所有者并聚焦，避免同步读取尚未回传的 model。 */
 function onTabKeydown(event: KeyboardEvent): void {
 	const currentIndex: number = tabs.value.findIndex(/** 标签值来自同一导航定义。 */ (item: CommunityTabOption): boolean => item.value === tab.value);
 	let nextIndex: number | null = null;
@@ -303,8 +304,9 @@ function onTabKeydown(event: KeyboardEvent): void {
 	else if (event.key === 'End') nextIndex = tabs.value.length - 1;
 	if (nextIndex == null) return;
 	event.preventDefault();
-	tab.value = tabs.value[nextIndex].value;
-	tabList.value?.querySelector<HTMLButtonElement>(`#twitter-communities-tab-${tab.value}`)?.focus();
+	const nextTab: TwitterCommunitiesTab = tabs.value[nextIndex].value;
+	tab.value = nextTab;
+	tabList.value?.querySelector<HTMLButtonElement>(`#twitter-communities-tab-${nextTab}`)?.focus();
 }
 
 onDeactivated(closeLibrary);
@@ -386,7 +388,7 @@ onBeforeUnmount(closeLibrary);
 		content: '';
 		position: absolute;
 		bottom: 0;
-		width: 56px; /* X 参照的短下划线，宽度不随半列拉伸。 */
+		inset-inline: var(--twitter-space-3);
 		height: 4px;
 		border-radius: var(--twitter-radius-pill);
 		background: var(--twitter-accent);
