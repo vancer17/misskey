@@ -5,13 +5,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <!--
 文件领域：Twitter 用户主页展示。
-作用：呈现个人资料与时间线，身份区从既有账户派生。
+作用：在加载、错误和成功期间保留返回头与页壳，呈现个人资料与时间线。
 数据链：输入资料供页面与业务判断使用；本人身份引用单向消费既有账户，不复制业务实体。
 -->
 
 <template>
-<div v-if="user && displayUser" data-testid="twitter-profile" :class="[$style.root, { [$style.mobile]: isMobile }]" class="_pageScrollable">
-	<header :class="$style.header">
+<div
+	:data-testid="user && displayUser ? 'twitter-profile' : 'twitter-profile-page'"
+	:class="[$style.root, { [$style.mobile]: isMobile }]"
+	:aria-busy="user == null && error == null"
+	class="_pageScrollable"
+>
+	<header data-testid="twitter-profile-header" :class="$style.header">
 		<button
 			class="_button"
 			:class="$style.back"
@@ -23,146 +28,149 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</button>
 		<div :class="$style.headerMeta">
 			<div :class="$style.headerName">
-				<MkUserName :user="displayUser" :nowrap="true"/>
+				<MkUserName v-if="displayUser" :user="displayUser" :nowrap="true"/>
+				<span v-else>{{ i18n.ts.user }}</span>
 			</div>
-			<div :class="$style.headerCount" data-testid="twitter-profile-note-count">{{ number(user.notesCount) }} {{ i18n.ts.notes }}</div>
+			<div v-if="user" :class="$style.headerCount" data-testid="twitter-profile-note-count">{{ number(user.notesCount) }} {{ i18n.ts.notes }}</div>
 		</div>
 	</header>
 
-	<div
-		:class="$style.banner"
-		:style="bannerStyle"
-		role="presentation"
-	></div>
+	<template v-if="user && displayUser">
+		<div
+			:class="$style.banner"
+			:style="bannerStyle"
+			role="presentation"
+		></div>
 
-	<div :class="$style.identity">
-		<div :class="$style.identityTop">
-			<TwitterAvatar decorationContext="profile" :class="$style.avatar" :user="displayUser" indicator/>
-			<div :class="$style.actions">
-				<button
-					class="_button"
-					:class="$style.menuButton"
-					type="button"
-					:aria-label="i18n.ts.more"
-					@click="showMenu"
-				>
-					<i class="ti ti-dots" aria-hidden="true"></i>
-				</button>
-				<button
-					v-if="$i?.id === user.id"
-					class="_button"
-					:class="$style.editButton"
-					type="button"
-					@click="router.push('/settings/profile')"
-				>
-					{{ i18n.ts.editProfile }}
-				</button>
-				<MkFollowButton
-					v-else
-					class="_button"
-					:class="$style.followButton"
-					:user="user"
-					variant="twitter"
-					full
-				/>
+		<div :class="$style.identity">
+			<div :class="$style.identityTop">
+				<TwitterAvatar decorationContext="profile" :class="$style.avatar" :user="displayUser" indicator/>
+				<div :class="$style.actions">
+					<button
+						class="_button"
+						:class="$style.menuButton"
+						type="button"
+						:aria-label="i18n.ts.more"
+						@click="showMenu"
+					>
+						<i class="ti ti-dots" aria-hidden="true"></i>
+					</button>
+					<button
+						v-if="$i?.id === user.id"
+						class="_button"
+						:class="$style.editButton"
+						type="button"
+						@click="router.push('/settings/profile')"
+					>
+						{{ i18n.ts.editProfile }}
+					</button>
+					<MkFollowButton
+						v-else
+						class="_button"
+						:class="$style.followButton"
+						:user="user"
+						variant="twitter"
+						full
+					/>
+				</div>
 			</div>
-		</div>
 
-		<div :class="$style.identityMain">
-			<div :class="$style.nameRow">
-				<h1 :class="$style.name"><MkUserName :user="displayUser" :nowrap="false"/></h1>
-				<span v-if="user.isLocked" :class="$style.badgeIcon" :aria-label="i18n.ts.private">
-					<i class="ti ti-lock" aria-hidden="true"></i>
+			<div :class="$style.identityMain">
+				<div :class="$style.nameRow">
+					<h1 :class="$style.name"><MkUserName :user="displayUser" :nowrap="false"/></h1>
+					<span v-if="user.isLocked" :class="$style.badgeIcon" :aria-label="i18n.ts.private">
+						<i class="ti ti-lock" aria-hidden="true"></i>
+					</span>
+					<span v-if="user.isBot" :class="$style.badgeIcon" :aria-label="i18n.ts.bot">
+						<i class="ti ti-robot" aria-hidden="true"></i>
+					</span>
+				</div>
+				<div :class="$style.acct"><MkAcct :user="displayUser" :detail="true"/></div>
+				<span v-if="$i && $i.id !== user.id && user.isFollowed" :class="$style.followed">
+					{{ i18n.ts.followsYou }}
 				</span>
-				<span v-if="user.isBot" :class="$style.badgeIcon" :aria-label="i18n.ts.bot">
-					<i class="ti ti-robot" aria-hidden="true"></i>
-				</span>
-			</div>
-			<div :class="$style.acct"><MkAcct :user="displayUser" :detail="true"/></div>
-			<span v-if="$i && $i.id !== user.id && user.isFollowed" :class="$style.followed">
-				{{ i18n.ts.followsYou }}
-			</span>
 
-			<div :class="$style.bio">
-				<Mfm
-					v-if="user.description"
-					:text="user.description"
-					:isNote="false"
-					:author="user"
-					class="_selectable"
-				/>
-				<p v-else :class="$style.emptyBio">{{ i18n.ts.noAccountDescription }}</p>
-			</div>
+				<div :class="$style.bio">
+					<Mfm
+						v-if="user.description"
+						:text="user.description"
+						:isNote="false"
+						:author="user"
+						class="_selectable"
+					/>
+					<p v-else :class="$style.emptyBio">{{ i18n.ts.noAccountDescription }}</p>
+				</div>
 
 				<div :class="$style.fields">
-				<div v-if="user.location" :class="$style.field">
-					<i class="ti ti-map-pin" aria-hidden="true"></i>
-					<span>{{ user.location }}</span>
-				</div>
-				<div v-if="user.birthday" :class="$style.field">
-					<i class="ti ti-cake" aria-hidden="true"></i>
-					<span>{{ birthday }}</span>
-				</div>
-				<div :class="$style.field">
-					<i class="ti ti-calendar" aria-hidden="true"></i>
-					<span>{{ dateString(user.createdAt) }}</span>
-				</div>
-				<div v-for="(field, index) in user.fields" :key="index" :class="$style.field">
-					<i class="ti ti-link" aria-hidden="true"></i>
-					<div :class="$style.fieldValue">
-						<Mfm :text="`${field.name}: ${field.value}`" :author="user" :plain="true" :colored="false"/>
-						<i
-							v-if="user.verifiedLinks.includes(field.value)"
-							v-tooltip:dialog="i18n.ts.verifiedLink"
-							:class="[$style.verified, 'ti ti-circle-check']"
-							aria-hidden="true"
-						></i>
+					<div v-if="user.location" :class="$style.field">
+						<i class="ti ti-map-pin" aria-hidden="true"></i>
+						<span>{{ user.location }}</span>
+					</div>
+					<div v-if="user.birthday" :class="$style.field">
+						<i class="ti ti-cake" aria-hidden="true"></i>
+						<span>{{ birthday }}</span>
+					</div>
+					<div :class="$style.field">
+						<i class="ti ti-calendar" aria-hidden="true"></i>
+						<span>{{ dateString(user.createdAt) }}</span>
+					</div>
+					<div v-for="(field, index) in user.fields" :key="index" :class="$style.field">
+						<i class="ti ti-link" aria-hidden="true"></i>
+						<div :class="$style.fieldValue">
+							<Mfm :text="`${field.name}: ${field.value}`" :author="user" :plain="true" :colored="false"/>
+							<i
+								v-if="user.verifiedLinks.includes(field.value)"
+								v-tooltip:dialog="i18n.ts.verifiedLink"
+								:class="[$style.verified, 'ti ti-circle-check']"
+								aria-hidden="true"
+							></i>
+						</div>
 					</div>
 				</div>
-			</div>
 
-			<div v-if="user.roles.length > 0" :class="$style.roles">
-				<MkA
-					v-for="role in user.roles"
-					:key="role.id"
-					:class="$style.role"
-					:to="`/roles/${role.id}`"
-					:style="{ '--roleColor': role.color ?? 'transparent' }"
-				>
-					<img v-if="role.iconUrl" :class="$style.roleIcon" :src="role.iconUrl" alt="">
-					<span>{{ role.name }}</span>
-				</MkA>
-			</div>
+				<div v-if="user.roles.length > 0" :class="$style.roles">
+					<MkA
+						v-for="role in user.roles"
+						:key="role.id"
+						:class="$style.role"
+						:to="`/roles/${role.id}`"
+						:style="{ '--roleColor': role.color ?? 'transparent' }"
+					>
+						<img v-if="role.iconUrl" :class="$style.roleIcon" :src="role.iconUrl" alt="">
+						<span>{{ role.name }}</span>
+					</MkA>
+				</div>
 
 				<div :class="$style.stats">
-				<MkA :to="userPage(user, 'notes')">
-					<b>{{ number(user.notesCount) }}</b>
-					<span>{{ i18n.ts.notes }}</span>
-				</MkA>
-				<MkA v-if="isFollowingVisibleForMe(user)" :to="userPage(user, 'following')">
-					<b>{{ number(user.followingCount) }}</b>
-					<span>{{ i18n.ts.following }}</span>
-				</MkA>
-				<MkA v-if="isFollowersVisibleForMe(user)" :to="userPage(user, 'followers')">
-					<b>{{ number(user.followersCount) }}</b>
-					<span>{{ i18n.ts.followers }}</span>
-				</MkA>
+					<MkA :to="userPage(user, 'notes')">
+						<b>{{ number(user.notesCount) }}</b>
+						<span>{{ i18n.ts.notes }}</span>
+					</MkA>
+					<MkA v-if="isFollowingVisibleForMe(user)" :to="userPage(user, 'following')">
+						<b>{{ number(user.followingCount) }}</b>
+						<span>{{ i18n.ts.following }}</span>
+					</MkA>
+					<MkA v-if="isFollowersVisibleForMe(user)" :to="userPage(user, 'followers')">
+						<b>{{ number(user.followersCount) }}</b>
+						<span>{{ i18n.ts.followers }}</span>
+					</MkA>
+				</div>
 			</div>
 		</div>
-	</div>
 
-	<div :class="$style.notices">
-		<MkAccountMoved v-if="user.movedTo" :movedTo="user.movedTo"/>
-		<MkRemoteCaution v-if="user.host != null" :href="user.url ?? user.uri!"/>
-		<MkInfo v-if="user.host == null && user.username.includes('.')">{{ i18n.ts.isSystemAccount }}</MkInfo>
-		<MkInfo v-if="user.isSuspended">{{ i18n.ts.userSuspended }}</MkInfo>
-		<MkInfo v-if="user.isSilenced">{{ i18n.ts.userSilenced }}</MkInfo>
-	</div>
+		<div :class="$style.notices">
+			<MkAccountMoved v-if="user.movedTo" :movedTo="user.movedTo"/>
+			<MkRemoteCaution v-if="user.host != null" :href="user.url ?? user.uri!"/>
+			<MkInfo v-if="user.host == null && user.username.includes('.')">{{ i18n.ts.isSystemAccount }}</MkInfo>
+			<MkInfo v-if="user.isSuspended">{{ i18n.ts.userSuspended }}</MkInfo>
+			<MkInfo v-if="user.isSilenced">{{ i18n.ts.userSilenced }}</MkInfo>
+		</div>
 
-	<TwitterUserTimeline :key="user.id" :user="user" :page="page"/>
+		<TwitterUserTimeline :key="user.id" :user="user" :page="page"/>
+	</template>
+	<TwitterPageState v-else-if="error" :type="errorStateType" @retry="retry"/>
+	<TwitterPageSkeleton v-else variant="profile"/>
 </div>
-<TwitterPageState v-else-if="error" :type="errorStateType" @retry="emit('retry')"/>
-<TwitterPageSkeleton v-else variant="profile"/>
 </template>
 
 <script lang="ts" setup>
@@ -226,14 +234,21 @@ const birthday = computed(() => {
 	return props.user.birthday.replaceAll('-', '/');
 });
 
-function goBack() {
+/** 返回上一条历史记录；资料加载和错误期间继续提供同一导航出口。 */
+function goBack(): void {
 	window.history.back();
 }
 
-function showMenu(ev: PointerEvent) {
+/** 将失败重试意图交回唯一的用户资料加载所有者。 */
+function retry(): void {
+	emit('retry');
+}
+
+/** 复用既有用户菜单动作，展示层不复制资料业务状态。 */
+function showMenu(ev: PointerEvent): void {
 	if (props.user == null) return;
-	const { menu, cleanup } = getUserMenu(props.user, router);
-	os.popupMenu(menu, ev.currentTarget ?? ev.target).finally(cleanup);
+	const menu: ReturnType<typeof getUserMenu> = getUserMenu(props.user, router);
+	os.popupMenu(menu.menu, ev.currentTarget ?? ev.target).finally(menu.cleanup);
 }
 </script>
 
