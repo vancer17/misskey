@@ -1,6 +1,10 @@
 /*
  * SPDX-FileCopyrightText: syuilo and misskey-project
  * SPDX-License-Identifier: AGPL-3.0-only
+ *
+ * 文件领域：前端集中式路由定义。
+ * 作用：将既有页面入口与路由权限绑定；详情主路径使用可共享的代码 loader 以供意图预加载复用。
+ * 数据链：序列化地址 → 原路由解析与异步页面；此处不请求或缓存业务实体。
  */
 
 import { defineAsyncComponent } from 'vue';
@@ -10,6 +14,7 @@ import { $i, iAmModerator } from '@/i.js';
 import MkLoading from '@/pages/_loading_.vue';
 import MkError from '@/pages/_error_.vue';
 import PageTimeline from '@/pages/timeline.vue';
+import { loadChannelPage, loadNotificationsPage, loadUserPage } from '@/ui/twitter/routing/index.js';
 
 export const page = (loader: AsyncComponentLoader) => defineAsyncComponent({
 	loader: loader,
@@ -41,7 +46,7 @@ export const ROUTE_DEF = [{
 	name: 'user',
 	path: '/@:acct/:page?',
 	viewKey: 'user',
-	component: page(() => import('@/pages/user/index.vue')),
+	component: page(loadUserPage),
 }, {
 	name: 'note',
 	path: '/notes/:noteId/:initialTab?',
@@ -350,7 +355,7 @@ export const ROUTE_DEF = [{
 	loginRequired: true,
 }, {
 	path: '/channels/:channelId',
-	component: page(() => import('@/pages/channel.vue')),
+	component: page(loadChannelPage),
 }, {
 	path: '/channels',
 	component: page(() => import('@/pages/channels.vue')),
@@ -513,7 +518,7 @@ export const ROUTE_DEF = [{
 	}],
 }, {
 	path: '/my/notifications',
-	component: page(() => import('@/pages/notifications.vue')),
+	component: page(loadNotificationsPage),
 	loginRequired: true,
 }, {
 	path: '/my/favorites',
