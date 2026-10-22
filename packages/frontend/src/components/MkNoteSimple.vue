@@ -38,7 +38,7 @@ import MkSubNoteContent from '@/components/MkSubNoteContent.vue';
 import MkCwButton from '@/components/MkCwButton.vue';
 import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const props = defineProps<{
 	note: Misskey.entities.Note | null;

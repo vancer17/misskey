@@ -45,7 +45,7 @@ import MkModal from '@/components/MkModal.vue';
 import MkButton from '@/components/MkButton.vue';
 import { i18n } from '@/i18n';
 import { deviceKind } from '@/utility/device-kind.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 /** 只读窗口配置；内容高度仅用于桌面对话框，抽屉保持原有尺寸规则。 */
 const props = withDefaults(defineProps<Readonly<{

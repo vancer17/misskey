@@ -16,7 +16,7 @@ import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import { pleaseLogin } from '@/utility/please-login.js';
 import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const isTwitterUi = useIsTwitterUi();
 

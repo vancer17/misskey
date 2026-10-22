@@ -82,7 +82,8 @@ import { updateCurrentAccountPartial } from '@/accounts.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import type { PageMetadata } from '@/page.js';
-import { TwitterAvatar, useIsTwitterUi, TwitterSettingsShell } from '@/ui/twitter/index.js';
+import { TwitterAvatar, TwitterSettingsShell } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 /** 账号与管理策略沿用现有入口的权威来源，后端仍执行每次操作的权限校验。 */
 const $i: ReturnType<typeof ensureSignin> = ensureSignin();

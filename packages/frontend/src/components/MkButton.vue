@@ -24,7 +24,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { nextTick, computed, onMounted, useTemplateRef } from 'vue';
 import MkA from '@/components/global/MkA.vue';
 import type { MkABehavior } from '@/components/global/MkA.vue';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const props = defineProps<{
 	type?: 'button' | 'submit' | 'reset' | 'a' | 'routerLink';

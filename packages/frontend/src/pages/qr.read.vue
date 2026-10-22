@@ -112,7 +112,8 @@ import MkNote from '@/components/MkNote.vue';
 import MkTab from '@/components/MkTab.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkQrReadRawViewer from '@/pages/qr.read.raw-viewer.vue';
-import { TwitterUserResult, useIsTwitterUi } from '@/ui/twitter/index.js';
+import { TwitterUserResult } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 import { getQrCameraErrorCode, getQrCameraFlashAvailable, listQrCameras, openQrCamera, setQrCameraFlash, stopQrCamera, subscribeQrCameraChanges, subscribeQrCameraEnded } from '@/utility/qr-camera.js';
 
 /** 单个扫码视图的临时摄像头状态，错误原因直接使用设备适配层的权威分类。 */

@@ -213,7 +213,8 @@ import MkInfo from '@/components/MkInfo.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import { genId } from '@/utility/id.js';
 import { DI } from '@/di.js';
-import { TwitterAvatar, useTwitterLayout } from '@/ui/twitter/index.js';
+import { TwitterAvatar } from '@/ui/twitter/index.js';
+import { useTwitterLayout } from '@/ui/twitter/context/index.js';
 
 const $i = ensureSignin();
 

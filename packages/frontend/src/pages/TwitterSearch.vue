@@ -135,7 +135,7 @@ import type { Endpoints } from 'misskey-js';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
 import { instance } from '@/instance.js';
 import TwitterSearchField from '@/ui/twitter/SearchField.vue';
-import { useTwitterLayout } from '@/ui/twitter/index.js';
+import { useTwitterLayout } from '@/ui/twitter/context/index.js';
 import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
 import { apLookup } from '@/utility/lookup.js';
 import { i18n } from '@/i18n.js';

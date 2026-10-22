@@ -58,7 +58,7 @@ import { focusTrap } from '@/utility/focus-trap.js';
 import { focusParent } from '@/utility/focus.js';
 import { prefer } from '@/preferences.js';
 import { DI } from '@/di.js';
-import { useIsTwitterUi, TWITTER_MOTION_DURATIONS } from '@/ui/twitter/index.js';
+import { useIsTwitterUi, TWITTER_MOTION_DURATIONS } from '@/ui/twitter/context/index.js';
 
 function getFixedContainer(el: Element | null): Element | null {
 	if (el == null || el.tagName === 'BODY') return null;

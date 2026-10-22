@@ -30,7 +30,8 @@ import { definePage } from '@/page.js';
 import type { PageMetadata } from '@/page.js';
 import { fetchInstance, instance } from '@/instance.js';
 import { i18n } from '@/i18n.js';
-import { TwitterWelcome, useIsTwitterUi } from '@/ui/twitter/index.js';
+import { TwitterWelcome } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const isTwitterUi: ComputedRef<boolean> = useIsTwitterUi();
 const loading: Ref<boolean> = ref(true);
