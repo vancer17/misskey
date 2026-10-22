@@ -1,6 +1,10 @@
 <!--
 SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
+
+文件领域：通用叠层路由出口。
+作用：保留既有叠层、返回和缓存行为，仅允许宿主定制等待展示与页面底色。
+数据链：路由解析结果 → 叠层页面；加载展示上下文继续传递给后代出口。
 -->
 
 <template>
@@ -31,7 +35,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<component :is="tab.component" v-bind="Object.fromEntries(tab.props)"/>
 
 					<template #fallback>
-						<MkLoading/>
+						<slot name="fallback">
+							<component :is="routeFallback" v-if="routeFallback"/>
+							<MkLoading v-else/>
+						</slot>
 					</template>
 				</Suspense>
 			</div>
@@ -41,7 +48,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { inject, provide, shallowRef } from 'vue';
+import { inject, provide, shallowRef, useSlots } from 'vue';
+import type { Slot, Slots } from 'vue';
+import { routerViewFallbackKey } from './router-view-fallback.js';
 import type { Router } from '@/router.js';
 import { prefer } from '@/preferences.js';
 import MkLoadingPage from '@/pages/_loading_.vue';
@@ -51,6 +60,12 @@ import { deepEqual } from '@/utility/deep-equal.js';
 const props = defineProps<{
 	router?: Router;
 }>();
+
+/** 叠层根出口的插槽对各卡片共用，仅提供加载视觉。 */
+const slots: Slots = useSlots();
+/** 后代嵌套出口继承同一宿主的展示函数。 */
+const routeFallback: Slot | undefined = slots.fallback ?? inject(routerViewFallbackKey, undefined);
+provide(routerViewFallbackKey, routeFallback);
 
 const router = props.router ?? inject(DI.router);
 
@@ -211,7 +226,7 @@ router.useListener('replace', ({ fullPath }) => {
 	position: relative;
 	width: 100%;
 	height: 100%;
-	background: var(--MI_THEME-bg);
+	background: var(--MI-router-view-background, var(--MI_THEME-bg));
 }
 
 .tabMenu {

@@ -43,7 +43,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<template v-else>
 			<ul :class="$style.list">
 				<li v-for="channel in state.items" :key="channel.id">
-					<MkA :to="`/channels/${channel.id}`" :class="$style.channel" data-testid="twitter-community-library-row" data-community-library-item @click="navigate">
+					<MkA
+						:to="`/channels/${channel.id}`"
+						:class="$style.channel"
+						data-testid="twitter-community-library-row"
+						data-community-library-item
+						@click="navigate"
+						@mouseenter="preloadTwitterChannelPage"
+						@focus="preloadTwitterChannelPage"
+						@pointerdown="preloadTwitterChannelPage"
+					>
 						<img v-if="channel.bannerUrl" :class="$style.banner" :src="channel.bannerUrl" alt="" loading="lazy">
 						<span v-else :class="$style.banner" aria-hidden="true"><i class="ti ti-device-tv"></i></span>
 						<span :class="$style.name">{{ channel.name }}</span>
@@ -70,6 +79,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed, nextTick, useTemplateRef, watch } from 'vue';
 import type { ComputedRef, ShallowRef } from 'vue';
 import type { TwitterCommunityLibrary, TwitterCommunityLibraryView } from '../domain/index.js';
+import { preloadTwitterChannelPage } from '../routing/index.js';
 import { useChannelLibraryFocus } from '../composables/use-channel-library-focus.js';
 import TwitterPageState from './TwitterPageState.vue';
 import MkA from '@/components/global/MkA.vue';
