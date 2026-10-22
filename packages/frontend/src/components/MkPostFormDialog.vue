@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：共享发帖弹窗展示宿主。
+作用：为 Twitter 发帖表单提供弹窗尺寸、可滚动高度与正文最小高度，复用原有关闭、发布及草稿生命周期。
+数据链：界面类型与宿主样式 → 共享发帖表单 → 原有发布和关闭事件。
+-->
+
 <template>
 <MkModal
 	ref="modal"
@@ -89,8 +95,13 @@ function onModalClosed() {
 }
 
 .twitterForm {
+	--twitter-composer-min-height: var(--twitter-composer-dialog-min-height, 120px);
+
 	max-width: 600px;
-	overflow: hidden;
+	max-block-size: var(--twitter-composer-dialog-max-height);
+	overflow-x: hidden;
+	overflow-y: auto;
+	overscroll-behavior-y: contain;
 	border-radius: var(--twitter-radius-large, 16px);
 	background: var(--twitter-panel, var(--MI_THEME-panel));
 	box-shadow: 0 16px 48px color-mix(in srgb, var(--MI_THEME-shadow) 45%, transparent);
