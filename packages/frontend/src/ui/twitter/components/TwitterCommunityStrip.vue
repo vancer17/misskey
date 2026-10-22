@@ -34,6 +34,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:to="`/channels/${channel.id}`"
 				:title="channel.name"
 				data-testid="twitter-community-card"
+				@mouseenter="preloadTwitterChannelPage"
+				@focus="preloadTwitterChannelPage"
+				@pointerdown="preloadTwitterChannelPage"
 			>
 				<div :class="$style.banner">
 					<img v-if="channel.bannerUrl" :class="$style.image" :src="channel.bannerUrl" alt="" loading="lazy" decoding="async" draggable="false">
@@ -82,6 +85,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { onBeforeUnmount, ref, watch } from 'vue';
 import type { Ref } from 'vue';
 import type * as Misskey from 'misskey-js';
+import { preloadTwitterChannelPage } from '../routing/index.js';
 import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
 
