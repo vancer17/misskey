@@ -46,7 +46,7 @@ import { i18n } from '@/i18n.js';
 import { instance } from '@/instance.js';
 import { miLocalStorage } from '@/local-storage.js';
 import * as os from '@/os.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const emit = defineEmits<{
 	(ev: 'closed'): void;

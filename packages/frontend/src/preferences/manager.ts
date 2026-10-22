@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * 文件领域：偏好设置 · 状态管理。
+ * 作用：维护偏好档案、作用域与同步状态；同步交互在执行时加载界面能力。
+ */
+
 import { customRef, ref, watch, onScopeDispose } from 'vue';
 import { EventEmitter } from 'eventemitter3';
 import { host, version } from '@@/js/config.js';
@@ -12,7 +17,6 @@ import type { MenuItem } from '@/types/menu.js';
 import { genId } from '@/utility/id.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { i18n } from '@/i18n.js';
-import * as os from '@/os.js';
 import { deepEqual } from '@/utility/deep-equal.js';
 import { deepClone } from '@/utility/clone.js';
 
@@ -457,19 +461,22 @@ export class PreferencesManager extends EventEmitter<PreferencesManagerEvents> {
 		return this.getMatchedRecordOf(key)[2].sync ?? false;
 	}
 
+	/** 为指定偏好启用云同步，在执行同步时加载冲突选择与进度提示。 */
 	public async enableSync<K extends keyof PREF>(key: K): Promise<{ enabled: boolean; } | null> {
 		if (this.isSyncEnabled(key)) return Promise.resolve(null);
 
-		// undefined ... cancel
+		const os: typeof import('@/os.js') = await import('@/os.js');
+
+		/** 由用户选择冲突值；取消时返回 undefined，保留原同步状态。 */
 		async function resolveConflict(local: ValueOf<K>, remote: ValueOf<K>): Promise<ValueOf<K> | undefined> {
-			const merge = (PREF_DEF as PreferencesDefinition)[key].mergeStrategy;
+			const merge: ((local: ValueOf<K>, remote: ValueOf<K>) => ValueOf<K>) | undefined = (PREF_DEF as PreferencesDefinition)[key].mergeStrategy;
 			let mergedValue: ValueOf<K> | undefined = undefined; // null と区別したいため
 			try {
 				if (merge != null) mergedValue = merge(local, remote);
 			} catch (_) {
 				// nop
 			}
-			const { canceled, result: choice } = await os.select({
+			const { canceled, result: choice }: Awaited<ReturnType<typeof os.select<'merge' | 'remote' | 'local' | null>>> = await os.select({
 				title: i18n.ts.preferenceSyncConflictTitle,
 				text: i18n.ts.preferenceSyncConflictText,
 				items: [...(mergedValue !== undefined ? [{
@@ -500,20 +507,20 @@ export class PreferencesManager extends EventEmitter<PreferencesManagerEvents> {
 			}
 		}
 
-		const record = this.getMatchedRecordOf(key);
+		const record: PrefRecord<K> = this.getMatchedRecordOf(key);
 
-		let newValue = record[1];
+		let newValue: ValueOf<K> = record[1];
 
-		const existing = await this.io.cloudGet({ key, scope: record[0] });
+		const existing: { value: ValueOf<K>; } | null = await this.io.cloudGet({ key, scope: record[0] });
 		if (existing != null && !deepEqual(record[1], existing.value)) {
-			const resolvedValue = await resolveConflict(record[1], existing.value);
+			const resolvedValue: ValueOf<K> | undefined = await resolveConflict(record[1], existing.value);
 			if (resolvedValue === undefined) return { enabled: false }; // canceled
 			newValue = resolvedValue;
 		}
 
 		this.commit(key, newValue);
 
-		const done = os.waiting();
+		const done: ReturnType<typeof os.waiting> = os.waiting();
 
 		try {
 			await this.io.cloudSet({ key, scope: record[0], value: newValue });
