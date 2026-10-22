@@ -14,7 +14,7 @@ import type { PollEditorModelValue } from '@/components/MkPollEditor.vue';
 import { concat } from '@/utility/array.js';
 import { i18n } from '@/i18n.js';
 import MkButton from '@/components/MkButton.vue';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const props = defineProps<{
 	modelValue: boolean;

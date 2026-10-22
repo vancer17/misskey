@@ -34,7 +34,7 @@ import { ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { PollEditorModelValue } from '@/components/MkPollEditor.vue';
 import MkCwButton from '@/components/MkCwButton.vue';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const showContent = ref(false);
 
