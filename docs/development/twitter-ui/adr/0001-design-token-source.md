@@ -42,6 +42,20 @@
 - **间距阶梯**：`--twitter-space-1..4` 与 `--twitter-space-6`（4/8/12/16/32px；24px 暂无消费者，出现真实消费点后再入梯，规范第 9 条），仅迁移单值与全档位复合声明；nitter 实测例外值（5/6/10/14px 等）保留字面量并注明来源，属地面真值而非债务；calc / safe-area / 百分比构造不迁移。
 - **动效时长双投影**：JS 侧唯一数值权威为 `domain/motion.ts` 的 `TWITTER_MOTION_DURATIONS`（供 Vue `<Transition :duration>` 消费），CSS 侧经 `tokens.scss` 的 `--twitter-duration-*` 投影；两者为跨介质单权威对，修改时长必须同步两处，禁止组件内出现第三份时长字面量。X 录屏校准到位后仅需各改一处数值。
 
+## 发帖正文编辑区补充（2026-10-22）
+
+Nitter 是只读查看器，没有发帖编辑器。本项采用本地 X 采集 `tmp/post_for_x/abs.twimg.com/responsive-web/client-web/` 中的正文实现作为补充来源：
+
+- `sharedbundle.Composebundle.RichTextCompose.18fd968422ec5550a.js` 的 `_fieldTextInputProps`、`_calcNumberOfLines` 与 `textInputStyle`：正文横向 padding 为 0，相关活动弹窗使用四行最小内容区，内联及附件等状态另有一行分支。
+- `modules.common.906782089d4ff5aaa.js` 的 `richContainer`、`rich` 与 `selection` 路径：富文本外层使用 space12 留白，内部不重复加 padding，正文容器无边框。
+- `main.2c1b49369d01ef5da.js` 的基准主题：headline1 字号 20、行高 24；数值随主题比例换算。`ondemand.draft-js.952df37d81743208a.js` 的可编辑节点显式禁用自身 outline。
+
+项目保留原生 `textarea`，将上下 12px 留白与 20px / 24px 排版集中为 composer Token。弹窗 120px 是四行内容区 96px 加上下留白 24px 后的 border-box 映射值，不是 X 编辑器整体尺寸的实测值；不逐层叠加 Draft 块内距，也不复制其多编辑器和附件高度分支。内联沿用 52px 最小高度，窄容器沿用现有字号及布局规则。
+
+频道标识改为正文列内的信息行，保留原有头像尺寸和列间距。底部焦点线属于本项目的可见焦点方案，不能当作 X 已验证的焦点样式。正文计数进入正常文档流。基础表单的输入、发布、上传、权限和草稿规则不变。
+
+本节的底部焦点线方案已由 [ADR-0020](./0020-composer-focus-policy-and-toolbar.md) 替代；其余排版、控件映射与频道展示决策继续适用。
+
 ## 后果
 
 - Twitter UI 的表面观感不再跟随用户 Misskey 主题（仅明暗跟随），这是 `data-ui='twitter'` 独立样式的应有语义；
