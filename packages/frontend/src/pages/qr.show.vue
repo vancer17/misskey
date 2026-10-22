@@ -57,7 +57,7 @@ import { userPage, userName } from '@/filters/user.js';
 import misskeysvg from '/client-assets/misskey.svg';
 import { getStaticImageUrl } from '@/utility/media-proxy.js';
 import { i18n } from '@/i18n.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 import * as os from '@/os.js';
 
 const $i: ReturnType<typeof ensureSignin> = ensureSignin();
