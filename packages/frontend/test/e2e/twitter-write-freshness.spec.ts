@@ -47,20 +47,36 @@ async function open(page: Page, path: string): Promise<void> {
 	await expect(page.getByTestId('twitter-sidebar')).toBeVisible();
 }
 
-/** 唯一发帖表单内的真实提交，返回服务端回执而非自己构造的帖子。 */
-async function submit(page: Page, text: string): Promise<Misskey.entities.Note> {
-	await page.getByTestId('post-form-text').fill(text);
+/** 区分常驻内联编辑器与发布后关闭的弹窗，避免选择器跨表单匹配。 */
+type ComposerSurface = 'dialog' | 'inline';
+
+/** 按明确的表单上下文定位既有控件，不将另一编辑器作为候选项。 */
+function composerControl(page: Page, surface: ComposerSurface, testId: 'post-form-text' | 'post-form-submit'): Locator {
+	return surface === 'inline'
+		? page.getByTestId('twitter-reply-composer').getByTestId(testId)
+		: page.locator(`[data-testid="${testId}"]:not([data-testid="twitter-reply-composer"] *)`);
+}
+
+/** 在指定表单真实提交，分别验证内联清空与弹窗关闭这两种成功状态。 */
+async function submit(page: Page, text: string, surface: ComposerSurface): Promise<Misskey.entities.Note> {
+	const input: Locator = composerControl(page, surface, 'post-form-text');
+	await input.fill(text);
 	const receipt: Promise<Response> = page.waitForResponse(/** 真实发帖完成点。 */ (response: Response): boolean => response.url().endsWith('/api/notes/create') && response.status() === 200);
-	await page.getByTestId('post-form-submit').click();
+	await composerControl(page, surface, 'post-form-submit').click();
 	const created: Misskey.Endpoints['notes/create']['res'] = await (await receipt).json();
-	await expect(page.getByTestId('post-form-text')).toBeHidden();
+	if (surface === 'inline') {
+		await expect(input).toBeVisible();
+		await expect(input).toHaveValue('');
+	} else {
+		await expect(input).toBeHidden();
+	}
 	return created.createdNote;
 }
 
 /** 桌面常驻侧栏入口，不能通过 API 发帖替代。 */
 async function publish(page: Page, text: string): Promise<Misskey.entities.Note> {
 	await page.getByTestId('twitter-sidebar').getByTestId('open-post-form').click();
-	return submit(page, text);
+	return submit(page, text, 'dialog');
 }
 
 /** 选择个人主页的普通帖子，允许置顶副本另行计数。 */
@@ -109,19 +125,19 @@ test('取消及传输失败不产生成功刷新，失败后可继续发布', /*
 	await expect(page.getByTestId('twitter-user-timeline-notes')).toContainText('No notes');
 	const before: number = reads();
 	await page.getByTestId('twitter-sidebar').getByTestId('open-post-form').click();
-	await expect(page.getByTestId('post-form-text')).toBeVisible();
+	await expect(composerControl(page, 'dialog', 'post-form-text')).toBeVisible();
 	await page.keyboard.press('Escape');
-	await expect(page.getByTestId('post-form-text')).toBeHidden();
+	await expect(composerControl(page, 'dialog', 'post-form-text')).toBeHidden();
 	expect(reads()).toBe(before);
 	await page.route('**/api/notes/create', /** 只模拟传输故障，不伪造领域响应。 */ async (route: Route): Promise<void> => { await route.abort(); });
 	await page.getByTestId('twitter-sidebar').getByTestId('open-post-form').click();
-	await page.getByTestId('post-form-text').fill('retry after transport failure');
-	await page.getByTestId('post-form-submit').click();
+	await composerControl(page, 'dialog', 'post-form-text').fill('retry after transport failure');
+	await composerControl(page, 'dialog', 'post-form-submit').click();
 	await expect(page.getByTestId('modal-dialog-ok')).toBeVisible();
 	await page.getByTestId('modal-dialog-ok').click();
 	expect(reads()).toBe(before);
 	await page.unroute('**/api/notes/create');
-	const note: Misskey.entities.Note = await submit(page, 'successful retry');
+	const note: Misskey.entities.Note = await submit(page, 'successful retry', 'dialog');
 	await expect(profileNote(page, note.id)).toHaveCount(1);
 });
 
@@ -167,7 +183,7 @@ test('回复详情主帖后回复列表与计数原地更新', /** 主帖查询�
 	const detail: Locator = page.getByTestId('twitter-note-detail');
 	await expect(detail).toBeVisible();
 	await detail.getByTestId('twitter-note-actions').first().getByRole('button', { name: 'Reply', exact: true }).click();
-	const reply: Misskey.entities.Note = await submit(page, 'direct fresh reply');
+	const reply: Misskey.entities.Note = await submit(page, 'direct fresh reply', 'inline');
 	await expect(page.locator(`[data-testid="twitter-thread-note"][data-note-id="${reply.id}"]`)).toBeVisible();
 	await expect(detail.getByTestId('twitter-note-actions').first()).toHaveAttribute('data-replies-count', '1');
 });
@@ -178,7 +194,7 @@ test('对子回复继续回复只展开相关节点并更新计数', /** 已展�
 	await open(page, `/notes/${parent.id}`);
 	const row: Locator = page.locator(`[data-testid="twitter-thread-note"][data-note-id="${child.id}"]`);
 	await row.getByRole('button', { name: 'Reply', exact: true }).click();
-	const reply: Misskey.entities.Note = await submit(page, 'grandchild fresh reply');
+	const reply: Misskey.entities.Note = await submit(page, 'grandchild fresh reply', 'dialog');
 	await expect(row.locator(`[data-note-id="${reply.id}"]`)).toBeVisible();
 	await expect(row.getByTestId('twitter-note-actions').first()).toHaveAttribute('data-replies-count', '1');
 });
@@ -268,7 +284,7 @@ test('相同帖的置顶与列表副本共享计数读取', /** 同键多消费�
 	await open(page, '/@fresh_user');
 	await expect(profileNote(page, parent.id)).toHaveCount(2);
 	await profileNote(page, parent.id).first().getByTestId('twitter-note-actions').getByRole('button', { name: 'Reply', exact: true }).click();
-	await submit(page, 'reply to duplicated parent');
+	await submit(page, 'reply to duplicated parent', 'dialog');
 	await expect(profileNote(page, parent.id)).toHaveCount(2);
 	for (const row of await profileNote(page, parent.id).all()) {
 		await expect(row.getByTestId('twitter-note-actions')).toHaveAttribute('data-replies-count', '1');
@@ -304,7 +320,7 @@ test('频道发帖更新实体统计且不重载既有流', /** 实时帖子与�
 	const body: Locator = page.locator('._pageContainer');
 	await expect(body).toContainText('Counter channel');
 	await body.getByRole('button', { name: 'Post to channel', exact: true }).click();
-	await submit(page, 'channel post updates stats');
+	await submit(page, 'channel post updates stats', 'dialog');
 	await expect(body).toContainText('channel post updates stats');
 	await expect(body).toContainText('1 Notes');
 });
@@ -369,7 +385,7 @@ test('移动端悬浮发帖按钮同样更新个人主页', /** 同一成功链�
 	await page.setViewportSize({ width: 390, height: 1000 });
 	await expect(page.getByTestId('twitter-user-timeline-notes')).toContainText('No notes');
 	await page.getByTestId('open-post-form').filter({ visible: true }).click();
-	const note: Misskey.entities.Note = await submit(page, 'mobile immediate publish');
+	const note: Misskey.entities.Note = await submit(page, 'mobile immediate publish', 'dialog');
 	await expect(profileNote(page, note.id)).toHaveCount(1);
 	await expect(page.getByTestId('twitter-profile-note-count')).toContainText('1');
 });
@@ -420,7 +436,7 @@ test('纯转发详情回复归属原帖而非转发外壳', /** 显示 ID 与发
 	await open(page, `/notes/${envelope.createdNote.id}`);
 	const detail: Locator = page.getByTestId('twitter-note-detail');
 	await detail.getByTestId('twitter-note-actions').first().getByRole('button', { name: 'Reply', exact: true }).click();
-	const reply: Misskey.entities.Note = await submit(page, 'reply to actual original');
+	const reply: Misskey.entities.Note = await submit(page, 'reply to actual original', 'inline');
 	expect(reply.replyId).toBe(original.id);
 	await expect(page.locator(`[data-testid="twitter-thread-note"][data-note-id="${reply.id}"]`)).toBeVisible();
 });
@@ -554,10 +570,10 @@ test('计数查询失败后仍消费其在途期间发生的第二次真实回�
 	});
 	try {
 		await actions.getByRole('button', { name: 'Reply', exact: true }).click();
-		const first: Misskey.entities.Note = await submit(page, 'first reply before counter failure');
+		const first: Misskey.entities.Note = await submit(page, 'first reply before counter failure', 'inline');
 		await started;
 		await actions.getByRole('button', { name: 'Reply', exact: true }).click();
-		const second: Misskey.entities.Note = await submit(page, 'second reply during pending counter');
+		const second: Misskey.entities.Note = await submit(page, 'second reply during pending counter', 'inline');
 		expect(requests).toBe(1);
 		release();
 		await expect(actions).toHaveAttribute('data-replies-count', '2');
