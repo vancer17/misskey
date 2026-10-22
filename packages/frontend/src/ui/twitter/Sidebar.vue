@@ -7,6 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 文件领域：Twitter UI · 桌面主导航。
 作用：呈现页面入口、未读提示与紧凑账户操作，入口交互意图仅预热目标页面代码。
 数据链：账户事实 → 导航展示；聚焦或指针意图 → 代码缓存，不请求或复制业务数据。
+布局：整行链接承接点击，内容胶囊承接视觉反馈；完整侧栏发帖按钮占内宽的九成。
 -->
 
 <template>
@@ -24,8 +25,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			to="/"
 			:aria-label="i18n.ts.timeline"
 		>
-			<i :class="$style.itemIcon" class="ti ti-home ti-fw"></i>
-			<span :class="$style.itemText">{{ i18n.ts.timeline }}</span>
+			<span :class="$style.itemContent">
+				<i :class="$style.itemIcon" class="ti ti-home ti-fw"></i>
+				<span :class="$style.itemText">{{ i18n.ts.timeline }}</span>
+			</span>
 		</MkA>
 
 		<MkA
@@ -37,10 +40,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 			@focus="preloadTwitterNotificationsPage"
 			@pointerdown="preloadTwitterNotificationsPage"
 		>
-			<i :class="$style.itemIcon" class="ti ti-bell ti-fw"></i>
-			<span :class="$style.itemText">{{ i18n.ts.notifications }}</span>
-			<span v-if="notificationCount !== ''" :class="$style.indicator" aria-hidden="true">
-				<span :class="$style.indicatorValue">{{ notificationCount }}</span>
+			<span :class="$style.itemContent">
+				<i :class="$style.itemIcon" class="ti ti-bell ti-fw"></i>
+				<span :class="$style.itemText">{{ i18n.ts.notifications }}</span>
+				<span v-if="notificationCount !== ''" :class="$style.indicator" aria-hidden="true">
+					<span :class="$style.indicatorValue">{{ notificationCount }}</span>
+				</span>
 			</span>
 		</MkA>
 
@@ -53,8 +58,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			to="/channels"
 			:aria-label="i18n.ts.channel"
 		>
-			<i :class="$style.itemIcon" class="ti ti-device-tv ti-fw"></i>
-			<span :class="$style.itemText">{{ i18n.ts.channel }}</span>
+			<span :class="$style.itemContent">
+				<i :class="$style.itemIcon" class="ti ti-device-tv ti-fw"></i>
+				<span :class="$style.itemText">{{ i18n.ts.channel }}</span>
+			</span>
 		</MkA>
 
 		<MkA
@@ -67,8 +74,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			@focus="preloadTwitterUserPage"
 			@pointerdown="preloadTwitterUserPage"
 		>
-			<i :class="$style.itemIcon" class="ti ti-user ti-fw"></i>
-			<span :class="$style.itemText">{{ i18n.ts.profile }}</span>
+			<span :class="$style.itemContent">
+				<i :class="$style.itemIcon" class="ti ti-user ti-fw"></i>
+				<span :class="$style.itemText">{{ i18n.ts.profile }}</span>
+			</span>
 		</MkA>
 	</div>
 
@@ -194,27 +203,43 @@ async function openAccountMenu(ev: PointerEvent) {
 	position: relative;
 	display: flex;
 	align-items: center;
-	gap: var(--twitter-space-4);
+	width: 100%;
+	min-width: 0;
 	min-height: 52px;
-	padding: 0 var(--twitter-space-4);
 	border-radius: var(--twitter-radius-pill);
 	color: var(--twitter-fg);
 	font-size: var(--twitter-font-size-heading);
 	line-height: 1;
 	text-decoration: none;
-	transition:
-		background-color var(--twitter-duration-fast) ease,
-		color var(--twitter-duration-fast) ease;
 
 	&:hover,
 	&:focus-visible,
 	&.active {
-		background: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
+		.itemContent {
+			background: color-mix(in srgb, var(--twitter-fg) 8%, transparent);
+		}
 	}
 
 	&.active {
 		font-weight: 700;
 	}
+}
+
+/** 内容胶囊按图标、标签和徽标收缩，整行链接继续承担导航点击。 */
+.itemContent {
+	display: flex;
+	align-items: center;
+	gap: var(--twitter-space-4);
+	width: fit-content;
+	max-width: 100%;
+	min-width: 0;
+	min-height: 52px;
+	box-sizing: border-box;
+	padding: 0 var(--twitter-space-4);
+	border-radius: var(--twitter-radius-pill);
+	transition:
+		background-color var(--twitter-duration-fast) ease,
+		color var(--twitter-duration-fast) ease;
 }
 
 .itemIcon {
@@ -223,6 +248,7 @@ async function openAccountMenu(ev: PointerEvent) {
 }
 
 .itemText {
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -230,7 +256,7 @@ async function openAccountMenu(ev: PointerEvent) {
 
 .indicator {
 	position: relative;
-	margin-left: auto;
+	flex-shrink: 0;
 	color: var(--MI_THEME-indicator);
 	font-size: 11px;
 	line-height: 1;
@@ -253,9 +279,11 @@ async function openAccountMenu(ev: PointerEvent) {
 
 .post {
 	display: flex;
+	align-self: flex-start;
 	align-items: center;
 	justify-content: center;
 	gap: var(--twitter-space-2);
+	width: 90%;
 	min-height: 52px;
 	border-radius: var(--twitter-radius-pill);
 	background: var(--twitter-accent);
@@ -305,13 +333,14 @@ async function openAccountMenu(ev: PointerEvent) {
 .iconOnly {
 	.logo,
 	.item,
+	.itemContent,
 	.post,
 	.account {
 		width: 52px;
 		padding: 0;
 	}
 
-	.item,
+	.itemContent,
 	.post {
 		justify-content: center;
 		gap: 0;
@@ -333,7 +362,7 @@ async function openAccountMenu(ev: PointerEvent) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.item,
+	.itemContent,
 	.post {
 		transition: none;
 	}
