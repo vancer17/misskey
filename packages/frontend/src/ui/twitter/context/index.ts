@@ -11,6 +11,8 @@
 
 export { useIsTwitterUi } from '../composables/use-is-twitter-ui.js';
 export { useTwitterLayout } from '../composables/use-twitter-layout.js';
+/** 发帖表单只消费工具栏几何，不加载帖子或页面业务模块。 */
+export { useTwitterComposerToolbar } from '../composables/use-composer-toolbar.js';
 export type { TwitterLayoutState } from '../composables/use-twitter-layout.js';
 export { TWITTER_LAYOUT_BREAKPOINTS } from '../domain/layout.js';
 export { TWITTER_MOTION_DURATIONS } from '../domain/motion.js';

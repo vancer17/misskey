@@ -105,6 +105,24 @@ body[data-ui='twitter'] {
 	/* 大组分隔 */
 	--twitter-space-6: 32px;
 
+	/* ——— 发帖正文（X 采集版本的基准排版，原生 textarea 适配；见 ADR-0001） ——— */
+	/* 正文常规字号：X headline1 对应 20px，窄容器沿用组件现有字号适配。 */
+	--twitter-composer-font-size: var(--twitter-font-size-heading);
+	/* 正文行高：X 基准行高 24px / 字号 20px。 */
+	--twitter-composer-line-height: 1.2;
+	/* 正文上下留白：X richContainer 的 space12，左右由外部列布局负责。 */
+	--twitter-composer-padding-block: var(--twitter-space-3);
+	/* 内联回复沿用原有最小高度，可容纳单行正文及上下留白。 */
+	--twitter-composer-inline-min-height: 52px;
+	/* 弹窗最小高度：四行正文 4 × 24px，加上下各 12px 留白。 */
+	--twitter-composer-dialog-min-height: 120px;
+	/* X dynamic modal 的 90vh 上限映射为动态视口单位，长内容由表单宿主纵向滚动。 */
+	--twitter-composer-dialog-max-height: 90dvh;
+	/* 现有桌面工具按钮命中区；窄容器沿用 40px 的局部覆盖。 */
+	--twitter-composer-tool-size: 36px;
+	/* X Compose toolBarButtonsWrapper 的 space4，兼作焦点环的轨道留白。 */
+	--twitter-composer-tool-gap: var(--twitter-space-1);
+
 	/* ——— 布局宽度（对齐 nitter timeline-container 600px 等度量） ——— */
 	/* 页面返回头高度（nitter 地面真值：navbar 高 50px；PF-1 统一权威，规范第 10 条） */
 	--twitter-header-height: 50px;
