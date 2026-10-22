@@ -3,8 +3,14 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter UI 基础加载呈现。
+作用：使用既有布局 Token 呈现列表、帖子详情和用户资料骨架。
+数据链：页面请求状态与公开骨架变体 → 占位几何；不保存或推断业务实体。
+-->
+
 <template>
-<div :class="[$style.root, $style[`variant_${variant}`]]" role="status" :aria-label="i18n.ts.loading">
+<div :class="[$style.root, $style[`variant_${variant}`], { [$style.mobile]: isMobile }]" role="status" :aria-label="i18n.ts.loading">
 	<!-- 列表形态：时间线 / 通知（行结构随 variant 变化） -->
 	<template v-if="variant === 'timeline' || variant === 'notifications'">
 		<div v-for="row in rows" :key="row" :class="$style.row">
@@ -53,27 +59,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-/**
- * 文件领域：Twitter UI · 基础组件 · 页面加载骨架屏
- *
- * 作用：以与内容同构的骨架块统一呈现必做页面的 loading 态（X-behavior），
- * 只接收 domain 权威变体类型，不含业务逻辑（规范组件层 #1）。
- *
- * 数据链角色：页面取数 fetching 状态 → 本组件（加载态呈现）；
- * 收敛并替代原 TimelineState 时代的 MkLoading 转圈与 NotificationSkeleton。
- */
 
 import { computed } from 'vue';
-import type { TwitterPageSkeletonVariant } from '@/ui/twitter/domain/page-state.js';
+import type { ComputedRef } from 'vue';
+import { useTwitterLayout } from '@/ui/twitter/index.js';
+import type { TwitterLayoutState, TwitterPageSkeletonVariant } from '@/ui/twitter/index.js';
 import { i18n } from '@/i18n.js';
 
-const props = defineProps<{
+/** 页面只传入公开骨架变体，尺寸继续由既有布局状态和 Token 派生。 */
+const props: Readonly<{ variant: TwitterPageSkeletonVariant }> = defineProps<{
 	/** 骨架形态变体（domain 权威类型）。 */
 	variant: TwitterPageSkeletonVariant;
 }>();
 
-/** 按变体解析渲染行数（列表形态固定行数，非列表形态不适用）。 */
-const rows = computed<number>(() => props.variant === 'notifications' ? 6 : 4);
+/** 复用 Shell 布局裁定，为资料骨架匹配真实资料的响应式头像。 */
+const { isMobile }: TwitterLayoutState = useTwitterLayout();
+
+/** 按变体解析渲染行数，骨架不建立列表业务状态。 */
+const rows: ComputedRef<number> = computed(/** 通知密度与帖子密度分别保留既有行数。 */ (): number => props.variant === 'notifications' ? 6 : 4);
 </script>
 
 <style lang="scss" module>
@@ -173,15 +176,27 @@ const rows = computed<number>(() => props.variant === 'notifications' ? 6 : 4);
 	border-radius: var(--twitter-radius-pill);
 }
 
+.variant_profile {
+	--profileAvatarSize: var(--twitter-avatar-profile-size);
+	--profileAvatarOverlap: 44px;
+
+	&.mobile {
+		--profileAvatarSize: var(--twitter-avatar-profile-mobile-size);
+		--profileAvatarOverlap: 32px;
+	}
+}
+
 .profileBanner {
-	height: 150px;
+	aspect-ratio: 3 / 1;
+	max-height: 200px;
+	width: 100%;
 }
 
 .profileAvatar {
-	width: 80px;
-	height: 80px;
-	margin: -32px 0 0 16px;
-	border: solid 4px var(--twitter-bg);
+	width: var(--profileAvatarSize);
+	height: var(--profileAvatarSize);
+	margin: calc(-1 * var(--profileAvatarOverlap)) 0 0 16px;
+	border: solid var(--twitter-avatar-profile-border-width) var(--twitter-bg);
 	border-radius: var(--twitter-radius-pill);
 	box-sizing: border-box;
 }

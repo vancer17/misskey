@@ -23,6 +23,8 @@ export type { TwitterPageStateType, TwitterPageSkeletonVariant } from './domain/
 export { twitterUserErrorStateType } from './domain/index.js';
 export { default as TwitterPageState } from './components/TwitterPageState.vue';
 export { default as TwitterPageSkeleton } from './components/TwitterPageSkeleton.vue';
+/** 路由代码未就绪时的主题一致占位，不读取业务数据。 */
+export { default as TwitterRouteLoading } from './components/TwitterRouteLoading.vue';
 export { default as TwitterUserResult } from './UserResult.vue';
 export { default as TwitterSettingsShell } from './SettingsShell.vue';
 export { default as TwitterNote } from './Note.vue';
@@ -58,5 +60,16 @@ export { useTwitterRefresh, useTwitterPaginatorRefresh } from './composables/use
 /** 会话级计数展示投影，不参与业务决策。 */
 export { useTwitterNoteCounters } from './store/note-counters.js';
 export type { TwitterNoteCounters } from './domain/note-counters.js';
+/** 频道详情与热门集合分别持有唯一确认状态，展示组件只读取派生值。 */
+export { getChannelCommunityTabs, resolveChannelCommunityTab } from './domain/index.js';
+export type { ChannelDetailState, ChannelCommunityTab, ChannelFeaturedOperation, ChannelFeaturedPage, ChannelFeaturedState } from './domain/index.js';
+export { createChannelDetailQuery } from './store/channel-detail.js';
+export type { ChannelDetailQuery } from './store/channel-detail.js';
+export { createChannelFeaturedQuery } from './store/channel-featured.js';
+export type { ChannelFeaturedQuery } from './store/channel-featured.js';
+export { default as TwitterChannelFeatured } from './components/TwitterChannelFeatured.vue';
+/** 个人主页的标签与保留结果刷新仍共用一个分页查询所有者。 */
+export type { TwitterUserTimelineTab } from './domain/index.js';
+export { TwitterUserTimelinePaginator } from './store/user-timeline.js';
 /** 用户写入和关注信号的只读失效适配。 */
 export { useTwitterUserEvents, useTwitterRelationshipEvents } from './composables/use-twitter-user-events.js';

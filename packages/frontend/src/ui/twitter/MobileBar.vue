@@ -1,6 +1,10 @@
 <!--
 SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
+
+文件领域：Twitter UI · 移动主导航。
+作用：呈现稳定的页面入口与未读提示，交互意图仅提前加载目标页面代码。
+数据链：账户事实 → 导航展示；聚焦或触控意图 → 代码缓存，不请求业务数据。
 -->
 
 <template>
@@ -28,6 +32,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 		:activeClass="$style.active"
 		to="/my/notifications"
 		:aria-label="notificationAriaLabel"
+		@mouseenter="preloadTwitterNotificationsPage"
+		@focus="preloadTwitterNotificationsPage"
+		@pointerdown="preloadTwitterNotificationsPage"
 	>
 		<i class="ti ti-bell ti-fw" aria-hidden="true"></i>
 		<span v-if="notificationCount !== ''" :class="$style.indicator" aria-hidden="true"></span>
@@ -39,6 +46,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 		:activeClass="$style.active"
 		:to="profilePath"
 		:aria-label="i18n.ts.profile"
+		@mouseenter="preloadTwitterUserPage"
+		@focus="preloadTwitterUserPage"
+		@pointerdown="preloadTwitterUserPage"
 	>
 		<i class="ti ti-user ti-fw" aria-hidden="true"></i>
 	</MkA>
@@ -47,6 +57,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted } from 'vue';
+import { preloadTwitterNotificationsPage, preloadTwitterUserPage } from './routing/index.js';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
 
