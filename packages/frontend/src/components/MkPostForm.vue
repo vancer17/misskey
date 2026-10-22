@@ -5,13 +5,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <!--
 文件领域：共享发帖表单展示边界。
-作用：向宿主提供回复上下文显隐与既有输入框聚焦能力，发布、上传和草稿仍由原表单负责。
-数据链：宿主展示参数 → 原表单状态与创建流程 → 既有发布事件。
+作用：向宿主提供回复上下文、独立受众策略与无边框编辑区，通过局部导航保持工具可达。
+数据链：宿主展示参数、样式 Token 与工具栏几何 → 原表单输入控件 → 既有创建流程与发布事件。发布、上传和草稿仍由原表单负责。
 -->
 
 <template>
 <div
-	:class="[$style.root, { [$style.twitterRoot]: isTwitterUi }]"
+	ref="twitterFormEl"
+	:class="[$style.root, { [$style.twitterRoot]: isTwitterUi, [$style.twitterVeryNarrow]: isTwitterUi && isVeryNarrow }]"
+	:data-testid="isTwitterUi ? 'twitter-composer' : undefined"
 	@dragover.stop="onDragover"
 	@dragenter="onDragenter"
 	@dragleave="onDragleave"
@@ -45,21 +47,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</button>
 		</div>
 
-		<div v-if="visibility === 'specified'" :class="$style.twitterToSpecified">
-			<span>{{ i18n.ts.recipient }}</span>
-			<div :class="$style.twitterVisibleUsers">
-				<span v-for="u in visibleUsers" :key="u.id" :class="$style.twitterVisibleUser">
-					<MkAcct :user="u"/>
-					<button class="_button" :aria-label="i18n.ts.remove" @click="removeVisibleUser(u.id)">
-						<i class="ti ti-x" aria-hidden="true"></i>
-					</button>
-				</span>
-				<button class="_button" :class="$style.twitterAddVisibleUser" :aria-label="i18n.ts.add" @click="addVisibleUser">
-					<i class="ti ti-plus" aria-hidden="true"></i>
-				</button>
-			</div>
-		</div>
-
 		<MkInfo v-if="!store.r.tips.value.postForm" :class="$style.twitterNotice" closable @close="closeTip('postForm')">
 			<button class="_textButton" @click="showTour">{{ i18n.ts._postForm.showHowToUse }}</button>
 		</MkInfo>
@@ -80,13 +67,46 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</button>
 
 			<div :class="$style.twitterMain">
+				<div :class="$style.twitterPolicy" data-testid="twitter-composer-policy">
+					<button v-if="targetChannel == null" ref="visibilityButton" v-tooltip="i18n.ts.visibility" :aria-label="i18n.ts.visibility" class="_button" :class="$style.twitterVisibility" @click="setVisibility">
+						<i v-if="visibility === 'public'" class="ti ti-world" aria-hidden="true"></i>
+						<i v-else-if="visibility === 'home'" class="ti ti-home" aria-hidden="true"></i>
+						<i v-else-if="visibility === 'followers'" class="ti ti-lock" aria-hidden="true"></i>
+						<i v-else class="ti ti-mail" aria-hidden="true"></i>
+						<span>{{ i18n.ts._visibility[visibility] }}</span>
+					</button>
+					<button v-if="visibility !== 'specified'" v-tooltip="i18n.ts._visibility.disableFederation" :aria-label="i18n.ts._visibility.disableFederation" class="_button" :class="[$style.twitterToolButton, { [$style.twitterDanger]: localOnly }]" :disabled="targetChannel != null" @click="toggleLocalOnly">
+						<i v-if="!localOnly" class="ti ti-rocket" aria-hidden="true"></i>
+						<i v-else class="ti ti-rocket-off" aria-hidden="true"></i>
+					</button>
+				</div>
+
+				<div v-if="visibility === 'specified'" :class="$style.twitterToSpecified">
+					<span>{{ i18n.ts.recipient }}</span>
+					<div :class="$style.twitterVisibleUsers">
+						<span v-for="u in visibleUsers" :key="u.id" :class="$style.twitterVisibleUser">
+							<MkAcct :user="u"/>
+							<button class="_button" :aria-label="i18n.ts.remove" @click="removeVisibleUser(u.id)">
+								<i class="ti ti-x" aria-hidden="true"></i>
+							</button>
+						</span>
+						<button class="_button" :class="$style.twitterAddVisibleUser" :aria-label="i18n.ts.add" @click="addVisibleUser">
+							<i class="ti ti-plus" aria-hidden="true"></i>
+						</button>
+					</div>
+				</div>
+
+				<div v-if="targetChannel" :class="$style.twitterChannelContext">
+					<span aria-hidden="true" :class="$style.twitterChannelDot" :style="{ backgroundColor: targetChannel.color }"></span>
+					<span :class="$style.twitterChannelName" :title="targetChannel.name">{{ targetChannel.name }}</span>
+				</div>
+
 				<div v-show="useCw" :class="$style.twitterCwOuter">
 					<input ref="cwInputEl" v-model="cw" :class="$style.twitterCw" :aria-label="i18n.ts.annotation" :placeholder="i18n.ts.annotation" @keydown="onKeydown" @keyup="onKeyup" @compositionend="onCompositionEnd">
 					<div v-if="maxCwTextLength - cwTextLength < 20" aria-live="polite" :class="[$style.twitterCwTextCount, { [$style.twitterCwTextOver]: cwTextLength > maxCwTextLength }]">{{ maxCwTextLength - cwTextLength }}</div>
 				</div>
 
 				<div :class="$style.twitterTextOuter">
-					<div v-if="targetChannel" :class="$style.twitterChannel" :style="{ background: targetChannel.color }"></div>
 					<textarea ref="textareaEl" v-model="text" :class="$style.twitterText" :aria-label="placeholder" :disabled="posting || posted" :readonly="textAreaReadOnly" :placeholder="placeholder" data-testid="post-form-text" @keydown="onKeydown" @keyup="onKeyup" @paste="onPaste" @compositionupdate="onCompositionUpdate" @compositionend="onCompositionEnd"></textarea>
 					<div v-if="maxTextLength - textLength < 100" aria-live="polite" :class="[$style.twitterTextCount, { [$style.twitterTextOver]: textLength > maxTextLength }]">{{ maxTextLength - textLength }}</div>
 				</div>
@@ -104,37 +124,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 
-		<footer ref="footerEl" :class="$style.twitterFooter">
+		<footer ref="footerEl" :class="$style.twitterFooter" data-testid="twitter-composer-toolbar">
 			<div :class="$style.twitterToolbar">
-				<button v-tooltip="i18n.ts.attachFile + ' (' + i18n.ts.upload + ')'" :aria-label="i18n.ts.attachFile" class="_button" :class="$style.twitterToolButton" @click="chooseFileFromPc"><i class="ti ti-photo-plus" aria-hidden="true"></i></button>
-				<button v-tooltip="i18n.ts.attachFile + ' (' + i18n.ts.fromDrive + ')'" :aria-label="i18n.ts.fromDrive" class="_button" :class="$style.twitterToolButton" @click="chooseFileFromDrive"><i class="ti ti-cloud-download" aria-hidden="true"></i></button>
-				<button v-tooltip="i18n.ts.poll" :aria-label="i18n.ts.poll" class="_button" :class="[$style.twitterToolButton, { [$style.twitterToolButtonActive]: poll }]" @click="togglePoll"><i class="ti ti-chart-arrows" aria-hidden="true"></i></button>
-				<button v-tooltip="i18n.ts.useCw" :aria-label="i18n.ts.useCw" class="_button" :class="[$style.twitterToolButton, { [$style.twitterToolButtonActive]: useCw }]" @click="useCw = !useCw"><i class="ti ti-eye-off" aria-hidden="true"></i></button>
-				<button v-tooltip="i18n.ts.hashtags" :aria-label="i18n.ts.hashtags" class="_button" :class="[$style.twitterToolButton, { [$style.twitterToolButtonActive]: withHashtags }]" @click="withHashtags = !withHashtags"><i class="ti ti-hash" aria-hidden="true"></i></button>
-				<button v-tooltip="i18n.ts.mention" :aria-label="i18n.ts.mention" class="_button" :class="$style.twitterToolButton" @click="insertMention"><i class="ti ti-at" aria-hidden="true"></i></button>
-				<button v-if="showAddMfmFunction" v-tooltip="i18n.ts.addMfmFunction" :aria-label="i18n.ts.addMfmFunction" class="_button" :class="$style.twitterToolButton" @click="insertMfmFunction"><i class="ti ti-palette" aria-hidden="true"></i></button>
-				<button v-if="postFormActions.length > 0" v-tooltip="i18n.ts.plugins" :aria-label="i18n.ts.plugins" class="_button" :class="$style.twitterToolButton" @click="showActions"><i class="ti ti-plug" aria-hidden="true"></i></button>
-				<button v-tooltip="i18n.ts.emoji" :aria-label="i18n.ts.emoji" class="_button" :class="$style.twitterToolButton" @click="insertEmoji"><i class="ti ti-mood-happy" aria-hidden="true"></i></button>
+				<div ref="twitterToolsViewport" :class="[$style.twitterToolsViewport, { [$style.twitterToolsAnimated]: prefer.s.animation }]" role="group" :aria-label="i18n.ts.tools" data-testid="twitter-composer-tools-scroll" @scroll.passive="updateToolbarGeometry" @focusin="onToolbarFocusin" @keydown="onToolbarKeydown">
+					<div ref="twitterToolsTrack" :class="$style.twitterToolsTrack" data-testid="twitter-composer-tools-track">
+						<button v-tooltip="i18n.ts.attachFile + ' (' + i18n.ts.upload + ')'" :aria-label="i18n.ts.attachFile" class="_button" :class="$style.twitterToolButton" @click="chooseFileFromPc"><i class="ti ti-photo-plus" aria-hidden="true"></i></button>
+						<button v-tooltip="i18n.ts.attachFile + ' (' + i18n.ts.fromDrive + ')'" :aria-label="i18n.ts.fromDrive" class="_button" :class="$style.twitterToolButton" @click="chooseFileFromDrive"><i class="ti ti-cloud-download" aria-hidden="true"></i></button>
+						<button v-tooltip="i18n.ts.poll" :aria-label="i18n.ts.poll" class="_button" :class="[$style.twitterToolButton, { [$style.twitterToolButtonActive]: poll }]" @click="togglePoll"><i class="ti ti-chart-arrows" aria-hidden="true"></i></button>
+						<button v-tooltip="i18n.ts.useCw" :aria-label="i18n.ts.useCw" class="_button" :class="[$style.twitterToolButton, { [$style.twitterToolButtonActive]: useCw }]" @click="useCw = !useCw"><i class="ti ti-eye-off" aria-hidden="true"></i></button>
+						<button v-tooltip="i18n.ts.hashtags" :aria-label="i18n.ts.hashtags" class="_button" :class="[$style.twitterToolButton, { [$style.twitterToolButtonActive]: withHashtags }]" @click="withHashtags = !withHashtags"><i class="ti ti-hash" aria-hidden="true"></i></button>
+						<button v-tooltip="i18n.ts.mention" :aria-label="i18n.ts.mention" class="_button" :class="$style.twitterToolButton" @click="insertMention"><i class="ti ti-at" aria-hidden="true"></i></button>
+						<button v-if="showAddMfmFunction" v-tooltip="i18n.ts.addMfmFunction" :aria-label="i18n.ts.addMfmFunction" class="_button" :class="$style.twitterToolButton" @click="insertMfmFunction"><i class="ti ti-palette" aria-hidden="true"></i></button>
+						<button v-if="postFormActions.length > 0" v-tooltip="i18n.ts.plugins" :aria-label="i18n.ts.plugins" class="_button" :class="$style.twitterToolButton" @click="showActions"><i class="ti ti-plug" aria-hidden="true"></i></button>
+						<button v-tooltip="i18n.ts.emoji" :aria-label="i18n.ts.emoji" class="_button" :class="$style.twitterToolButton" @click="insertEmoji"><i class="ti ti-mood-happy" aria-hidden="true"></i></button>
+					</div>
+				</div>
+				<button v-show="canScrollPrevious" ref="twitterToolsPreviousButton" class="_button" :class="[$style.twitterToolsNavigation, $style.twitterToolsPrevious]" type="button" :aria-label="i18n.ts.goBack" data-testid="twitter-composer-tools-previous" @click="scrollToolsPrevious"><i class="ti ti-chevron-left" aria-hidden="true"></i></button>
+				<button v-show="canScrollNext" ref="twitterToolsNextButton" class="_button" :class="[$style.twitterToolsNavigation, $style.twitterToolsNext]" type="button" :aria-label="i18n.ts.next" data-testid="twitter-composer-tools-next" @click="scrollToolsNext"><i class="ti ti-chevron-right" aria-hidden="true"></i></button>
 			</div>
 
 			<div :class="$style.twitterFooterActions">
-				<template v-if="!(targetChannel != null && fixed)">
-					<button v-if="targetChannel == null" ref="visibilityButton" v-tooltip="i18n.ts.visibility" :aria-label="i18n.ts.visibility" class="_button" :class="$style.twitterVisibility" @click="setVisibility">
-						<i v-if="visibility === 'public'" class="ti ti-world" aria-hidden="true"></i>
-						<i v-else-if="visibility === 'home'" class="ti ti-home" aria-hidden="true"></i>
-						<i v-else-if="visibility === 'followers'" class="ti ti-lock" aria-hidden="true"></i>
-						<i v-else class="ti ti-mail" aria-hidden="true"></i>
-						<span>{{ i18n.ts._visibility[visibility] }}</span>
-					</button>
-					<button v-else class="_button" :class="$style.twitterVisibility" disabled>
-						<i class="ti ti-device-tv" aria-hidden="true"></i>
-						<span>{{ targetChannel.name }}</span>
-					</button>
-				</template>
-				<button v-if="visibility !== 'specified'" v-tooltip="i18n.ts._visibility.disableFederation" :aria-label="i18n.ts._visibility.disableFederation" class="_button" :class="[$style.twitterToolButton, { [$style.twitterDanger]: localOnly }]" :disabled="targetChannel != null" @click="toggleLocalOnly">
-					<i v-if="!localOnly" class="ti ti-rocket" aria-hidden="true"></i>
-					<i v-else class="ti ti-rocket-off" aria-hidden="true"></i>
-				</button>
 				<button ref="otherSettingsButton" v-tooltip="i18n.ts.other" :aria-label="i18n.ts.other" class="_button" :class="$style.twitterToolButton" @click="showOtherSettings"><i class="ti ti-dots" aria-hidden="true"></i></button>
 				<button ref="submitButtonEl" :aria-label="submitText" :aria-busy="posting" :class="$style.twitterSubmit" :disabled="!canPost" data-testid="post-form-submit" @click="post">
 					<MkEllipsis v-if="posting"/>
@@ -258,6 +267,7 @@ import { toASCII } from 'punycode.js';
 import { host, url } from '@@/js/config.js';
 import MkUploaderItems from './MkUploaderItems.vue';
 import type { ShallowRef } from 'vue';
+import { useTwitterComposerToolbar } from '@/ui/twitter/context/index.js';
 import type { PostFormProps } from '@/types/post-form.js';
 import type { MenuItem } from '@/types/menu.js';
 import type { PollEditorModelValue } from '@/components/MkPollEditor.vue';
@@ -337,6 +347,28 @@ const otherSettingsButton = useTemplateRef('otherSettingsButton');
 const accountMenuEl = useTemplateRef('accountMenuEl');
 const footerEl = useTemplateRef('footerEl');
 const submitButtonEl = useTemplateRef('submitButtonEl');
+
+/** 当前宿主根节点仅用于测量表单容器，不从视口重复定义布局事实。 */
+const twitterFormEl: Readonly<ShallowRef<HTMLElement | null>> = useTemplateRef<HTMLElement>('twitterFormEl');
+/** 横向工具视口保留原始按钮和真实弹层锚点。 */
+const twitterToolsViewport: Readonly<ShallowRef<HTMLElement | null>> = useTemplateRef<HTMLElement>('twitterToolsViewport');
+/** 内容轨道的固有宽度随可选 MFM 和插件工具自然变化。 */
+const twitterToolsTrack: Readonly<ShallowRef<HTMLElement | null>> = useTemplateRef<HTMLElement>('twitterToolsTrack');
+/** 箭头触及起点隐藏前，将键盘焦点转交给首个原始工具。 */
+const twitterToolsPreviousButton: Readonly<ShallowRef<HTMLButtonElement | null>> = useTemplateRef<HTMLButtonElement>('twitterToolsPreviousButton');
+/** 箭头触及终点隐藏前，将键盘焦点转交给末个原始工具。 */
+const twitterToolsNextButton: Readonly<ShallowRef<HTMLButtonElement | null>> = useTemplateRef<HTMLButtonElement>('twitterToolsNextButton');
+/** 只读布局与局部导航函数，不持有可见性、正文或上传状态。 */
+const {
+	isVeryNarrow,
+	canScrollPrevious,
+	canScrollNext,
+	updateGeometry: updateToolbarGeometry,
+	scrollPrevious: scrollToolsPrevious,
+	scrollNext: scrollToolsNext,
+	onFocusin: onToolbarFocusin,
+	onKeydown: onToolbarKeydown,
+}: ReturnType<typeof useTwitterComposerToolbar> = useTwitterComposerToolbar(isTwitterUi, twitterFormEl, twitterToolsViewport, twitterToolsTrack, twitterToolsPreviousButton, twitterToolsNextButton);
 
 const posting = ref(false);
 const posted = ref(false);
@@ -2155,8 +2187,8 @@ html[data-color-scheme=light] .preview {
 .twitterToSpecified {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
-	padding: 12px 16px 0;
+	gap: var(--twitter-space-2);
+	padding-block-end: var(--twitter-space-3);
 	color: var(--twitter-secondary-fg, color-mix(in srgb, var(--MI_THEME-fg) 65%, transparent));
 	font-size: var(--twitter-font-size-meta);
 }
@@ -2176,8 +2208,18 @@ html[data-color-scheme=light] .preview {
 	border-radius: var(--twitter-radius-pill, 999px);
 	background: color-mix(in srgb, var(--twitter-accent, var(--MI_THEME-accent)) 12%, transparent);
 	color: var(--twitter-accent, var(--MI_THEME-accent));
+	min-width: 0;
+	max-width: 100%;
+
+	> :first-child {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 
 	button {
+		flex-shrink: 0;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -2244,6 +2286,15 @@ html[data-color-scheme=light] .preview {
 	}
 }
 
+.twitterPolicy {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--twitter-space-1);
+	min-width: 0;
+	padding-block-end: var(--twitter-space-3);
+}
+
 .twitterMain {
 	display: flex;
 	flex-direction: column;
@@ -2268,17 +2319,14 @@ html[data-color-scheme=light] .preview {
 	color: var(--twitter-fg, var(--MI_THEME-fg));
 	font-family: inherit;
 
-	&:focus {
+	/* X selection 正文无焦点边框；CW 与话题作为项目扩展沿用相同输入表现。 */
+	&:focus,
+	&:focus-visible {
 		outline: none;
 	}
 
 	&:disabled {
 		opacity: 0.55;
-	}
-
-	&:focus-visible {
-		outline: 2px solid var(--twitter-accent, var(--MI_THEME-accent));
-		outline-offset: -2px;
 	}
 }
 
@@ -2290,11 +2338,19 @@ html[data-color-scheme=light] .preview {
 
 .twitterCwTextCount,
 .twitterTextCount {
+	font-size: var(--twitter-font-size-meta);
+	color: var(--MI_THEME-warn);
+}
+
+.twitterCwTextCount {
 	position: absolute;
 	top: 0;
 	right: 0;
-	font-size: var(--twitter-font-size-meta);
-	color: var(--MI_THEME-warn);
+}
+
+.twitterTextCount {
+	display: block;
+	text-align: end;
 }
 
 .twitterCwTextOver,
@@ -2303,15 +2359,17 @@ html[data-color-scheme=light] .preview {
 }
 
 .twitterTextOuter {
-	margin-top: 8px;
+	margin-top: 0;
 }
 
 .twitterText {
-	min-height: 52px;
+	padding-block: var(--twitter-composer-padding-block, 12px);
+	padding-inline: 0;
+	min-height: var(--twitter-composer-min-height, var(--twitter-composer-inline-min-height, 52px));
 	max-height: 500px;
 	resize: none;
-	font-size: 19px;
-	line-height: 1.35;
+	font-size: var(--twitter-composer-font-size, 20px);
+	line-height: var(--twitter-composer-line-height, 1.2);
 	field-sizing: content;
 
 	&::placeholder {
@@ -2320,14 +2378,28 @@ html[data-color-scheme=light] .preview {
 	}
 }
 
-.twitterChannel {
-	position: absolute;
-	top: 0;
-	left: -10px;
-	width: 4px;
-	height: 100%;
+.twitterChannelContext {
+	display: flex;
+	align-items: center;
+	gap: var(--twitter-space-2, 8px);
+	min-width: 0;
+	padding-block: var(--twitter-space-1, 4px);
+	font-size: var(--twitter-font-size-meta, 13px);
+	color: var(--twitter-secondary-fg, var(--MI_THEME-fg));
+}
+
+.twitterChannelDot {
+	flex: none;
+	width: var(--twitter-space-2, 8px);
+	height: var(--twitter-space-2, 8px);
 	border-radius: var(--twitter-radius-pill, 999px);
-	pointer-events: none;
+}
+
+.twitterChannelName {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .twitterHashtags {
@@ -2346,30 +2418,78 @@ html[data-color-scheme=light] .preview {
 }
 
 .twitterFooter {
-	display: flex;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: center;
-	justify-content: space-between;
 	gap: 8px;
 	padding: 6px 16px 12px 72px;
 	border-top: solid 1px var(--twitter-border, var(--MI_THEME-divider));
 }
 
 .twitterToolbar {
-	display: flex;
-	align-items: center;
-	gap: 2px;
+	position: relative;
+	min-width: 0;
+}
+
+.twitterToolsViewport {
 	min-width: 0;
 	overflow-x: auto;
-	scrollbar-width: thin;
+	overflow-y: hidden;
+	overscroll-behavior-x: contain;
+	scroll-snap-type: x mandatory;
+	scroll-padding-inline: calc(var(--twitter-composer-tool-size) + var(--twitter-composer-tool-gap));
+	scrollbar-width: none;
+
+	&::-webkit-scrollbar { display: none; }
 }
+
+.twitterToolsTrack {
+	display: flex;
+	align-items: center;
+	gap: var(--twitter-composer-tool-gap);
+	box-sizing: border-box;
+	width: max-content;
+	min-width: 100%;
+	padding: var(--twitter-composer-tool-gap);
+
+	> button { scroll-snap-align: start; }
+}
+
+.twitterToolsAnimated { scroll-behavior: smooth; }
+
+.twitterToolsNavigation {
+	position: absolute;
+	top: 50%;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--twitter-composer-tool-size);
+	height: var(--twitter-composer-tool-size);
+	border-radius: var(--twitter-radius-pill);
+	background: var(--twitter-panel);
+	color: var(--twitter-accent);
+	box-shadow: var(--twitter-overlay-shadow);
+	transform: translateY(-50%);
+
+	&:focus-visible {
+		outline: 2px solid var(--twitter-accent);
+		outline-offset: -2px;
+	}
+}
+
+.twitterToolsPrevious { inset-inline-start: 0; }
+.twitterToolsNext { inset-inline-end: 0; }
+
+:global([dir='rtl']) .twitterToolsNavigation i { transform: rotate(180deg); }
 
 .twitterToolButton {
 	display: inline-flex;
 	flex-shrink: 0;
 	align-items: center;
 	justify-content: center;
-	width: 36px;
-	height: 36px;
+	width: var(--twitter-composer-tool-size);
+	height: var(--twitter-composer-tool-size);
 	border-radius: var(--twitter-radius-pill, 999px);
 	color: var(--twitter-accent, var(--MI_THEME-accent));
 	transition:
@@ -2421,8 +2541,10 @@ html[data-color-scheme=light] .preview {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	max-width: 150px;
-	height: 36px;
+	max-width: 100%;
+	min-width: 0;
+	min-height: var(--twitter-composer-tool-size);
+	box-sizing: border-box;
 	padding: 0 10px;
 	border-radius: var(--twitter-radius-pill, 999px);
 	color: var(--twitter-accent, var(--MI_THEME-accent));
@@ -2500,23 +2622,24 @@ html[data-color-scheme=light] .preview {
 	}
 
 	.twitterFooter {
-		flex-wrap: wrap;
 		padding: 6px 12px calc(12px + env(safe-area-inset-bottom, 0px)) 62px;
 	}
 
-	.twitterToolButton,
-	.twitterVisibility {
-		width: 40px;
-		height: 40px;
-		padding: 0;
-	}
-
-	.twitterVisibility span {
-		display: none;
+	.twitterToolbar,
+	.twitterPolicy {
+		--twitter-composer-tool-size: 40px;
 	}
 }
 
+.twitterVeryNarrow .twitterFooter {
+	grid-template-columns: minmax(0, 1fr);
+
+	.twitterFooterActions { justify-self: end; }
+}
+
 @media (prefers-reduced-motion: reduce) {
+	.twitterToolsAnimated { scroll-behavior: auto; }
+
 	.twitterRoot * {
 		transition-duration: 0.01ms !important;
 		animation-duration: 0.01ms !important;
