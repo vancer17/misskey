@@ -106,8 +106,9 @@ export function provideTwitterScrollHost(
 	}
 
 	watch(router.currentRef,
-		/** 在 Vue 替换旧子树前保存位置，避免 onDeactivated 时高度已经被收缩。 */
-		async (_route: PathResolvedResult): Promise<void> => {
+		/** 同地址通知保留位置与待恢复任务；实际导航在 Vue 替换旧子树前保存旧几何。 */
+		async (route: PathResolvedResult, previousRoute: PathResolvedResult): Promise<void> => {
+			if (route._parsedRoute.fullPath === previousRoute._parsedRoute.fullPath) return;
 			const nextKey: string = positionKey(router.getCurrentFullPath());
 			if (nextKey === currentKey) {
 				// 入口的 ?ui 参数被普通导航去除时，仍是当前页重选，不继承旧位置。
