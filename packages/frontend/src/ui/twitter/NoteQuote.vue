@@ -5,15 +5,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <!--
 文件领域：Twitter 帖子身份展示（NoteQuote）。
-作用：保持帖子模型只读，将作者头像和名称绑定到既有账户／用户展示引用。
-数据链：实际作者标识 → 只读身份展示；不改写帖子事实或动作参数。
+作用：保持帖子模型只读，将身份展示与引用卡片入口绑定到被引用帖子。
+数据链：被引用帖子 → 只读身份展示及独立导航目标；缺失引用仅保留冒泡边界，不改写帖子事实。
 -->
 
 <template>
-<div v-if="note == null" :class="[$style.root, $style.deleted]">
+<div v-if="note == null" data-twitter-note-card :class="[$style.root, $style.deleted]">
 	{{ i18n.ts.deletedNote }}
 </div>
-<article v-else :class="$style.root" :aria-label="i18n.ts.quote">
+<article
+	v-else
+	data-twitter-note-card
+	:class="$style.root"
+	:aria-label="i18n.ts.quote"
+	@click="onNoteClick"
+	@auxclick="onNoteAuxClick"
+>
 	<header v-if="displayUser" :class="$style.header">
 		<TwitterAvatar decorationContext="none" :class="$style.avatar" :user="displayUser" link preview/>
 		<MkA
@@ -25,11 +32,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</MkA>
 		<span :class="$style.username"><MkAcct :user="displayUser"/></span>
 		<span aria-hidden="true">·</span>
-		<MkTime :time="note.createdAt"/>
+		<MkTime v-if="mock" :time="note.createdAt"/>
+		<MkA v-else :class="$style.time" :to="notePage(note)" :aria-label="i18n.ts.note">
+			<MkTime :time="note.createdAt"/>
+		</MkA>
 	</header>
 
 	<div v-if="note.cw != null" :class="$style.cw">
-		<Mfm v-if="note.cw !== ''" :text="note.cw" :author="note.user" :nyaize="'respect'" :emojiUrls="note.emojis"/>
+		<Mfm v-if="note.cw !== ''" :text="note.cw" :author="note.user" :nyaize="'respect'" :emojiUrls="note.emojis" class="_selectable"/>
 		<MkA :class="$style.showMore" :to="notePage(note)">{{ i18n.ts.showMore }}</MkA>
 	</div>
 	<div v-else :class="$style.body">
@@ -39,6 +49,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:author="note.user"
 			:nyaize="'respect'"
 			:emojiUrls="note.emojis"
+			class="_selectable"
 		/>
 		<div v-if="note.files?.length" :class="$style.meta">
 			<i class="ti ti-photo" aria-hidden="true"></i>{{ i18n.ts.files }}
@@ -58,8 +69,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import TwitterAvatar from './components/TwitterAvatar.vue';
 import * as Misskey from 'misskey-js';
+import { computed, inject } from 'vue';
 import type { ComputedRef } from 'vue';
 import { useTwitterDisplayUser } from './composables/use-twitter-display-user.js';
+import { useNoteNavigation } from './composables/use-note-navigation.js';
+import { DI } from '@/di.js';
 import { i18n } from '@/i18n.js';
 import { notePage } from '@/filters/note.js';
 import { userPage } from '@/filters/user.js';
@@ -68,6 +82,16 @@ import { userPage } from '@/filters/user.js';
 const props = defineProps<{
 	note: Misskey.entities.Note | null;
 }>();
+/** 样本上下文不新增可跳入真实实例的帖子入口。 */
+const mock: boolean = inject(DI.mock, false);
+/** 缺失引用保持空值，不把外层帖子作为替代导航目标。 */
+const navigationNote: ComputedRef<Misskey.entities.Note | null> = computed(
+	/** 引用卡片始终以自身收到的帖子为目标。 */
+	(): Misskey.entities.Note | null => props.note,
+);
+/** 引用正文与空白区复用统一导航，键盘访问保留在真实时间戳链接。 */
+const { onNoteClick, onNoteAuxClick }: ReturnType<typeof useNoteNavigation> = useNoteNavigation(navigationNote);
+
 /** 身份展示与帖子的业务快照分离。 */
 const displayUser: ComputedRef<Readonly<Misskey.entities.UserLite> | null> = useTwitterDisplayUser(
 	/** 提取该组件实际显示的作者，不混淆转发者与原作者。 */
@@ -123,6 +147,15 @@ const displayUser: ComputedRef<Readonly<Misskey.entities.UserLite> | null> = use
 	color: var(--twitter-fg);
 	text-decoration: none;
 	text-overflow: ellipsis;
+
+	&:hover {
+		text-decoration: underline;
+	}
+}
+
+.time {
+	color: inherit;
+	text-decoration: none;
 
 	&:hover {
 		text-decoration: underline;
