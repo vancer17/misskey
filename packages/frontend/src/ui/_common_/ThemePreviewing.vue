@@ -16,7 +16,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { i18n } from '@/i18n.js';
 import { themeManager } from '@/theme.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const isTwitterUi = useIsTwitterUi();
 

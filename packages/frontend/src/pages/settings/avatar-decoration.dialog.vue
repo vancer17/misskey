@@ -64,7 +64,8 @@ import MkModalWindow from '@/components/MkModalWindow.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
 import { i18n } from '@/i18n.js';
 import { ensureSignin } from '@/i.js';
-import { TwitterAvatarDecorationPreview, useIsTwitterUi } from '@/ui/twitter/index.js';
+import { TwitterAvatarDecorationPreview } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 import type { TwitterAvatarDecorationContext } from '@/ui/twitter/index.js';
 import { canUseAvatarDecoration } from '@/utility/avatar-decoration/index.js';
 
