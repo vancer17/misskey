@@ -87,7 +87,7 @@ import MkPaginationControl from '@/components/MkPaginationControl.vue';
 import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
 import TwitterPageSkeleton from '@/ui/twitter/components/TwitterPageSkeleton.vue';
 import * as os from '@/os.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const isTwitterUi = useIsTwitterUi();
 
