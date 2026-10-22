@@ -95,7 +95,7 @@ import { transformPlayerUrl } from '@/utility/url-preview.js';
 import { store } from '@/store.js';
 import { prefer } from '@/preferences.js';
 import { maybeMakeRelative } from '@@/js/url.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const props = withDefaults(defineProps<{
 	url: string;
