@@ -64,6 +64,17 @@
 
 S-1 裁决建议：三栏 Shell 是 phase-1 P-00 的产品决策（总表原文"三栏桌面 Shell"），本审计不推翻；但应在 ADR 明确边界——**Shell 骨架（列制、侧栏、底栏）= X 信息架构；nitter 权威范围 = 主列内容区（帖子卡、列表、表单、面板）**。此前该边界仅隐含在总表与 PR 描述中。
 
+### 侧栏内部空间登记（2026-10-22）
+
+本项只登记 `Sidebar.vue` 的当前内部呈现，不替代 T-7／S-1 对整个 Shell 的来源汇总。Nitter `navbar.scss` 是顶部横向导航，不提供左侧纵向主导航或发帖入口；因此这一局部采用本地 X 归档补充。当前契约见 [主滚动布局](./scroll-layout.md)，选择依据与历史替代见 [ADR-0021](./adr/0021-sidebar-capsules-and-community-tab-indicator.md)。
+
+| 当前实现件 | 来源锚点 | 当前映射 |
+| --- | --- | --- |
+| 侧栏根节点与发帖按钮 | X `loader.SideNav.abc2a60017aefc0ea.js` 模块 `634040` 的 `rootPaddingNormal`／`button` | 根横向内距 `8px`；完整侧栏按钮占内宽 `90%` 并沿起点对齐；图标模式继续使用既有 `52px` 控件 |
+| 导航命中区与视觉胶囊 | X `sharedbundle.Composebundle.ComposeGrokMediabundle.ComposeMediabundle.Delegatebundle.Grokbundle.Payments.517af20de8a4bcaaa.js` 模块 `829598` 的外层 `vertical` 与内层 `base`／`vertical` | 整行链接包含受最大宽度约束的内容胶囊；胶囊承接悬停、选中和焦点反馈，图标／字号／内距仍消费现有 Token |
+
+上述文件均位于本地 `tmp/community_for_x/abs.twimg.com/responsive-web/client-web/`。归档源码能证明结构与默认样式，不代替完整导航的运行时像素测量；`275px`／`72px`／`600px`／`350px` 仍按既有布局契约消费。
+
 ## 三、帖子卡片（P-02 / R-2）
 
 | # | 项 | nitter 源值（锚点） | 实现值（锚点） | 判定 | 类 |
@@ -144,6 +155,7 @@ S-1 裁决建议：三栏 Shell 是 phase-1 P-00 的产品决策（总表原文"
 
 | 当前实现件 | 适用来源 | 采用真值 |
 | --- | --- | --- |
+| 首页／发现标签与选中指示条 | Nitter `timeline.scss` 的 `.tab-item` 等分和单元下划线；现行 `TimelineHeader`／`TwitterSearch` | 两列等分，指示条逻辑两侧各内缩 `--twitter-space-3`（`12px`），宽度随按钮变化；`4px` 高度、颜色与圆角沿用现有 Token；来源选择见 ADR-0021 |
 | `TwitterCommunityStrip` 横幅卡片 | X 归档 Communities `119474`：`eE.container`／`eE.name`／`eM`，主脚本主题 | 卡宽 `36×3+24=132px`、banner `2.5:1`、圆角 `12px`、边框 `1px`、名称内距 `8px`；通过 `--twitter-community-*` 与既有 Token 消费 |
 | 横条配色与通用间距 | Nitter `themes/twitter{,_dark}.css`、既有 Token 阶梯 | 背景／文字／边框继承 `--twitter-*`；横条内距与可见卡间距 `16px` |
 | 搜索结果 `MkChannelPreview` `.twitter` 变体 | Nitter `tweet/card.scss` `.card-container`（图与标题同构） | border `1px`、radius `10px`（`--twitter-radius-embed`）、`--twitter-panel` |
