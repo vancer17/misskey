@@ -68,11 +68,12 @@ import { useGlobalEvent } from '@/events.js';
 import { computed, markRaw, onActivated, onDeactivated, onBeforeUnmount, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { ComputedRef } from 'vue';
-import type { TwitterLayoutState, TwitterUserTimelineTab } from '@/ui/twitter/index.js';
+import type { TwitterUserTimelineTab } from '@/ui/twitter/index.js';
+import type { TwitterLayoutState } from '@/ui/twitter/context/index.js';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import { TwitterNote, TwitterUserTimelinePaginator } from '@/ui/twitter/index.js';
 import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
-import { useTwitterLayout } from '@/ui/twitter/index.js';
+import { useTwitterLayout } from '@/ui/twitter/context/index.js';
 import { userPage } from '@/filters/user.js';
 import { i18n } from '@/i18n.js';
 
