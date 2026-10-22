@@ -249,7 +249,7 @@ import { i18n } from '@/i18n.js';
 import { isTouchUsing } from '@/utility/touch.js';
 import { isFocusable } from '@/utility/focus.js';
 import { getNodeOrNull } from '@/utility/get-dom-node-or-null.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const childrenCache = new WeakMap<MenuParent, MenuItem[]>();
 </script>
