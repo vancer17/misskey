@@ -25,4 +25,6 @@ export const TWITTER_LAYOUT_BREAKPOINTS = {
 	entryCompact: 512,
 	/** 匿名入口双列布局下界：X 归档 md；禁止改写业务右栏断点。 */
 	entrySplit: 768,
+	/** 发帖工具栏极窄容器上界（不含）：X Compose 的 xxSmall，独立于移动 Shell。 */
+	composerNarrow: 320,
 } as const;
