@@ -23,7 +23,7 @@ import MkButton from '@/components/MkButton.vue';
 import MkSparkle from '@/components/MkSparkle.vue';
 import { i18n } from '@/i18n.js';
 import { confetti } from '@/utility/confetti.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
 const modal = useTemplateRef('modal');
 
