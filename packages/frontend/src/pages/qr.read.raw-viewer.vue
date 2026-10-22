@@ -87,7 +87,7 @@ import { extractUrlFromMfm } from '@/utility/extract-url-from-mfm.js';
 import MkCode from '@/components/MkCode.vue';
 import MkUrlPreview from '@/components/MkUrlPreview.vue';
 import { i18n } from '@/i18n.js';
-import { useIsTwitterUi } from '@/ui/twitter/index.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 import * as os from '@/os.js';
 
 const props = defineProps<{

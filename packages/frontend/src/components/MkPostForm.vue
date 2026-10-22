@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：共享发帖表单展示边界。
+作用：向宿主提供回复上下文显隐与既有输入框聚焦能力，发布、上传和草稿仍由原表单负责。
+数据链：宿主展示参数 → 原表单状态与创建流程 → 既有发布事件。
+-->
+
 <template>
 <div
 	:class="[$style.root, { [$style.twitterRoot]: isTwitterUi }]"
@@ -18,9 +24,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</button>
 		</header>
 
-		<div v-if="replyTargetNote != null || renoteTargetNote != null" :class="$style.twitterContext">
+		<div v-if="(showReplyContext && replyTargetNote != null) || renoteTargetNote != null" :class="$style.twitterContext">
 			<MkNoteSimple
-				v-if="replyTargetNote"
+				v-if="showReplyContext && replyTargetNote"
 				:class="$style.twitterTargetNote"
 				:note="replyTargetNote"
 			/>
@@ -176,7 +182,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</button>
 		</div>
 	</header>
-	<MkNoteSimple v-if="replyTargetNote" :class="$style.targetNote" :note="replyTargetNote"/>
+	<MkNoteSimple v-if="showReplyContext && replyTargetNote" :class="$style.targetNote" :note="replyTargetNote"/>
 	<MkNoteSimple v-if="renoteTargetNote" :class="$style.targetNote" :note="renoteTargetNote"/>
 	<div v-if="quoteId" :class="$style.withQuote"><i class="ti ti-quote"></i> {{ i18n.ts.quoteAttached }}<button @click="quoteId = null; renoteTargetNote = null;"><i class="ti ti-x"></i></button></div>
 	<div v-if="visibility === 'specified'" :class="$style.toSpecified">
@@ -300,12 +306,15 @@ const props = withDefaults(defineProps<PostFormProps & {
 	freezeAfterPosted?: boolean;
 	mock?: boolean;
 	variant?: 'default' | 'twitter';
+	/** 详情页已呈现原帖时隐藏重复预览，不改变回复目标。 */
+	showReplyContext?: boolean;
 }>(), {
 	initialVisibleUsers: () => [],
 	autofocus: true,
 	mock: false,
 	initialLocalOnly: undefined,
 	variant: undefined,
+	showReplyContext: true,
 });
 
 provide(DI.mock, props.mock);
@@ -620,7 +629,8 @@ function addTag(tag: string) {
 	insertTextAtCursor(textareaEl.value, ` #${tag} `);
 }
 
-function focus() {
+/** 聚焦既有输入框并将光标移至末尾，供弹窗和内联宿主复用。 */
+function focus(): void {
 	if (textareaEl.value) {
 		textareaEl.value.focus();
 		textareaEl.value.setSelectionRange(textareaEl.value.value.length, textareaEl.value.value.length);
@@ -1650,6 +1660,7 @@ async function canClose() {
 
 defineExpose({
 	clear,
+	focus,
 	abortUploader: () => uploader.abortAll(),
 	canClose,
 });
