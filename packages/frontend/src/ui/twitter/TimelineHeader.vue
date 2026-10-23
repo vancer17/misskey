@@ -4,9 +4,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <!--
-文件领域：Twitter 紧凑身份展示。
-作用：保留原头像交互，将紧凑头像明确接入不显示挂件的展示场景。
-数据链：既有用户投影 → Twitter 头像包装 → 无装饰身份展示，不改写用户事实。
+文件领域：Twitter 时间线页头与导航展示。
+作用：承载时间线切换、紧凑身份与专用刷新入口，刷新忙闲状态由查询所有者传入。
+数据链：只读导航／操作投影 → 页头；切换、刷新意图 → 页面协调层，不持有帖子事实。
 -->
 
 <template>
@@ -28,13 +28,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:class="$style.tab"
 			type="button"
 			:aria-current="tab.key === tabModel ? 'page' : undefined"
-			@click="(ev) => onTabClick(tab, ev)"
+			@click="onTabClick(tab, $event)"
 		>
 			<span :class="$style.tabTitle">{{ tab.title }}</span>
 		</button>
 	</nav>
 
 	<div :class="$style.actions">
+		<button
+			v-if="showRefresh"
+			class="_button"
+			:class="$style.action"
+			type="button"
+			data-testid="twitter-timeline-refresh"
+			:aria-label="refreshing ? i18n.ts.loading : i18n.ts.reload"
+			:aria-busy="refreshing"
+			:disabled="refreshDisabled || refreshing"
+			@click="onRefresh"
+		>
+			<i :class="[refreshing ? 'ti ti-loader-2' : 'ti ti-refresh', $style.actionIcon, { [$style.refreshing]: refreshing }]" aria-hidden="true"></i>
+		</button>
 		<button
 			v-for="(action, index) in actions"
 			:key="index"
@@ -51,6 +64,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import type { ModelRef } from 'vue';
 import TwitterAvatar from './components/TwitterAvatar.vue';
 import type { Tab } from '@/components/global/MkPageHeader.tabs.vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
@@ -60,22 +74,41 @@ import { useTwitterLayout } from './composables/use-twitter-layout.js';
 
 const { isMobile } = useTwitterLayout();
 
-withDefaults(defineProps<{
+/** 页头只接收导航与刷新展示参数，业务状态仍由时间线查询所有者提供。 */
+type TimelineHeaderProps = {
 	tabs: Tab[];
 	actions?: PageHeaderItem[];
 	displayMyAvatar?: boolean;
-}>(), {
-	actions: () => [],
+	showRefresh?: boolean;
+	refreshing?: boolean;
+	refreshDisabled?: boolean;
+};
+
+const props: Readonly<TimelineHeaderProps> = withDefaults(defineProps<TimelineHeaderProps>(), {
+	/** 未传入额外操作时展示空集合，不引入业务默认动作。 */
+	actions: (): PageHeaderItem[] => [],
 	displayMyAvatar: false,
+	showRefresh: false,
+	refreshing: false,
+	refreshDisabled: false,
 });
 
-const tabModel = defineModel<string>('tab');
+const tabModel: ModelRef<string | undefined> = defineModel<string>('tab');
 
+/** 页头只向页面提交用户意图，不执行查询或滚动。 */
 const emit = defineEmits<{
 	(ev: 'tabReselected'): void;
+	(ev: 'refresh'): void;
 }>();
 
-function onTabClick(tab: Tab, ev: PointerEvent) {
+/** 手动刷新受原生禁用属性与处理器共同保护，忙时不重复提交。 */
+function onRefresh(): void {
+	if (props.refreshDisabled || props.refreshing) return;
+	emit('refresh');
+}
+
+/** 保留原标签动作与重选回顶意图，仅提交当前导航标识。 */
+function onTabClick(tab: Tab, ev: PointerEvent): void {
 	if (tab.onClick != null) {
 		tab.onClick(ev);
 		return;
@@ -226,9 +259,21 @@ function onTabClick(tab: Tab, ev: PointerEvent) {
 	font-size: var(--twitter-font-size-title);
 }
 
+.refreshing {
+	animation: refreshSpin calc(var(--twitter-duration-slow) * 4) linear infinite;
+}
+
+@keyframes refreshSpin {
+	to { transform: rotate(360deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
 	.tab::after {
 		transition: none;
+	}
+
+	.refreshing {
+		animation: none;
 	}
 }
 

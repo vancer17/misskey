@@ -18,7 +18,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:tabs="tabs"
 				:actions="actions"
 				:displayMyAvatar="displayMyAvatar"
+				:showRefresh="showRefresh"
+				:refreshing="refreshing"
+				:refreshDisabled="refreshDisabled"
 				@tabReselected="scrollToTop"
+				@refresh="emit('refresh')"
 			/>
 		</template>
 
@@ -50,16 +54,31 @@ import { useRouter } from '@/router.js';
 import { prefer } from '@/preferences.js';
 import TwitterTimelineHeader from './TimelineHeader.vue';
 
-withDefaults(defineProps<{
+/** 页面壳转交页头的展示参数，不复制查询状态或刷新结果。 */
+type TimelineShellProps = {
 	tabs: Tab[];
 	actions?: PageHeaderItem[];
 	swipable?: boolean;
 	displayMyAvatar?: boolean;
-}>(), {
-	actions: () => [],
+	showRefresh?: boolean;
+	refreshing?: boolean;
+	refreshDisabled?: boolean;
+};
+
+withDefaults(defineProps<TimelineShellProps>(), {
+	/** 未指定操作时保留空页头操作集合。 */
+	actions: (): PageHeaderItem[] => [],
 	swipable: true,
 	displayMyAvatar: false,
+	showRefresh: false,
+	refreshing: false,
+	refreshDisabled: false,
 });
+
+/** 刷新仅作为用户意图转交页面，由页面协调查询与滚动。 */
+const emit = defineEmits<{
+	(ev: 'refresh'): void;
+}>();
 
 const tabModel = defineModel<string>('tab');
 const rootEl = useTemplateRef('rootEl');
