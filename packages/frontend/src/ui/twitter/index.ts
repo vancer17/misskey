@@ -17,6 +17,10 @@
 export { twitterUserErrorStateType } from './domain/index.js';
 export { default as TwitterPageState } from './components/TwitterPageState.vue';
 export { default as TwitterPageSkeleton } from './components/TwitterPageSkeleton.vue';
+/** 横向标签的共享选中指示条，只消费标签标识并维护临时展示几何。 */
+export { default as TwitterTabIndicator } from './components/TwitterTabIndicator.vue';
+/** 时间线首拉的延显骨架与结果交接，仅消费原查询的只读加载状态。 */
+export { default as TwitterTimelineLoadBoundary } from './components/TwitterTimelineLoadBoundary.vue';
 /** 路由代码未就绪时的主题一致占位，不读取业务数据。 */
 export { default as TwitterRouteLoading } from './components/TwitterRouteLoading.vue';
 export { default as TwitterUserResult } from './UserResult.vue';
@@ -50,7 +54,7 @@ export type { TwitterAvatarDecoration, TwitterAvatarDecorationContext } from './
 export { useTwitterDisplayUser } from './composables/use-twitter-display-user.js';
 
 /** 主视口滚动及独立页面回退的 UI 协调入口。 */
-export { provideTwitterScrollHost, useTwitterScrollPositionKeeper } from './composables/use-twitter-scroll-host.js';
+export { provideTwitterScrollHost, useTwitterScrollPositionKeeper, useTwitterSourceScrollReset } from './composables/use-twitter-scroll-host.js';
 /** 写入与回访的 UI 调度，业务实体仍归原数据所有者。 */
 export { useTwitterRefresh, useTwitterPaginatorRefresh } from './composables/use-twitter-refresh.js';
 /** 会话级计数展示投影，不参与业务决策。 */
