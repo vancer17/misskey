@@ -3,8 +3,14 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：首页时间线页面与交互协调。
+作用：保留 Misskey 的时间线来源及筛选入口；Twitter 分支将手动刷新、Shell 回顶和结果提示连接起来。
+数据链：既有偏好 → 时间线查询输入；唯一查询所有者 → 只读刷新结果 → 页面提示，不复制帖子事实。
+-->
+
 <template>
-<component :is="timelineComponent" v-model:tab="src" v-bind="timelineComponentProps">
+<component :is="timelineComponent" ref="timelineShell" v-model:tab="src" v-bind="timelineComponentProps" @refresh="refreshTwitterTimeline">
 	<div
 		:class="isTwitterUi ? $style.twitterBody : ['_spacer', $style.body]"
 		:style="isTwitterUi ? undefined : { '--MI_SPACER-w': '800px' }"
@@ -18,10 +24,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 			fixed
 			:style="{ marginBottom: 'var(--MI-margin)' }"
 		/>
-		<MkStreamingNotesTimeline
-			ref="tlComponent"
-			:key="src + withRenotes + withReplies + onlyFiles + withSensitive"
-			:class="isTwitterUi ? $style.twitterTl : $style.tl"
+		<TwitterStreamingTimeline
+			v-if="isTwitterUi"
+			ref="twitterTlComponent"
+			:key="twitterTimelineKey"
+			:class="$style.twitterTl"
 			:src="(src.split(':')[0] as (BasicTimelineType | 'list'))"
 			:list="src.split(':')[1]"
 			:withRenotes="withRenotes"
@@ -29,14 +36,29 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:withSensitive="withSensitive"
 			:onlyFiles="onlyFiles"
 			:sound="true"
-			:variant="isTwitterUi ? 'twitter' : 'misskey'"
+			@refreshStarted="onTwitterRefreshStarted"
+		/>
+		<MkStreamingNotesTimeline
+			v-else
+			ref="tlComponent"
+			:key="src + withRenotes + withReplies + onlyFiles + withSensitive"
+			:class="$style.tl"
+			:src="(src.split(':')[0] as (BasicTimelineType | 'list'))"
+			:list="src.split(':')[1]"
+			:withRenotes="withRenotes"
+			:withReplies="withReplies"
+			:withSensitive="withSensitive"
+			:onlyFiles="onlyFiles"
+			:sound="true"
+			variant="misskey"
 		/>
 	</div>
 </component>
 </template>
 
 <script lang="ts" setup>
-import { computed, watch, provide, useTemplateRef, ref, onMounted, onActivated, inject } from 'vue';
+import { computed, watch, provide, useTemplateRef, ref, onMounted, onActivated, onDeactivated, onBeforeUnmount, inject } from 'vue';
+import type { ComputedRef, ShallowRef } from 'vue';
 import PageWithHeader from '@/components/global/PageWithHeader.vue';
 import type { Tab } from '@/components/global/MkPageHeader.tabs.vue';
 import type { MenuItem } from '@/types/menu.js';
@@ -55,13 +77,17 @@ import { deepMerge } from '@/utility/merge.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { availableBasicTimelines, hasWithReplies, isAvailableBasicTimeline, isBasicTimeline, basicTimelineIconClass } from '@/timelines.js';
 import { prefer } from '@/preferences.js';
-import TwitterTimelineShell from '@/ui/twitter/TimelineShell.vue';
+import { TwitterStreamingTimeline, TwitterTimelineShell } from '@/ui/twitter/index.js';
+import type { TwitterTimelineRefreshResult } from '@/ui/twitter/index.js';
 import { DI } from '@/di.js';
 
 const tlComponent = useTemplateRef('tlComponent');
+const twitterTlComponent: Readonly<ShallowRef<InstanceType<typeof TwitterStreamingTimeline> | null>> = useTemplateRef('twitterTlComponent');
+const timelineShell: Readonly<ShallowRef<InstanceType<typeof TwitterTimelineShell> | InstanceType<typeof PageWithHeader> | null>> = useTemplateRef('timelineShell');
 const uiStyle = inject(DI.uiStyle, ref('default'));
 const isTwitterUi = computed(() => uiStyle.value === 'twitter');
 const timelineComponent = computed(() => isTwitterUi.value ? TwitterTimelineShell : PageWithHeader);
+let timelinePageActive: boolean = true;
 
 type TimelinePageSrc = BasicTimelineType | `list:${string}`;
 
@@ -118,6 +144,50 @@ const withSensitive = computed<boolean>({
 	get: () => store.r.tl.value.filter.withSensitive,
 	set: (x) => saveTlFilter('withSensitive', x),
 });
+
+const twitterTimelineKey: ComputedRef<string> = computed(
+	/** 来源、账户或筛选改变即重建查询所有者，避免旧响应归属新查询。 */
+	(): string => `${$i?.id ?? ''}:${src.value}:${withRenotes.value}:${withReplies.value}:${onlyFiles.value}:${withSensitive.value}`,
+);
+
+/** 查询所有者先登记比较基线，再经页面驱动真实 Shell 滚动宿主回顶一次。 */
+function onTwitterRefreshStarted(): void {
+	if (isTwitterUi.value && timelinePageActive) timelineShell.value?.scrollToTop();
+}
+
+/** 页面仅将权威刷新结果转换为轻量提示，不通过列表或 DOM 推断新帖。 */
+async function refreshTwitterTimeline(): Promise<void> {
+	const currentTimeline: InstanceType<typeof TwitterStreamingTimeline> | null = twitterTlComponent.value;
+	if (!isTwitterUi.value || !timelinePageActive || currentTimeline == null || currentTimeline.refreshing) return;
+	const result: TwitterTimelineRefreshResult = await currentTimeline.refreshManually();
+	if (!timelinePageActive || !isTwitterUi.value || currentTimeline !== twitterTlComponent.value) return;
+	switch (result) {
+		case 'updated':
+			os.toast(i18n.ts._twitterUi.timelineUpdated);
+			break;
+		case 'unchanged':
+			os.toast(i18n.ts._twitterUi.timelineUpToDate);
+			break;
+		case 'failed':
+			os.toast(i18n.ts._twitterUi.timelineRefreshFailed);
+			break;
+		case 'cancelled':
+			break;
+	}
+}
+
+onActivated(
+	/** 缓存页面重新激活后允许本次所有者的结果进入当前 UI。 */
+	(): void => { timelinePageActive = true; },
+);
+onDeactivated(
+	/** 页面失活即停止消费异步提示；查询撤销由业务包装层处理。 */
+	(): void => { timelinePageActive = false; },
+);
+onBeforeUnmount(
+	/** 页面销毁时关闭提示出口，防止旧 Promise 在离页后弹出反馈。 */
+	(): void => { timelinePageActive = false; },
+);
 
 const showFixedPostForm = prefer.model('showFixedPostForm');
 
@@ -219,11 +289,14 @@ onActivated(() => {
 	switchTlIfNeeded();
 });
 
-const headerActions = computed<PageHeaderItem[]>(() => {
+const headerActions: ComputedRef<PageHeaderItem[]> = computed<PageHeaderItem[]>(
+/** 原界面保留通用刷新操作，Twitter 页头使用带忙闲状态的独立刷新入口。 */
+(): PageHeaderItem[] => {
 	const items: PageHeaderItem[] = [{
 		icon: 'ti ti-dots',
 		text: i18n.ts.options,
-		handler: (ev) => {
+		/** 操作菜单只更新既有筛选偏好，查询归属随页面 key 重新创建。 */
+		handler: (ev: PointerEvent): void => {
 			const menuItems: MenuItem[] = [];
 
 			menuItems.push({
@@ -271,11 +344,12 @@ const headerActions = computed<PageHeaderItem[]>(() => {
 		},
 	}];
 
-	if (deviceKind === 'desktop') {
+	if (deviceKind === 'desktop' && !isTwitterUi.value) {
 		items.unshift({
 			icon: 'ti ti-refresh',
 			text: i18n.ts.reload,
-			handler: () => {
+			/** 默认界面继续调用原流式组件的公开刷新入口。 */
+			handler: (): void => {
 				tlComponent.value?.reloadTimeline();
 			},
 		});
@@ -318,9 +392,17 @@ const headerTabsWhenNotLogin = computed(() => [...availableBasicTimelines().map(
 	iconOnly: true,
 }))] as Tab[]);
 
-const timelineComponentProps = computed(() => {
-	const defaultTabs = ($i ? headerTabs.value : headerTabsWhenNotLogin.value) as Tab[];
-	const twitterTabs = defaultTabs.filter(tab => tab.onClick == null);
+/** 壳组件的只读展示投影，沿用现有组件参数类型而不重复业务状态定义。 */
+type TimelineComponentProps = Pick<InstanceType<typeof TwitterTimelineShell>['$props'], 'actions' | 'tabs' | 'swipable' | 'displayMyAvatar' | 'showRefresh' | 'refreshing' | 'refreshDisabled'> & Pick<InstanceType<typeof PageWithHeader>['$props'], 'canOmitTitle'>;
+
+const timelineComponentProps: ComputedRef<TimelineComponentProps> = computed(
+/** 界面分支只决定展示入口，刷新结果始终来自 Twitter 查询所有者。 */
+(): TimelineComponentProps => {
+	const defaultTabs: Tab[] = ($i ? headerTabs.value : headerTabsWhenNotLogin.value) as Tab[];
+	const twitterTabs: Tab[] = defaultTabs.filter(
+		/** Twitter 页头只展示可切换来源，额外导航动作保留在既有入口。 */
+		(tab: Tab): boolean => tab.onClick == null,
+	);
 
 	return isTwitterUi.value
 		? {
@@ -328,6 +410,9 @@ const timelineComponentProps = computed(() => {
 			tabs: twitterTabs,
 			swipable: true,
 			displayMyAvatar: true,
+			showRefresh: deviceKind === 'desktop',
+			refreshing: twitterTlComponent.value?.refreshing ?? false,
+			refreshDisabled: twitterTlComponent.value?.initializing ?? true,
 		}
 		: {
 			actions: headerActions.value,
