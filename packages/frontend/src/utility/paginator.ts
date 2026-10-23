@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * 文件领域：Misskey 通用分页与队列。
+ * 作用：持有唯一条目集合并提供原有分页动作；导出构造依赖类型供业务所有者接入。
+ * 数据链：接口及分页参数 → 已确认集合／前置队列 → 列表展示，不包含界面特定刷新结果。
+ */
 import { ref, shallowRef, triggerRef } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { ComputedRef, Ref, ShallowRef, UnwrapRef } from 'vue';
@@ -10,8 +15,10 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 
 const MAX_ITEMS = 30;
 const MAX_QUEUE_ITEMS = 100;
-const FIRST_FETCH_LIMIT = 15;
-const SECOND_FETCH_LIMIT = 30;
+/** 既有首批查询数量；业务查询所有者复用此权威值，不复制默认分页尺度。 */
+export const FIRST_FETCH_LIMIT: number = 15;
+/** 既有后续页查询数量；旧页与新页读取共同消费同一权威值。 */
+export const SECOND_FETCH_LIMIT: number = 30;
 
 export type MisskeyEntity = {
 	id: string;
@@ -68,6 +75,20 @@ export interface IPaginator<T = unknown, _T = T & MisskeyEntity> {
 	removeItem(id: string): void;
 	updateItem(id: string, updater: (item: _T) => _T): void;
 }
+
+/** 从现有浅引用分页器构造器派生配置，避免复制请求及分页参数定义。 */
+export type PaginatorOptions<Endpoint extends PaginatorCompatibleEndpointPaths> = ConstructorParameters<typeof Paginator<
+	Endpoint,
+	PaginatorCompatibleEndpoints[Endpoint],
+	PaginatorCompatibleEndpoints[Endpoint]['res'][number] & MisskeyEntity,
+	true
+>>[1];
+
+/** 流式容器的构造依赖；原接口映射与所有分页调用仍由容器统一维护。 */
+export type PaginatorFactory = <Endpoint extends PaginatorCompatibleEndpointPaths>(
+	endpoint: Endpoint,
+	options: PaginatorOptions<Endpoint>,
+) => IPaginator<PaginatorCompatibleEndpoints[Endpoint]['res'][number]>;
 
 export class Paginator<
 	Endpoint extends PaginatorCompatibleEndpointPaths,
@@ -177,7 +198,8 @@ export class Paginator<
 		this.updateItem = this.updateItem.bind(this);
 	}
 
-	private getNewestId(): string | null | undefined {
+	/** 从唯一前置队列或条目集合派生新页游标，供业务查询所有者复用。 */
+	protected getNewestId(): string | null | undefined {
 		// 様々な要因により並び順は保証されないのでソートが必要
 		if (this.aheadQueue.length > 0) {
 			return this.aheadQueue.map(x => x.id).sort().at(-1);
@@ -185,7 +207,8 @@ export class Paginator<
 		return this.items.value.map(x => x.id).sort().at(-1);
 	}
 
-	private getOldestId(): string | null | undefined {
+	/** 从唯一条目集合派生旧页游标，避免子查询所有者复制分页事实。 */
+	protected getOldestId(): string | null | undefined {
 		// 様々な要因により並び順は保証されないのでソートが必要
 		return this.items.value.map(x => x.id).sort().at(0);
 	}
