@@ -99,6 +99,24 @@ async function box(locator: Locator): Promise<ElementBox> {
 	return result!;
 }
 
+/** 锁定条目保留未知文案，真实徽章在装饰槽位中完成解码并整体去色，且不产生扫光。 */
+async function expectLockedBadge(row: Locator): Promise<void> {
+	const badge: Locator = row.locator('[aria-hidden="true"]');
+	const image: Locator = badge.locator('img');
+	await expect(image).toHaveCount(1);
+	await expect(image).toHaveAttribute('alt', '');
+	await expect.poll(/** 解码尺寸证明浏览器成功载入真实资产，而非仅生成图片节点。 */ (): Promise<boolean> => image.evaluate(
+		/** 只观测当前图片的加载结果，不复制徽章目录或接口字段。 */ (element: HTMLImageElement): boolean => element.complete && element.naturalWidth > 0,
+	)).toBe(true);
+	await expect(badge).toHaveCSS('filter', 'grayscale(1) brightness(0.75)');
+	const animation: string = await image.locator('xpath=../..').evaluate(
+		/** 框体的伪元素不得沿用已解锁高等级徽章的扫光动画。 */ (element: HTMLElement): string => getComputedStyle(element, '::before').animationName,
+	);
+	expect(animation).toBe('none');
+	await expect(row.getByTestId('achievement-title')).toHaveText('???');
+	await expect(row.getByTestId('achievement-description')).toHaveText('???');
+}
+
 test('成就通知点击与 Enter 均进入 Twitter 成就页并呈现真实目录', /** 入口、字段和既有目录顺序共同验证，而不只检查 URL。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
 	// 故意逆序申领，目录不得退化为申领时间倒序。
 	await claim('markedAsCat');
@@ -152,21 +170,36 @@ test('直接访问刷新及历史回访保持页面可用并恢复主列位置',
 	await expect(achievement(page, 'notes1')).toHaveAttribute('data-achievement-locked', 'false');
 });
 
-test('锁定占位的隐藏点击成就成功后直接更新当前条目', /** 同时核对真实申领与当前页面，不靠整页刷新补齐展示。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
-	await openAchievements(page);
-	const locked: Locator = achievement(page, 'clickedClickHere');
-	await expect(locked).toHaveAttribute('data-achievement-locked', 'true');
-	await expect(locked.getByTestId('achievement-title')).toHaveText('???');
-	await expect(locked.getByTestId('achievement-description')).toHaveText('???');
-	const claimed: Promise<Response> = page.waitForResponse(/** 只等待该隐藏成就的真实写入回执。 */ (response: Response): boolean => isClaimResponse(response, 'clickedClickHere'));
-	await locked.click();
-	await claimed;
-	await expect.poll(/** 独立核对服务端事实，避免只证明客户端自行解锁。 */ async (): Promise<number> => (await earned()).filter(
-		/** 后端应只保留一条已申领记录。 */ (item: Misskey.entities.UsersAchievementsResponse[number]): boolean => item.name === 'clickedClickHere',
-	).length).toBe(1);
-	await expect(achievement(page, 'clickedClickHere')).toHaveAttribute('data-achievement-locked', 'false');
-	await expect(achievement(page, 'clickedClickHere').getByTestId('achievement-title')).toHaveText('Click here');
-});
+/** 鼠标命中徽章以及原生按钮的两种键盘激活方式，共用同一条真实申领链。 */
+const hiddenClaimInputs: readonly ('badge' | 'Enter' | 'Space')[] = ['badge', 'Enter', 'Space'];
+for (const input of hiddenClaimInputs) {
+	test(`锁定占位通过 ${input} 申领隐藏点击成就后直接更新当前条目`, /** 同时核对真实申领与当前页面，不靠整页刷新补齐展示。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+		await openAchievements(page);
+		const locked: Locator = achievement(page, 'clickedClickHere');
+		await expect(locked).toHaveAttribute('data-achievement-locked', 'true');
+		await expectLockedBadge(locked);
+		const source: string | null = await locked.locator('img').getAttribute('src');
+		expect(source).not.toBeNull();
+		await locked.scrollIntoViewIfNeeded();
+		const claimed: Promise<Response> = page.waitForResponse(/** 只等待该隐藏成就的真实写入回执。 */ (response: Response): boolean => isClaimResponse(response, 'clickedClickHere'));
+		if (input === 'badge') {
+			const target: ElementBox = await box(locked.locator('img'));
+			await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);
+		} else {
+			await locked.focus();
+			await locked.press(input);
+		}
+		await claimed;
+		await expect.poll(/** 独立核对服务端事实，避免只证明客户端自行解锁。 */ async (): Promise<number> => (await earned()).filter(
+			/** 后端应只保留一条已申领记录。 */ (item: Misskey.entities.UsersAchievementsResponse[number]): boolean => item.name === 'clickedClickHere',
+		).length).toBe(1);
+		const unlocked: Locator = achievement(page, 'clickedClickHere');
+		await expect(unlocked).toHaveAttribute('data-achievement-locked', 'false');
+		await expect(unlocked.getByTestId('achievement-title')).toHaveText('Click here');
+		await expect(unlocked.locator('img')).toHaveAttribute('src', source!);
+		await expect(unlocked.locator('img').locator('xpath=../../..')).toHaveCSS('filter', 'none');
+	});
+}
 
 test('三分钟申领计时在离页后清理并在回访后重新计时', /** 仅推进浏览器时间，真实申领请求及后端存储保持完整。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
 	await seedSession(page);
@@ -200,6 +233,8 @@ test('默认界面的本人成就与其他用户展示保留原组件语义', /*
 	await expect(page.getByTestId('twitter-achievements')).toHaveCount(0);
 	await expect(achievement(page, 'notes1').getByTestId('achievement-description')).toHaveText('Post your first note');
 	await expect(achievement(page, 'notes10')).toHaveAttribute('data-achievement-locked', 'true');
+	await expect(achievement(page, 'notes10').locator('img')).toHaveCount(0);
+	await expect(achievement(page, 'clickedClickHere').locator('img')).toHaveCount(0);
 	const ownRow: ElementBox = await box(achievement(page, 'notes1'));
 	expect(ownRow.width).toBeLessThanOrEqual(381);
 	await page.evaluate(/** 退出测试浏览器会话，后端账号与已申领成就事实保持不变。 */ (): void => { localStorage.removeItem('account'); });
@@ -219,22 +254,38 @@ for (const scheme of ['light', 'dark'] as const) {
 		await expect(page.locator('html')).toHaveAttribute('data-color-scheme', scheme);
 		await page.evaluate(/** 等待真实字体完成排版后再读取几何。 */ async (): Promise<void> => { await document.fonts.ready; });
 		await expect.poll(/** 真实徽章资源完成解码后再采集截图。 */ (): Promise<boolean> => shell.locator('img').evaluateAll(
-			/** 锁定占位不含图片，只检查实际存在的成就资源。 */ (images: HTMLImageElement[]): boolean => images.every(
+			/** 已解锁与锁定项都必须载入目录中的真实徽章资源。 */ (images: HTMLImageElement[]): boolean => images.every(
 				/** 加载成功必须同时有解码尺寸。 */ (image: HTMLImageElement): boolean => image.complete && image.naturalWidth > 0,
 			),
 		)).toBe(true);
+		const locked: Locator = achievement(page, 'notes10');
+		await expectLockedBadge(locked);
+		await expectLockedBadge(achievement(page, 'notes50000'));
+		await expectLockedBadge(achievement(page, 'notes100000'));
 		for (const width of [1440, 390, 320]) {
 			await page.setViewportSize({ width, height: 900 });
 			const first: ElementBox = await box(achievement(page, 'notes1'));
 			const second: ElementBox = await box(achievement(page, 'login3'));
 			const container: ElementBox = await box(shell);
+			const unlockedBadge: ElementBox = await box(achievement(page, 'notes1').locator('img').locator('xpath=../..'));
+			const lockedBadge: ElementBox = await box(locked.locator('img').locator('xpath=../..'));
+			const unlockedTitle: ElementBox = await box(achievement(page, 'notes1').getByTestId('achievement-title'));
+			const lockedTitle: ElementBox = await box(locked.getByTestId('achievement-title'));
 			expect(Math.abs(first.x - second.x)).toBeLessThanOrEqual(1);
 			expect(Math.abs(first.width - container.width)).toBeLessThanOrEqual(1);
 			expect(second.y).toBeGreaterThanOrEqual(first.y + first.height - 1);
+			expect(lockedBadge.width).toBe(48);
+			expect(lockedBadge.height).toBe(48);
+			expect(Math.abs(lockedBadge.width - unlockedBadge.width)).toBeLessThanOrEqual(1);
+			expect(Math.abs(lockedBadge.x - unlockedBadge.x)).toBeLessThanOrEqual(1);
+			expect(Math.abs(lockedTitle.x - unlockedTitle.x)).toBeLessThanOrEqual(1);
+			expect(lockedBadge.x + lockedBadge.width).toBeLessThan(lockedTitle.x);
 			const overflow: number = await page.evaluate(/** 目录换行不能撑宽页面根节点。 */ (): number => document.documentElement.scrollWidth - window.innerWidth);
 			expect(overflow).toBeLessThanOrEqual(1);
 			const rowOverflow: number = await achievement(page, 'notes1').evaluate(/** 逐条内容不得突破自己的布局盒子。 */ (element: HTMLElement): number => element.scrollWidth - element.clientWidth);
 			expect(rowOverflow).toBeLessThanOrEqual(1);
+			const lockedOverflow: number = await locked.evaluate(/** 新增锁定徽章不得撑宽自己的条目。 */ (element: HTMLElement): number => element.scrollWidth - element.clientWidth);
+			expect(lockedOverflow).toBeLessThanOrEqual(1);
 			const radius: string = await achievement(page, 'notes1').evaluate(/** 单列条目取消原独立面板的大圆角。 */ (element: HTMLElement): string => getComputedStyle(element).borderRadius);
 			expect(radius).toBe('0px');
 			await page.screenshot({ path: testInfo.outputPath(`achievements-${scheme}-${width}.png`), animations: 'disabled' });
