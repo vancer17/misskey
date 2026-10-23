@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/** 通知查询接口：沿用既有通知查询和自动已读语义，响应成功前等待已读水位持久化。 */
+
 import { In } from 'typeorm';
 import * as Redis from 'ioredis';
 import { Inject, Injectable } from '@nestjs/common';
@@ -14,6 +16,8 @@ import { NotificationService } from '@/core/NotificationService.js';
 import { DI } from '@/di-symbols.js';
 import { IdService } from '@/core/IdService.js';
 import { MiNotification } from '@/models/Notification.js';
+import type { SchemaType } from '@/misc/json-schema.js';
+import type { MiLocalUser } from '@/models/User.js';
 
 export const meta = {
 	tags: ['account', 'notifications'],
@@ -65,7 +69,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private notificationEntityService: NotificationEntityService,
 		private notificationService: NotificationService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, /** 原通知查询结果返回前，等待可选的自动已读动作完成。 */ async (ps: SchemaType<typeof paramDef>, me: MiLocalUser): Promise<Awaited<ReturnType<NotificationEntityService['packMany']>>> => {
 			const untilId = ps.untilId ?? (ps.untilDate ? this.idService.gen(ps.untilDate!) : undefined);
 			const sinceId = ps.sinceId ?? (ps.sinceDate ? this.idService.gen(ps.sinceDate!) : undefined);
 
@@ -91,7 +95,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			// Mark all as read
 			if (ps.markAsRead) {
-				this.notificationService.readAllNotification(me.id);
+				await this.notificationService.readAllNotification(me.id);
 			}
 
 			return await this.notificationEntityService.packMany(notifications, me.id);
