@@ -111,7 +111,8 @@ O-3 裁决延伸：不渲染内联发帖表单，发帖入口 = 头部 pencil（
 				<section :class="$style.identityCard">
 					<h2 :class="$style.name">{{ channel.name }}</h2>
 					<div v-if="channel.description" :class="$style.description">
-						<Mfm :text="channel.description" :isNote="false"/>
+						<!-- 使用 MFM 既有标签导航参数，使 Twitter 频道简介中的标签进入帖子结果页。 -->
+						<Mfm :text="channel.description" :isNote="true"/>
 					</div>
 					<div :class="$style.actionRow">
 						<MkButton
@@ -188,7 +189,8 @@ O-3 裁决延伸：不渲染内联发帖表单，发帖入口 = 头部 pencil（
 						<span>{{ i18n.ts.youAreAdmin }}</span>
 					</div>
 					<div v-if="channel.description" :class="$style.description">
-						<Mfm :text="channel.description" :isNote="false"/>
+						<!-- 关于面沿用频道头部的标签导航，进入同一帖子结果页。 -->
+						<Mfm :text="channel.description" :isNote="true"/>
 					</div>
 				</section>
 			</div>
