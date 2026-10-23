@@ -33,14 +33,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 		<template v-for="name in lockedAchievements" :key="name">
 			<button v-if="name === 'clickedClickHere'" type="button" :data-achievement-name="name" data-achievement-locked="true" :class="[$style.achievement, $style.locked]" class="_button _panel" @click="requestHiddenClaim">
-				<div :class="$style.icon"></div>
+				<div :class="[$style.icon, $style.lockedIcon]" aria-hidden="true">
+					<div v-if="isTwitterUi" :class="$style.iconFrame" :style="badgeFrameStyle(name)">
+						<div :class="$style.iconInner" :style="{ background: ACHIEVEMENT_BADGES[name].bg ?? ACHIEVEMENT_FRAME_STYLES[ACHIEVEMENT_BADGES[name].frame].inner }">
+							<img :class="$style.iconImg" :src="ACHIEVEMENT_BADGES[name].img" alt="">
+						</div>
+					</div>
+				</div>
 				<div :class="$style.body">
 					<div :class="$style.header"><span data-testid="achievement-title" :class="$style.title">???</span></div>
 					<div data-testid="achievement-description" :class="$style.description">???</div>
 				</div>
 			</button>
 			<div v-else :data-achievement-name="name" data-achievement-locked="true" :class="[$style.achievement, $style.locked]" class="_panel">
-				<div :class="$style.icon"></div>
+				<div :class="[$style.icon, $style.lockedIcon]" aria-hidden="true">
+					<div v-if="isTwitterUi" :class="$style.iconFrame" :style="badgeFrameStyle(name)">
+						<div :class="$style.iconInner" :style="{ background: ACHIEVEMENT_BADGES[name].bg ?? ACHIEVEMENT_FRAME_STYLES[ACHIEVEMENT_BADGES[name].frame].inner }">
+							<img :class="$style.iconImg" :src="ACHIEVEMENT_BADGES[name].img" alt="">
+						</div>
+					</div>
+				</div>
 				<div :class="$style.body">
 					<div :class="$style.header"><span data-testid="achievement-title" :class="$style.title">???</span></div>
 					<div data-testid="achievement-description" :class="$style.description">???</div>
@@ -239,6 +251,11 @@ function requestRetry(): void { emit('retry'); }
 		/* 图像槽位映射 Nitter tweet-avatar 的 48px 尺度，不改变徽章图片或等级。 */
 		width: 48px;
 		margin-right: var(--twitter-space-3);
+	}
+
+	.lockedIcon {
+		/* 锁定徽章整体去色并压暗；外层滤镜保留框体与图案原有的阴影。 */
+		filter: grayscale(1) brightness(0.75);
 	}
 
 	.iconFrame {
