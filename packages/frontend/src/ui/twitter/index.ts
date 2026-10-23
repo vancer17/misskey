@@ -67,3 +67,9 @@ export type { TwitterUserTimelineTab } from './domain/index.js';
 export { TwitterUserTimelinePaginator } from './store/user-timeline.js';
 /** 用户写入和关注信号的只读失效适配。 */
 export { useTwitterUserEvents, useTwitterRelationshipEvents } from './composables/use-twitter-user-events.js';
+/** 首页流式容器及其手动刷新查询所有者，共用原分页集合和流式调用链。 */
+export { default as TwitterStreamingTimeline } from './components/TwitterStreamingTimeline.vue';
+export { default as TwitterTimelineShell } from './TimelineShell.vue';
+export { TwitterTimelinePaginator } from './store/timeline-refresh.js';
+export type { TwitterTimelineRefreshController } from './store/timeline-refresh.js';
+export type { TwitterTimelineRefreshResult } from './domain/index.js';
