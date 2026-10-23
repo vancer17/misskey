@@ -4,9 +4,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <!--
-文件领域：Twitter 紧凑身份展示。
-作用：保留原头像交互，将紧凑头像明确接入不显示挂件的展示场景。
-数据链：既有用户投影 → Twitter 头像包装 → 无装饰身份展示，不改写用户事实。
+文件领域：Twitter 通知业务行。
+作用：展示既有通知投影并提交已读动作，导航继续由原链接组件处理。
+数据链：只读通知 → 用户点击 → 通知状态动作 → 权威账户未读字段，不保存计数副本。
 -->
 
 <template>
@@ -15,6 +15,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:to="rootComponent === MkA ? target : undefined"
 	:class="[$style.root, { [$style.unread]: unread, [$style.mobile]: isMobile }]"
 	:data-notification-type="notification.type"
+	@click.capture="onNotificationClick"
 >
 	<TwitterNotificationIcon :class="$style.icon" :notification="notification"/>
 
@@ -99,39 +100,49 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import TwitterAvatar from './components/TwitterAvatar.vue';
 import { computed, ref } from 'vue';
+import type { ComputedRef, Ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkA from '@/components/global/MkA.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkReactionIcon from '@/components/MkReactionIcon.vue';
 import { i18n } from '@/i18n.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import { confirmNotificationsRead } from '@/notifications/index.js';
 import { notePage } from '@/filters/note.js';
 import { userPage } from '@/filters/user.js';
 import TwitterNotificationIcon from './NotificationIcon.vue';
 import TwitterNotificationNotePreview from './NotificationNotePreview.vue';
 import { useTwitterLayout } from './composables/use-twitter-layout.js';
 
-const { isMobile } = useTwitterLayout();
+const { isMobile }: { isMobile: Readonly<Ref<boolean>> } = useTwitterLayout();
 
-const props = withDefaults(defineProps<{
+/** 通知业务行只读输入，通知实体继续复用服务端权威协议类型。 */
+type NotificationRowProps = Readonly<{
 	notification: Misskey.entities.Notification;
 	unread?: boolean;
 	full?: boolean;
-}>(), {
+}>;
+
+const props: Readonly<Required<NotificationRowProps>> = withDefaults(defineProps<NotificationRowProps>(), {
 	unread: false,
 	full: false,
 });
 
-const followRequestDone = ref(false);
+const followRequestDone: Ref<boolean> = ref(false);
 
-const actor = computed(() => {
+/** 点击仅提交全局已读水位动作，不阻塞链接导航；离页后的对账由状态模块继续完成。 */
+function onNotificationClick(): void {
+	void confirmNotificationsRead();
+}
+
+const actor: ComputedRef<Misskey.entities.UserLite | null> = computed(/** 从只读通知投影获取行为人，用于名称展示。 */ (): Misskey.entities.UserLite | null => {
 	if ('user' in props.notification && props.notification.user != null) {
 		return props.notification.user;
 	}
 	return null;
 });
 
-const actionLabel = computed(() => {
+const actionLabel: ComputedRef<string> = computed(/** 将既有通知种类映射为本地化动作文本。 */ (): string => {
 	switch (props.notification.type) {
 		case 'reaction':
 			return props.notification.note.reactionAcceptance === 'likeOnly'
@@ -153,7 +164,7 @@ const actionLabel = computed(() => {
 	}
 });
 
-const headerLabel = computed(() => {
+const headerLabel: ComputedRef<string> = computed(/** 为系统通知与聚合通知派生本地化标题，不修改通知事实。 */ (): string => {
 	switch (props.notification.type) {
 		case 'reaction:grouped':
 			return props.notification.note.reactionAcceptance === 'likeOnly'
@@ -172,15 +183,24 @@ const headerLabel = computed(() => {
 		case 'achievementEarned':
 			return i18n.ts._notification.achievementEarned;
 		case 'exportCompleted': {
-			const entityName = {
+			const entityName: Readonly<Record<Extract<Misskey.entities.Notification, { type: 'exportCompleted' }>['exportedEntity'], string>> = {
+				/** 天线导出对象名称。 */
 				antenna: i18n.ts.antennas,
+				/** 屏蔽列表导出对象名称。 */
 				blocking: i18n.ts.blockedUsers,
+				/** 收藏夹导出对象名称。 */
 				clip: i18n.ts.clips,
+				/** 自定义表情导出对象名称。 */
 				customEmoji: i18n.ts.customEmojis,
+				/** 收藏帖子导出对象名称。 */
 				favorite: i18n.ts.favorites,
+				/** 关注列表导出对象名称。 */
 				following: i18n.ts.following,
+				/** 静音列表导出对象名称。 */
 				muting: i18n.ts.mutedUsers,
+				/** 帖子导出对象名称。 */
 				note: i18n.ts.notes,
+				/** 用户列表导出对象名称。 */
 				userList: i18n.ts.lists,
 			} as const;
 			return i18n.tsx._notification.exportOfXCompleted({ x: entityName[props.notification.exportedEntity] });
@@ -196,7 +216,7 @@ const headerLabel = computed(() => {
 	}
 });
 
-const target = computed(() => {
+const target: ComputedRef<string | null> = computed(/** 导航仅序列化通知关联的实体标识，不向路由写入完整实体。 */ (): string | null => {
 	switch (props.notification.type) {
 		case 'note':
 		case 'mention':
@@ -224,13 +244,13 @@ const target = computed(() => {
 	}
 });
 
-const rootComponent = computed(() => {
+const rootComponent: ComputedRef<typeof MkA | 'article'> = computed(/** 有关联目标时复用原链接，否则仅展示通知内容。 */ (): typeof MkA | 'article' => {
 	if (target.value == null) return 'article';
 	if (props.notification.type === 'receiveFollowRequest') return 'article';
 	return MkA;
 });
 
-const previewNote = computed(() => {
+const previewNote: ComputedRef<Misskey.entities.Note | null> = computed(/** 从通知原有投影选择帖子预览，不保存帖子状态副本。 */ (): Misskey.entities.Note | null => {
 	switch (props.notification.type) {
 		case 'note':
 		case 'mention':
@@ -249,25 +269,27 @@ const previewNote = computed(() => {
 	}
 });
 
-const visibleReactions = computed(() => {
+const visibleReactions: ComputedRef<Extract<Misskey.entities.Notification, { type: 'reaction:grouped' }>['reactions']> = computed(/** 聚合回应仅投影前八个头像，原聚合计数保持不变。 */ (): Extract<Misskey.entities.Notification, { type: 'reaction:grouped' }>['reactions'] => {
 	return props.notification.type === 'reaction:grouped'
 		? props.notification.reactions.slice(0, 8)
 		: [];
 });
 
-const visibleRenoteUsers = computed(() => {
+const visibleRenoteUsers: ComputedRef<Extract<Misskey.entities.Notification, { type: 'renote:grouped' }>['users']> = computed(/** 聚合转发仅投影前八个用户，原通知实体保持只读。 */ (): Extract<Misskey.entities.Notification, { type: 'renote:grouped' }>['users'] => {
 	return props.notification.type === 'renote:grouped'
 		? props.notification.users.slice(0, 8)
 		: [];
 });
 
-function acceptFollowRequest() {
+/** 沿用原关注申请确认接口；完成标记只用于本行按钮的临时 UI 展示。 */
+function acceptFollowRequest(): void {
 	if (!('user' in props.notification)) return;
 	followRequestDone.value = true;
 	misskeyApi('following/requests/accept', { userId: props.notification.user.id });
 }
 
-function rejectFollowRequest() {
+/** 沿用原关注申请拒绝接口；不在通知组件持有关系状态副本。 */
+function rejectFollowRequest(): void {
 	if (!('user' in props.notification)) return;
 	followRequestDone.value = true;
 	misskeyApi('following/requests/reject', { userId: props.notification.user.id });
