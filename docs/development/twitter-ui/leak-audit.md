@@ -29,6 +29,7 @@ A 路由级 / B 启动与全局弹窗链 / C 交互子层弹窗 / D 嵌入式 Mi
 | A5 | `/channels/:id` | `Note.vue` 频道链接 | ❌ **新发现** | 阶段外处置冲突：清单判 Channels=Hide/延后，但卡片仍有直连链接 → ❓隐藏链接或 Compatible |
 | A6 | `/notes/:id/reactions` | `Note.vue:230` 反应「更多」 | ❌ **新发现** | Compatible 化（反应列表页未 Twitter 化） |
 | A7 | Sidebar 账户菜单项 → settings 等 | `Sidebar.vue` popupMenu（菜单本体✅） | ⚠️ | 菜单项目标逐一对照 P-20 Compatible 面，人工走查复核 |
+| A8 | `/tags/:tag`（Twitter 简介标签入口） | `TwitterHome.vue`；`ui/twitter/UserResult.vue`；`TwitterChannel.vue` 的头部和“关于”页简介 | ✅ 代码入口已覆盖 | 三个业务组件通过 MFM 公开参数 `isNote=true` 统一进入 P-15；共享用户结果行覆盖搜索、关注／粉丝列表及二维码用户结果。P-16 仍不纳入；运行验收独立记录，决策见 [ADR-0023](./adr/0023-description-hashtag-navigation.md)。 |
 
 ## B. 启动与全局弹窗链（boot 期 `os.popup`，全部无 twitter 变体）
 
@@ -83,7 +84,7 @@ A 路由级 / B 启动与全局弹窗链 / C 交互子层弹窗 / D 嵌入式 Mi
 | ❌ 确认泄漏 | 20 | A1-A6、B1-B5、C5-C8、D1-D5 |
 | ⚠️ 部分/待复核 | 8 | A7、C4、C9、D6、E1-E4 |
 | ❓ 产品决策前置 | 0（原 4 项，已全部裁决，见文末决策记录与 [ADR-0002](./adr/0002-product-decisions-leak-remediation.md)） | B1 / B3 / B4 / D1 / A5 |
-| ✅ 已覆盖 | 5 | C1-C3、C11、E3（现状无面） |
+| ✅ 已覆盖 | 6 | A8（代码入口）、C1-C3、C11、E3（现状无面） |
 
 ## 修复批次建议
 
@@ -101,6 +102,8 @@ A 路由级 / B 启动与全局弹窗链 / C 交互子层弹窗 / D 嵌入式 Mi
 ## 人工走查矩阵（修复后复核用）
 
 页面（时间线/详情/主页/通知/搜索/404）× 交互（浏览/发帖全工具链/回复/引用/菜单/选择器/举报/设置入口）× 视口（桌面 / ≤500px）× 主题（明/暗）。
+
+A8 的运行复核覆盖个人简介、搜索／关注／粉丝／二维码的共享用户结果行、频道头部和“关于”页：点击标签后进入编码后的 `/tags/:tag`，展示匹配帖子或帖子空态，返回导航和键盘激活可用；默认 Misskey 简介仍进入 `/user-tags/:tag`。真实后端集成结果和截图 diff 由实际验证记录提供，表内的代码覆盖不代表这些验证已经通过，也不替代 P-19 正式视觉基线。
 
 ## 产品决策记录（2026-10-08 已裁决）
 
