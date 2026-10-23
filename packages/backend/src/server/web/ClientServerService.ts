@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * 文件领域：Web 页面与静态资源交付适配。
+ * 作用：为主前端和嵌入前端分别注册其制品或开发代理，保持 HTML 入口与资源来源一致。
+ * 数据链：启动时确认的各自 manifest 状态 → 对应资源路由 → 浏览器加载；不向业务域传播制品探测。
+ */
+
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { Inject, Injectable } from '@nestjs/common';
@@ -202,9 +208,10 @@ export class ClientServerService {
 		return (manifest);
 	}
 
+	/** 注册 Web 交付入口；主前端与嵌入前端仅依据各自制品状态选择对应资源来源。 */
 	@bindThis
-	public createServer(fastify: FastifyInstance, options: FastifyPluginOptions, done: (err?: Error) => void) {
-		const configUrl = new URL(this.config.url);
+	public createServer(fastify: FastifyInstance, options: FastifyPluginOptions, done: (err?: Error) => void): void {
+		const configUrl: URL = new URL(this.config.url);
 
 		fastify.addHook('onRequest', (request, reply, done) => {
 			// クリックジャッキング防止のためiFrameの中に入れられないようにする
@@ -213,38 +220,45 @@ export class ClientServerService {
 		});
 
 		//#region vite assets
-		if (this.config.frontendEmbedManifestExists) {
+		const urlOriginWithoutPort: string = configUrl.origin.replace(/:\d+$/, '');
+		if (this.config.frontendManifestExists) {
 			this.clientLoggerService.logger.info(`[ClientServerService] Using built frontend vite assets. ${this.frontendViteOut}`);
-			fastify.register((fastify, options, done) => {
-				fastify.register(fastifyStatic, {
+			fastify.register(/** 主前端静态路由的缓存及去查询参数规则只影响本插件。 */ (assets: FastifyInstance, _options: FastifyPluginOptions, ready: (error?: Error) => void): void => {
+				assets.register(fastifyStatic, {
 					root: this.frontendViteOut,
 					prefix: '/vite/',
 					maxAge: ms('30 days'),
 					immutable: true,
 					decorateReply: false,
 				});
-				fastify.register(fastifyStatic, {
+				assets.addHook('onRequest', handleRequestRedirectToOmitSearch);
+				ready();
+			});
+		} else {
+			console.log('[ClientServerService] Proxying to Vite dev server.');
+			const port: string = process.env.VITE_PORT ?? '5173';
+			fastify.register(fastifyProxy, {
+				upstream: urlOriginWithoutPort + ':' + port,
+				prefix: '/vite',
+				rewritePrefix: '/vite',
+			});
+		}
+
+		if (this.config.frontendEmbedManifestExists) {
+			this.clientLoggerService.logger.info(`[ClientServerService] Using built embed vite assets. ${this.frontendEmbedViteOut}`);
+			fastify.register(/** 嵌入前端独立封装静态钩子，不改变主前端开发代理的查询参数。 */ (assets: FastifyInstance, _options: FastifyPluginOptions, ready: (error?: Error) => void): void => {
+				assets.register(fastifyStatic, {
 					root: this.frontendEmbedViteOut,
 					prefix: '/embed_vite/',
 					maxAge: ms('30 days'),
 					immutable: true,
 					decorateReply: false,
 				});
-				fastify.addHook('onRequest', handleRequestRedirectToOmitSearch);
-				done();
+				assets.addHook('onRequest', handleRequestRedirectToOmitSearch);
+				ready();
 			});
 		} else {
-			console.log('[ClientServerService] Proxying to Vite dev server.');
-			const urlOriginWithoutPort = configUrl.origin.replace(/:\d+$/, '');
-
-			const port = (process.env.VITE_PORT ?? '5173');
-			fastify.register(fastifyProxy, {
-				upstream: urlOriginWithoutPort + ':' + port,
-				prefix: '/vite',
-				rewritePrefix: '/vite',
-			});
-
-			const embedPort = (process.env.EMBED_VITE_PORT ?? '5174');
+			const embedPort: string = process.env.EMBED_VITE_PORT ?? '5174';
 			fastify.register(fastifyProxy, {
 				upstream: urlOriginWithoutPort + ':' + embedPort,
 				prefix: '/embed_vite',
