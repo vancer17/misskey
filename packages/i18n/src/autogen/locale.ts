@@ -13542,6 +13542,18 @@ export interface Locale extends ILocale {
          */
         "newNotesWithCount": ParameterizedString<"count">;
         /**
+         * タイムラインを更新しました
+         */
+        "timelineUpdated": string;
+        /**
+         * 今回は新しいノートがありません
+         */
+        "timelineUpToDate": string;
+        /**
+         * 更新できませんでした。もう一度お試しください
+         */
+        "timelineRefreshFailed": string;
+        /**
          * 日付
          */
         "scheduleDate": string;
