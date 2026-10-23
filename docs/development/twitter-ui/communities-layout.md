@@ -17,7 +17,7 @@
 
 首页横条对应 X 成员社区横条，频道集合严格来自真实关注关系。频道所属、收藏和参与人数分别表达不同事实。发现页只显示全频道帖子流，不请求 `channels/featured`；原界面的推荐标签继续使用该端点。
 
-主标签采用两列等分布局，每个按钮保留完整半列点击区域。选中指示条以按钮为定位容器，逻辑起止内缩均为 `--twitter-space-3`（默认 `12px`），宽度由实际按钮宽度减去两侧内缩得到；高度保持 `4px`，颜色及圆角使用既有 Token。该几何规则与 `TimelineHeader`、`TwitterSearch` 的现行标签一致，空间关系参照 Nitter `timeline.scss` 的等分 tab 与随单元伸展的下划线。标签文字、字号和浏览器缩放不独立决定指示条宽度；点击、ARIA、焦点顺序及请求所有权仍由原标签实现负责。来源选择见 [ADR-0021](./adr/0021-sidebar-capsules-and-community-tab-indicator.md)。
+主标签采用两列等分布局，每个按钮保留完整半列点击区域。标签容器中唯一的共享指示条根据选中按钮测量位置，双侧内缩均为 `--twitter-space-3`（默认 `12px`），宽度由实际按钮宽度减去两侧内缩得到；高度保持 `4px`，颜色使用既有 Token，端点与其他共享指示条统一为上角圆、下角直。该几何规则与 `TimelineHeader`、`TwitterSearch` 的现行标签一致，空间关系参照 Nitter `timeline.scss` 的等分 tab 与随单元伸展的下划线。标签文字、字号和浏览器缩放不独立决定指示条宽度；点击、ARIA、焦点顺序及请求所有权仍由原标签实现负责。尺度来源见 [ADR-0021](./adr/0021-sidebar-capsules-and-community-tab-indicator.md)，端点统一见 [ADR-0029](./adr/0029-tab-indicator-shape-consistency.md)，共享指示条的横移、无动画校准和生命周期契约见 [横向标签指示条转场](./tab-indicator-motion.md)。
 
 方向键、Home／End 从同一标签定义计算目标，将同一个目标值提交给页面所有者并用于定位焦点。选中标签、`aria-selected`、可进入 Tab 顺序的按钮与实际焦点应一致；组件不为键盘导航保留第二份选中状态。
 

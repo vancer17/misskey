@@ -54,6 +54,7 @@ O-3 裁决延伸：不渲染内联发帖表单，发帖入口 = 头部 pencil（
 					v-for="item in tabs"
 					:id="`twitter-channel-tab-${item.value}`"
 					:key="item.value"
+					:data-twitter-tab-key="item.value"
 					class="_button"
 					:class="[$style.tab, { [$style.activeTab]: tab === item.value }]"
 					type="button"
@@ -66,6 +67,7 @@ O-3 裁决延伸：不渲染内联发帖表单，发帖入口 = 头部 pencil（
 				>
 					{{ item.title }}
 				</button>
+				<TwitterTabIndicator :activeKey="tab"/>
 			</nav>
 			<div v-else-if="state.status === 'idle' || state.status === 'loading'" :class="$style.loadingTabs" aria-hidden="true"><span v-for="placeholder in 3" :key="placeholder" :class="$style.skeletonLine"></span></div>
 		</template>
@@ -222,7 +224,7 @@ import MkInfo from '@/components/MkInfo.vue';
 import MkStreamingNotesTimeline from '@/components/MkStreamingNotesTimeline.vue';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
-import { getChannelCommunityTabs, TwitterChannelFeatured, TwitterNote, TwitterPageSkeleton, TwitterPageState } from '@/ui/twitter/index.js';
+import { getChannelCommunityTabs, TwitterChannelFeatured, TwitterNote, TwitterPageSkeleton, TwitterPageState, TwitterTabIndicator } from '@/ui/twitter/index.js';
 import { useTwitterLayout } from '@/ui/twitter/context/index.js';
 import type { ChannelCommunityTab, ChannelDetailState, ChannelFeaturedState } from '@/ui/twitter/index.js';
 import { useTwitterScrollPositionKeeper } from '@/ui/twitter/index.js';
@@ -404,6 +406,8 @@ function goBack(): void {
 
 /* tab 行：与 TwitterCommunities / TwitterSearch 同构（下划线 active） */
 .tabs {
+	--twitter-tab-indicator-inset: var(--twitter-space-3);
+	position: relative;
 	display: grid;
 	grid-auto-flow: column;
 	grid-auto-columns: minmax(88px, 1fr);
@@ -427,22 +431,6 @@ function goBack(): void {
 		background-color var(--twitter-duration-fast) ease,
 		color var(--twitter-duration-fast) ease;
 
-	&::after {
-		content: "";
-		position: absolute;
-		right: 12px;
-		bottom: 0;
-		left: 12px;
-		height: 4px;
-		border-radius: var(--twitter-radius-pill) var(--twitter-radius-pill) 0 0;
-		background: var(--twitter-accent);
-		opacity: 0;
-		transform: scaleX(0.4);
-		transition:
-			opacity var(--twitter-duration-fast) ease,
-			transform var(--twitter-duration-normal) var(--twitter-ease);
-	}
-
 	&:hover,
 	&:focus-visible {
 		background: color-mix(in srgb, var(--twitter-fg) 4%, transparent);
@@ -452,11 +440,6 @@ function goBack(): void {
 
 .activeTab {
 	color: var(--twitter-fg);
-
-	&::after {
-		opacity: 1;
-		transform: scaleX(1);
-	}
 }
 
 /* 社区头 banner：nitter profile/_base.scss 真值 3:1（600px 主列 → 200px，与 U-4 的 X 上限一致）；
