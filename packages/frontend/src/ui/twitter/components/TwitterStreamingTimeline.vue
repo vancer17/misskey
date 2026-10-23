@@ -11,12 +11,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<MkStreamingNotesTimeline
-	ref="timeline"
-	v-bind="props"
-	variant="twitter"
-	:paginatorFactory="createPaginator"
-/>
+<TwitterTimelineLoadBoundary :pending="initializing">
+	<MkStreamingNotesTimeline
+		ref="timeline"
+		v-bind="props"
+		variant="twitter"
+		:paginatorFactory="createPaginator"
+	>
+		<template #loading></template>
+	</MkStreamingNotesTimeline>
+</TwitterTimelineLoadBoundary>
 </template>
 
 <script lang="ts" setup>
@@ -25,7 +29,7 @@ import type { ComputedRef, ShallowRef } from 'vue';
 import MkStreamingNotesTimeline from '@/components/MkStreamingNotesTimeline.vue';
 import type { BasicTimelineType } from '@/timelines.js';
 import type { IPaginator, PaginatorCompatibleEndpointPaths, PaginatorCompatibleEndpoints, PaginatorFactory, PaginatorOptions } from '@/utility/paginator.js';
-import { TwitterTimelinePaginator } from '../index.js';
+import { TwitterTimelineLoadBoundary, TwitterTimelinePaginator } from '../index.js';
 import type { TwitterTimelineRefreshController, TwitterTimelineRefreshResult } from '../index.js';
 
 /** 首页查询的只读输入，接口与分页参数仍由既有流式组件映射。 */
