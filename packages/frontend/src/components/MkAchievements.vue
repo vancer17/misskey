@@ -3,10 +3,16 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Misskey 既有成就列表的展示适配。
+作用：在 Twitter 上下文呈现连续列表，默认界面保留原网格；不改变成就目录、数据查询和申领。
+数据链：既有 users/achievements 查询 → 目录顺序与锁定项 → 只读展示；UI 上下文仅选择局部样式。
+-->
+
 <template>
-<div>
+<div data-testid="achievements" :class="{ [$style.twitter]: isTwitterUi }">
 	<div v-if="achievements" :class="$style.root">
-		<div v-for="achievement in achievements" :key="achievement.name" :class="$style.achievement" class="_panel">
+		<div v-for="achievement in achievements" :key="achievement.name" :data-achievement-name="achievement.name" data-achievement-locked="false" :class="$style.achievement" class="_panel">
 			<div :class="$style.icon">
 				<div
 					:class="[$style.iconFrame, {
@@ -17,36 +23,36 @@ SPDX-License-Identifier: AGPL-3.0-only
 					}]"
 				>
 					<div :class="[$style.iconInner]" :style="{ background: ACHIEVEMENT_BADGES[achievement.name].bg ?? '' }">
-						<img :class="$style.iconImg" :src="ACHIEVEMENT_BADGES[achievement.name].img">
+						<img :class="$style.iconImg" :src="ACHIEVEMENT_BADGES[achievement.name].img" alt="">
 					</div>
 				</div>
 			</div>
 			<div :class="$style.body">
 				<div :class="$style.header">
-					<span :class="$style.title">{{ i18n.ts._achievements._types[`_${achievement.name}`].title }}</span>
-					<span :class="$style.time">
+					<span data-testid="achievement-title" :class="$style.title">{{ i18n.ts._achievements._types[`_${achievement.name}`].title }}</span>
+					<span data-testid="achievement-time" :class="$style.time">
 						<time v-tooltip="new Date(achievement.unlockedAt).toLocaleString()">{{ new Date(achievement.unlockedAt).getFullYear() }}/{{ new Date(achievement.unlockedAt).getMonth() + 1 }}/{{ new Date(achievement.unlockedAt).getDate() }}</time>
 					</span>
 				</div>
-				<div :class="$style.description">{{ withDescription ? i18n.ts._achievements._types[`_${achievement.name}`].description : '???' }}</div>
+				<div data-testid="achievement-description" :class="$style.description">{{ withDescription ? i18n.ts._achievements._types[`_${achievement.name}`].description : '???' }}</div>
 				<div v-if="'flavor' in i18n.ts._achievements._types[`_${achievement.name}`] && withDescription" :class="$style.flavor">{{ (i18n.ts._achievements._types[`_${achievement.name}`] as { flavor: string; }).flavor }}</div>
 			</div>
 		</div>
 		<template v-if="withLocked">
-			<div v-for="achievement in lockedAchievements" :key="achievement" :class="[$style.achievement, $style.locked]" class="_panel" @click="achievement === 'clickedClickHere' ? clickHere() : () => {}">
+			<div v-for="achievement in lockedAchievements" :key="achievement" :data-achievement-name="achievement" data-achievement-locked="true" :class="[$style.achievement, $style.locked]" class="_panel" @click="achievement === 'clickedClickHere' ? clickHere() : () => {}">
 				<div :class="$style.icon">
 				</div>
 				<div :class="$style.body">
 					<div :class="$style.header">
-						<span :class="$style.title">???</span>
+						<span data-testid="achievement-title" :class="$style.title">???</span>
 					</div>
-					<div :class="$style.description">???</div>
+					<div data-testid="achievement-description" :class="$style.description">???</div>
 				</div>
 			</div>
 		</template>
 	</div>
-	<div v-else>
-		<MkLoading/>
+	<div v-else data-testid="achievements-loading" :class="$style.loading">
+		<MkLoading :colored="!isTwitterUi"/>
 	</div>
 </div>
 </template>
@@ -54,9 +60,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import * as Misskey from 'misskey-js';
 import { onMounted, ref, computed } from 'vue';
+import type { ComputedRef } from 'vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { ACHIEVEMENT_TYPES, ACHIEVEMENT_BADGES, claimAchievement } from '@/utility/achievements.js';
+import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
+
+/** 仅消费轻量 UI 上下文，原查询和申领路径保持原有归属。 */
+const isTwitterUi: ComputedRef<boolean> = useIsTwitterUi();
 
 const props = withDefaults(defineProps<{
 	user: Misskey.entities.User;
@@ -235,5 +246,81 @@ onMounted(() => {
 	transform: skewX(-15deg);
 	font-size: 85%;
 	margin-top: 8px;
+}
+
+/* 成就无 Nitter 对应页：沿用现有列表 Token，徽章仍为原业务资产（ADR-0024）。 */
+.twitter {
+	color: var(--twitter-fg);
+	background: var(--twitter-bg);
+
+	.root {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0;
+		place-content: stretch;
+	}
+
+	.achievement {
+		min-width: 0;
+		padding: var(--twitter-space-3);
+		border-bottom: 1px solid var(--twitter-border);
+		border-radius: 0;
+		background: var(--twitter-bg);
+		color: var(--twitter-fg);
+		font-size: var(--twitter-font-size-body);
+		line-height: 1.3;
+
+		&.locked {
+			opacity: 1;
+			color: var(--twitter-secondary-fg);
+		}
+	}
+
+	.icon {
+		/* 图像槽位映射 Nitter tweet-avatar 的 48px 尺度，不改变徽章图片或等级。 */
+		width: 48px;
+		margin-right: var(--twitter-space-3);
+	}
+
+	.iconFrame {
+		width: 100%;
+		height: 48px;
+	}
+
+	.header {
+		flex-wrap: wrap;
+		gap: var(--twitter-space-1) var(--twitter-space-2);
+		margin-bottom: var(--twitter-space-1);
+	}
+
+	.title {
+		min-width: 0;
+		flex: 1 1 0;
+		overflow-wrap: anywhere;
+		font-size: var(--twitter-font-size-content);
+	}
+
+	.time {
+		max-width: 100%;
+		color: var(--twitter-secondary-fg);
+		font-size: var(--twitter-font-size-meta);
+		opacity: 1;
+	}
+
+	.description,
+	.flavor {
+		overflow-wrap: anywhere;
+		font-size: var(--twitter-font-size-body);
+	}
+
+	.flavor {
+		margin-top: var(--twitter-space-1);
+		color: var(--twitter-secondary-fg);
+		opacity: 1;
+		transform: none;
+	}
+
+	.loading {
+		color: var(--twitter-accent);
+	}
 }
 </style>
