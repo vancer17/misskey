@@ -11,8 +11,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <component :is="prefer.s.enablePullToRefresh ? MkPullToRefresh : 'div'" :refresher="() => reloadTimeline()">
-	<TwitterPageSkeleton v-if="isTwitter && paginator.fetching.value" variant="timeline"/>
-	<MkLoading v-else-if="paginator.fetching.value"/>
+	<slot v-if="paginator.fetching.value" name="loading">
+		<TwitterPageSkeleton v-if="isTwitter" variant="timeline"/>
+		<MkLoading v-else/>
+	</slot>
 
 	<MkError
 		v-else-if="paginator.error.value && !isTwitter"
