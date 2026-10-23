@@ -15,12 +15,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkA
 			v-for="tab in tabs"
 			:key="tab.key"
+			:data-twitter-tab-key="tab.key"
 			:class="$style.tab"
 			:to="userPage(props.user, tab.key)"
 			:aria-current="activeTab === tab.key ? 'page' : undefined"
 		>
 			<span :class="$style.tabTitle">{{ tab.title }}</span>
 		</MkA>
+		<TwitterTabIndicator :activeKey="activeTab"/>
 	</nav>
 
 	<div
@@ -71,7 +73,7 @@ import type { ComputedRef } from 'vue';
 import type { TwitterUserTimelineTab } from '@/ui/twitter/index.js';
 import type { TwitterLayoutState } from '@/ui/twitter/context/index.js';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
-import { TwitterNote, TwitterUserTimelinePaginator } from '@/ui/twitter/index.js';
+import { TwitterNote, TwitterTabIndicator, TwitterUserTimelinePaginator } from '@/ui/twitter/index.js';
 import TwitterPageState from '@/ui/twitter/components/TwitterPageState.vue';
 import { useTwitterLayout } from '@/ui/twitter/context/index.js';
 import { userPage } from '@/filters/user.js';
@@ -213,6 +215,7 @@ onBeforeUnmount(/** 最终驱逐缓存页时撤销所有首批请求归属。 */
 
 <style lang="scss" module>
 .tabs {
+	--twitter-tab-indicator-inset: var(--twitter-space-3);
 	position: sticky;
 	/* 与上方 TwitterHome 返回头同高对齐（PF-1 S-2/S-3 权威 token，评审修复遗留 53px 孤值） */
 	top: var(--twitter-header-height);
@@ -242,22 +245,6 @@ onBeforeUnmount(/** 最终驱逐缓存页时撤销所有首批请求归属。 */
 		background-color var(--twitter-duration-fast) ease,
 		color var(--twitter-duration-fast) ease;
 
-	&::after {
-		content: "";
-		position: absolute;
-		right: 12px;
-		bottom: 0;
-		left: 12px;
-		height: 4px;
-		border-radius: var(--twitter-radius-pill) var(--twitter-radius-pill) 0 0;
-		background: var(--twitter-accent);
-		opacity: 0;
-		transform: scaleX(0.4);
-		transition:
-			opacity var(--twitter-duration-fast) ease,
-			transform var(--twitter-duration-normal) var(--twitter-ease);
-	}
-
 	&:hover {
 		background: color-mix(in srgb, var(--twitter-fg) 6%, transparent);
 		color: var(--twitter-fg);
@@ -270,11 +257,6 @@ onBeforeUnmount(/** 最终驱逐缓存页时撤销所有首批请求归属。 */
 
 	&[aria-current="page"] {
 		color: var(--twitter-fg);
-
-		&::after {
-			opacity: 1;
-			transform: scaleX(1);
-		}
 	}
 }
 
@@ -330,8 +312,7 @@ onBeforeUnmount(/** 最终驱逐缓存页时撤销所有首批请求归属。 */
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.tab,
-	.tab::after {
+	.tab {
 		transition: none;
 	}
 }
