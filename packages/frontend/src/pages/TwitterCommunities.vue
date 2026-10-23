@@ -60,6 +60,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					v-for="item in tabs"
 					:id="`twitter-communities-tab-${item.value}`"
 					:key="item.value"
+					:data-twitter-tab-key="item.value"
 					class="_button"
 					:class="[$style.tab, { [$style.activeTab]: tab === item.value }]"
 					type="button"
@@ -72,6 +73,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				>
 					{{ item.title }}
 				</button>
+				<TwitterTabIndicator :activeKey="tab"/>
 			</nav>
 		</template>
 
@@ -120,7 +122,7 @@ import MkPagination from '@/components/MkPagination.vue';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkStickyContainer from '@/components/global/MkStickyContainer.vue';
-import { TwitterCommunityLibraryDialog, TwitterCommunityStrip, TwitterPageState, TwitterSearchField, useCommunityDialogPosition, useTwitterScrollPositionKeeper } from '@/ui/twitter/index.js';
+import { TwitterCommunityLibraryDialog, TwitterCommunityStrip, TwitterPageState, TwitterSearchField, TwitterTabIndicator, useCommunityDialogPosition, useTwitterScrollPositionKeeper } from '@/ui/twitter/index.js';
 import { useTwitterLayout } from '@/ui/twitter/context/index.js';
 import type { TwitterCommunitiesTab, TwitterCommunityLibrary, TwitterCommunityLibraryView } from '@/ui/twitter/index.js';
 import { i18n } from '@/i18n.js';
@@ -367,6 +369,8 @@ onBeforeUnmount(closeLibrary);
 .searchField { flex: 1; min-width: 0; }
 
 .tabs {
+	--twitter-tab-indicator-inset: var(--twitter-space-3);
+	position: relative;
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	background: color-mix(in srgb, var(--twitter-bg) 82%, transparent);
@@ -384,23 +388,12 @@ onBeforeUnmount(closeLibrary);
 	font-size: var(--twitter-font-size-content);
 	font-weight: 700;
 
-	&::after {
-		content: '';
-		position: absolute;
-		bottom: 0;
-		inset-inline: var(--twitter-space-3);
-		height: 4px;
-		border-radius: var(--twitter-radius-pill);
-		background: var(--twitter-accent);
-		opacity: 0;
-	}
 	&:hover { background: var(--twitter-hover); }
 	&:focus-visible { outline: 2px solid var(--twitter-accent); outline-offset: -2px; }
 }
 
 .activeTab {
 	color: var(--twitter-fg);
-	&::after { opacity: 1; }
 }
 
 .emptyGuide {

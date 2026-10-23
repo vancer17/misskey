@@ -24,6 +24,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<button
 			v-for="tab in tabs"
 			:key="tab.key"
+			:data-twitter-tab-key="tab.key"
 			class="_button"
 			:class="$style.tab"
 			type="button"
@@ -32,6 +33,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		>
 			<span :class="$style.tabTitle">{{ tab.title }}</span>
 		</button>
+		<TwitterTabIndicator :activeKey="tabModel ?? null"/>
 	</nav>
 
 	<div :class="$style.actions">
@@ -66,6 +68,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import type { ModelRef } from 'vue';
 import TwitterAvatar from './components/TwitterAvatar.vue';
+import TwitterTabIndicator from './components/TwitterTabIndicator.vue';
 import type { Tab } from '@/components/global/MkPageHeader.tabs.vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import { i18n } from '@/i18n.js';
@@ -153,6 +156,8 @@ function onTabClick(tab: Tab, ev: PointerEvent): void {
 }
 
 .tabs {
+	--twitter-tab-indicator-inset: var(--twitter-space-3);
+	position: relative;
 	display: flex;
 	height: 100%;
 	min-width: 0;
@@ -183,22 +188,6 @@ function onTabClick(tab: Tab, ev: PointerEvent): void {
 		background-color var(--twitter-duration-fast) ease,
 		color var(--twitter-duration-fast) ease;
 
-	&::after {
-		content: "";
-		position: absolute;
-		right: 12px;
-		bottom: 0;
-		left: 12px;
-		height: 4px;
-		border-radius: var(--twitter-radius-pill) var(--twitter-radius-pill) 0 0;
-		background: var(--twitter-accent);
-		opacity: 0;
-		transform: scaleX(0.4);
-		transition:
-			opacity var(--twitter-duration-fast) ease,
-			transform var(--twitter-duration-normal) var(--twitter-ease);
-	}
-
 	&:hover {
 		background: color-mix(in srgb, var(--twitter-fg) 6%, transparent);
 		color: var(--twitter-fg);
@@ -211,11 +200,6 @@ function onTabClick(tab: Tab, ev: PointerEvent): void {
 
 	&[aria-current="page"] {
 		color: var(--twitter-fg);
-
-		&::after {
-			opacity: 1;
-			transform: scaleX(1);
-		}
 	}
 }
 
@@ -268,10 +252,6 @@ function onTabClick(tab: Tab, ev: PointerEvent): void {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.tab::after {
-		transition: none;
-	}
-
 	.refreshing {
 		animation: none;
 	}

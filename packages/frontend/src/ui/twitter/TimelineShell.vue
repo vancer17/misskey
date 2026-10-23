@@ -27,10 +27,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</template>
 
 		<MkSwiper
-			v-if="swipable && prefer.r.enableHorizontalSwipe.value && tabs.length > 1"
+			v-if="swipable && tabs.length > 1"
+			ref="bodySwiper"
 			v-model:tab="tabModel"
+			:animationEnabled="bodyAnimationEnabled"
 			:class="$style.body"
 			:tabs="tabs"
+			@beforeLeave="bodyTransition.beforeLeave"
+			@afterLeave="bodyTransition.afterLeave"
+			@leaveCancelled="bodyTransition.afterLeave"
+			@afterEnter="bodyTransition.afterEnter"
+			@enterCancelled="bodyTransition.enterCancelled"
 		>
 			<slot></slot>
 		</MkSwiper>
@@ -42,7 +49,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { useTemplateRef } from 'vue';
+import { computed, useTemplateRef } from 'vue';
+import type { ComputedRef, ModelRef, ShallowRef } from 'vue';
 import { prefersReducedMotion } from '@@/js/config.js';
 import { scrollInContainer } from '@@/js/scroll.js';
 import type { Tab } from '@/components/global/MkPageHeader.tabs.vue';
@@ -53,6 +61,7 @@ import { useTwitterScrollPositionKeeper } from '@/ui/twitter/composables/use-twi
 import { useRouter } from '@/router.js';
 import { prefer } from '@/preferences.js';
 import TwitterTimelineHeader from './TimelineHeader.vue';
+import { useTwitterTimelineTransition } from './composables/use-twitter-timeline-transition.js';
 
 /** 页面壳转交页头的展示参数，不复制查询状态或刷新结果。 */
 type TimelineShellProps = {
@@ -80,8 +89,21 @@ const emit = defineEmits<{
 	(ev: 'refresh'): void;
 }>();
 
-const tabModel = defineModel<string>('tab');
-const rootEl = useTemplateRef('rootEl');
+/** 页头与原查询所有者共用的来源标识，不建立正文选中副本。 */
+const tabModel: ModelRef<string | undefined> = defineModel<string>('tab');
+/** 只测量当前页面 DOM，不接管其他缓存页的滚动。 */
+const rootEl: Readonly<ShallowRef<HTMLElement | null>> = useTemplateRef<HTMLElement>('rootEl');
+/** 只访问基础转场公开的离场结算，不操作 Vue 内部状态或直接删除节点。 */
+const bodySwiper: Readonly<ShallowRef<InstanceType<typeof MkSwiper> | null>> = useTemplateRef<InstanceType<typeof MkSwiper>>('bodySwiper');
+/** 点击动画独立于手势设置，遵循现有动画偏好。 */
+const bodyAnimationEnabled: ComputedRef<boolean> = computed(/** 关闭动画或减少动态效果时直接交接。 */ (): boolean => prefer.s.animation && !prefersReducedMotion);
+/** 几何交接不保存列表或请求状态，正文横移仍只有 MkSwiper 一个所有者。 */
+const bodyTransition: ReturnType<typeof useTwitterTimelineTransition> = useTwitterTimelineTransition(rootEl, tabModel, bodyAnimationEnabled, settleLeaving);
+
+/** 下一轮来源提交前由原转场所有者结束旧离场，最多保留一旧一新两个面板。 */
+function settleLeaving(): void {
+	bodySwiper.value?.finishLeaving();
+}
 
 useTwitterScrollPositionKeeper(rootEl);
 
@@ -114,7 +136,16 @@ defineExpose({
 }
 
 .body {
+	--MI-swiper-duration: var(--twitter-duration-normal);
+	--MI-swiper-ease: var(--twitter-ease);
+	--MI-swiper-gap: 0px;
+	--twitter-timeline-loading-min-height: calc(100cqh - (var(--MI-stickyTop, 0px) + var(--MI-stickyBottom, 0px)));
+	position: relative;
 	min-height: calc(100cqh - (var(--MI-stickyTop, 0px) + var(--MI-stickyBottom, 0px)));
 	background: var(--twitter-bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.body { --MI-swiper-duration: 0ms; }
 }
 </style>
