@@ -29,6 +29,7 @@ import { makeHotkey } from '@/utility/hotkey.js';
 import { addCustomEmoji, removeCustomEmojis, updateCustomEmojis } from '@/custom-emojis.js';
 import { prefer } from '@/preferences.js';
 import { updateCurrentAccountPartial } from '@/accounts.js';
+import { syncNotificationUnreadState } from '@/notifications/index.js';
 import { unisonReload } from '@/utility/unison-reload.js';
 import { isBirthday } from '@/utility/is-birthday.js';
 
@@ -347,23 +348,20 @@ export async function mainBoot(): Promise<void> {
 			const main = markRaw(stream.useChannel('main', null, 'System'));
 
 			// 自分の情報が更新されたとき
-			main.on('meUpdated', i => {
-				updateCurrentAccountPartial(i);
+			main.on('meUpdated', /** 其他账户字段沿用原更新链，通知字段统一进入有代次保护的对账入口。 */ (account: Misskey.entities.UserDetailed): void => {
+				const update: Partial<Misskey.entities.MeDetailed> = { ...account };
+				delete update.hasUnreadNotification;
+				delete update.unreadNotificationsCount;
+				updateCurrentAccountPartial(update);
+				void syncNotificationUnreadState();
 			});
 
-			main.on('readAllNotifications', () => {
-				updateCurrentAccountPartial({
-					hasUnreadNotification: false,
-					unreadNotificationsCount: 0,
-				});
+			main.on('readAllNotifications', /** 已读事件仅使账户事实失效，避免与 HTTP 对账重复归零。 */ (): void => {
+				void syncNotificationUnreadState();
 			});
 
-			main.on('unreadNotification', () => {
-				const unreadNotificationsCount = ($i?.unreadNotificationsCount ?? 0) + 1;
-				updateCurrentAccountPartial({
-					hasUnreadNotification: true,
-					unreadNotificationsCount,
-				});
+			main.on('unreadNotification', /** 延迟到达的未读事件不能累加到较新的账户快照，统一重新查询。 */ (): void => {
+				void syncNotificationUnreadState();
 			});
 
 			main.on('newChatMessage', () => {
