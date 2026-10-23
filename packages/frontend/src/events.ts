@@ -10,6 +10,8 @@ import { onBeforeUnmount } from 'vue';
 
 /** 已确认业务写入的跨组件通知；载荷只定位消费者，不定义业务规则。 */
 type Events = {
+	/** 指定账户的成就申领已由真实服务端请求确认。 */
+	achievementClaimed: (userId: Misskey.entities.User['id']) => void;
 	/** 用户置顶集合写入成功。 */
 	userPinnedNotesChanged: (userId: Misskey.entities.User['id']) => void;
 	/** 当前账户收藏集合写入成功。 */
