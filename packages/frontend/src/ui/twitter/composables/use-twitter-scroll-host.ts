@@ -11,6 +11,7 @@
 import { inject, nextTick, onBeforeUnmount, provide, watch } from 'vue';
 import type { ComputedRef, InjectionKey, Ref } from 'vue';
 import { prefersReducedMotion } from '@@/js/config.js';
+import { scrollInContainer } from '@@/js/scroll.js';
 import { useRouter } from '@/router.js';
 import type { Router } from '@/router.js';
 import type { PathResolvedResult } from '@/lib/nirax.js';
@@ -27,12 +28,15 @@ type ScrollPosition = Readonly<{
 type TwitterScrollContext = Readonly<{
 	router: Router;
 	enabled: ComputedRef<boolean>;
+	resetForSource: (root: HTMLElement) => boolean;
 }>;
 
 /** 只属于 Twitter 模块的布局注入标识，不污染共享组件 DI。 */
 const scrollContextKey: InjectionKey<TwitterScrollContext> = Symbol('twitter-scroll-host');
 /** UI 位置表有界，浏览多用户时不无限保留历史；不持久化。 */
 const MAX_SCROLL_POSITIONS: number = 50;
+/** 真实独立窗口的既有 keeper 提供可取消操作；弱引用不额外持有缓存页面。 */
+const fallbackRestoreCancels: WeakMap<object, () => void> = new WeakMap<object, () => void>();
 
 /** 从既有导航地址派生位置键；ui 是入口风格参数，不区分同一页面的位置。 */
 function positionKey(fullPath: string): string {
@@ -52,7 +56,7 @@ export function provideTwitterScrollHost(
 	router: Router,
 	enabled: ComputedRef<boolean>,
 ): void {
-	provide(scrollContextKey, { router, enabled });
+	provide(scrollContextKey, { router, enabled, resetForSource });
 	const positions: Map<string, ScrollPosition> = new Map();
 	let currentKey: string = positionKey(router.getCurrentFullPath());
 	let restoring: ScrollPosition | null = null;
@@ -68,6 +72,15 @@ export function provideTwitterScrollHost(
 		viewport.value?.style.removeProperty('overflow-anchor');
 	}
 
+	/** 当前活动内容切换来源时，先撤销旧路由恢复再立即回顶，不向消费者暴露宿主或位置表。 */
+	function resetForSource(root: HTMLElement): boolean {
+		const host: HTMLElement | null = viewport.value;
+		if (disposed || !enabled.value || host == null || !root.isConnected || !content.value?.contains(root) || root.getClientRects().length === 0) return false;
+		cancelRestore();
+		host.scrollTo({ top: 0, behavior: 'instant' });
+		return true;
+	}
+
 	/** 在旧页面仍处于文档内时采集；优先保留当前可见列表锚点。 */
 	function capture(): ScrollPosition | null {
 		const host: HTMLElement | null = viewport.value;
@@ -77,6 +90,8 @@ export function provideTwitterScrollHost(
 		let anchor: string | null = null;
 		let offset: number = 0;
 		for (const item of page.querySelectorAll<HTMLElement>('[data-scroll-anchor]')) {
+			// 离场 DOM 仅供绘制，不能反向成为新来源的路由恢复锚点。
+			if (item.closest('[data-twitter-timeline-leaving]') != null) continue;
 			const rect: DOMRect = item.getBoundingClientRect();
 			if (rect.height === 0 || rect.bottom <= bounds.top || rect.top > bounds.top + host.clientHeight / 2) continue;
 			anchor = item.dataset.scrollAnchor ?? null;
@@ -220,5 +235,24 @@ export function provideTwitterScrollHost(
 export function useTwitterScrollPositionKeeper(root: Ref<HTMLElement | null | undefined>): void {
 	const context: TwitterScrollContext | null = inject(scrollContextKey, null);
 	const router: Router = useRouter();
-	if (context == null || context.router !== router || !context.enabled.value) useScrollPositionKeeper(root);
+	if (context == null || context.router !== router || !context.enabled.value) {
+		fallbackRestoreCancels.set(root, useScrollPositionKeeper(root).cancelPendingRestore);
+	}
+}
+
+/**
+ * 为来源切换提供原子的 UI 回顶操作；主出口取消恢复，真实独立窗口继续使用自己的滚动宿主。
+ * 返回值仅表示当前活动 DOM 是否接纳操作，不参与业务决策。
+ */
+export function useTwitterSourceScrollReset(root: Readonly<Ref<HTMLElement | null | undefined>>): () => boolean {
+	const context: TwitterScrollContext | null = inject(scrollContextKey, null);
+	const router: Router = useRouter();
+	return /** 只允许当前仍在文档中的页面改变所属宿主。 */ (): boolean => {
+		const element: HTMLElement | null | undefined = root.value;
+		if (element == null || !element.isConnected || element.getClientRects().length === 0) return false;
+		if (context != null && context.router === router && context.enabled.value) return context.resetForSource(element);
+		fallbackRestoreCancels.get(root)?.();
+		scrollInContainer(element, { top: 0, behavior: 'instant' });
+		return true;
+	};
 }
