@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/** 接口集成回归：使用真实服务、数据库与 Redis 验证端点行为，包含通知已读完成及水位单向推进。 */
+
 process.env.NODE_ENV = 'test';
 
 import * as assert from 'assert';
@@ -10,9 +12,11 @@ import { describe, beforeAll, test, expect, vi } from 'vitest';
 // node-fetch only supports it's own Blob yet
 // https://github.com/node-fetch/node-fetch/pull/1664
 import { Blob } from 'node-fetch';
+import { Redis } from 'ioredis';
 import { api, castAsError, initTestDb, post, role, signup, simpleGet, uploadFile } from '../utils.js';
 import type * as misskey from 'misskey-js';
 import { MiUser } from '@/models/_.js';
+import { loadConfig } from '@/config.js';
 
 const waitForPushToTlOptions = { timeout: 3000, interval: 25 };
 
@@ -29,6 +33,49 @@ describe('Endpoints', () => {
 		dave = await signup({ username: 'dave' });
 		await api('admin/update-meta', { federation: 'all' }, alice as misskey.entities.SignupResponse);
 	}, 1000 * 60 * 2);
+
+	/** 已读水位集成回归：真实 HTTP 服务与 Redis 共同验证，不用 Mock 证明业务完成。 */
+	describe('notification read watermark', /** 在外层先建立管理员账户后创建本场景账户，保留既有测试的权限前提。 */ (): void => {
+		test('十进制序号跨位数及并发请求后水位只前进', /** 通知内容先由真实 API 创建，仅为存储协议边界调整 Stream ID。 */ async (): Promise<void> => {
+			const user: misskey.entities.SignupResponse = await signup({ username: 'watermark_reader' });
+			const redis: Redis = new Redis(loadConfig().redis);
+			const timeline: string = `notificationTimeline:${user.id}`;
+			const watermark: string = `latestReadNotification:${user.id}`;
+			try {
+				await api('i/claim-achievement', { name: 'notes1' }, user);
+				await expect.poll(/** 等待真实通知异步持久化，不以固定睡眠推定完成。 */ async (): Promise<number> => await redis.xlen(timeline)).toBe(1);
+				const source: Array<[string, string[]]> = await redis.xrevrange(timeline, '+', '-', 'COUNT', 1);
+				const content: string[] = source[0][1];
+				const boundaries: ReadonlyArray<readonly [string, string]> = [
+					// 同毫秒的序号从一位增加到两位。
+					['1700000000000-9', '1700000000000-10'],
+					// 同毫秒的序号从两位增加到三位。
+					['1700000000000-99', '1700000000000-100'],
+					// 序号超过浮点精确整数范围，仍保持逐位比较。
+					['1700000000000-9007199254740992', '1700000000000-9007199254740993'],
+					// 毫秒部分也按十进制数值顺序推进。
+					['9-0', '10-0'],
+				];
+				for (const [previous, next] of boundaries) {
+					await redis.del(timeline, watermark);
+					await redis.xadd(timeline, previous, ...content);
+					await redis.set(watermark, previous);
+					const readers: Promise<unknown>[] = [];
+					for (let index: number = 0; index < 8; index++) readers.push(api('notifications/mark-all-as-read', {}, user));
+					await redis.xadd(timeline, next, ...content);
+					const confirmed: Awaited<ReturnType<typeof api<'notifications/mark-all-as-read', misskey.Endpoints['notifications/mark-all-as-read']['req']>>> = await api('notifications/mark-all-as-read', {}, user);
+					assert.strictEqual(confirmed.status, 204);
+					await Promise.all(readers);
+					assert.strictEqual(await redis.get(watermark), next);
+					const account: Awaited<ReturnType<typeof api<'i', misskey.Endpoints['i']['req']>>> = await api('i', {}, user);
+					assert.strictEqual(account.body.unreadNotificationsCount, 0);
+				}
+			} finally {
+				await redis.del(timeline, watermark);
+				await redis.quit();
+			}
+		});
+	});
 
 	describe('signup', () => {
 		test('不正なユーザー名でアカウントが作成できない', async () => {
