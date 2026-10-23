@@ -5,8 +5,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <!--
 文件领域：既有帖子列表的 Twitter 展示适配。
-作用：宿主显式声明独立帖卡主作者的挂件场景，分页和业务事实继续归原列表机制。
-数据链：分页／流式帖子 → Twitter 主帖展示角色 → 头像包装；不根据回复关系改写展示角色。
+作用：宿主声明帖卡展示场景，并可注入通用分页器构造依赖；流式、轮询与队列仍走原调用链。
+数据链：既有接口映射 → 原分页器或注入的查询所有者 → 流式帖子展示；不解释界面特定刷新结果。
 -->
 
 <template>
@@ -116,7 +116,7 @@ import { useDocumentVisibility } from '@@/js/use-document-visibility.js';
 import { getScrollContainer, scrollToTop } from '@@/js/scroll.js';
 import type { BasicTimelineType } from '@/timelines.js';
 import type { SoundStore } from '@/preferences/def.js';
-import type { IPaginator, MisskeyEntity } from '@/utility/paginator.js';
+import type { IPaginator, MisskeyEntity, PaginatorFactory, PaginatorCompatibleEndpointPaths, PaginatorCompatibleEndpoints, PaginatorOptions } from '@/utility/paginator.js';
 import MkPullToRefresh from '@/components/MkPullToRefresh.vue';
 import { useStream } from '@/stream.js';
 import * as sound from '@/utility/sound.js';
@@ -149,6 +149,8 @@ const props = withDefaults(defineProps<{
 	withSensitive?: boolean;
 	onlyFiles?: boolean;
 	variant?: 'misskey' | 'twitter';
+	/** 可选构造依赖；不改变本组件的接口映射、订阅与分页规则。 */
+	paginatorFactory?: PaginatorFactory;
 }>(), {
 	withRenotes: true,
 	withReplies: false,
@@ -164,17 +166,25 @@ provide('inTimeline', true);
 provide('tl_withSensitive', computed(() => props.withSensitive));
 provide(DI.inChannel, computed(() => props.src === 'channel' ? props.channel ?? null : null));
 
+/** 保持唯一的分页器构造入口，默认消费者仍使用原有浅引用分页器。 */
+function createPaginator<Endpoint extends PaginatorCompatibleEndpointPaths>(
+	endpoint: Endpoint,
+	options: PaginatorOptions<Endpoint>,
+): IPaginator<PaginatorCompatibleEndpoints[Endpoint]['res'][number]> {
+	return props.paginatorFactory?.(endpoint, options) ?? new Paginator(endpoint, options);
+}
+
 let paginator: IPaginator<Misskey.entities.Note>;
 
 if (props.src === 'antenna') {
-	paginator = markRaw(new Paginator('antennas/notes', {
+	paginator = markRaw(createPaginator('antennas/notes', {
 		computedParams: computed(() => ({
 			antennaId: props.antenna!,
 		})),
 		useShallowRef: true,
 	}));
 } else if (props.src === 'home') {
-	paginator = markRaw(new Paginator('notes/timeline', {
+	paginator = markRaw(createPaginator('notes/timeline', {
 		computedParams: computed(() => ({
 			withRenotes: props.withRenotes,
 			withFiles: props.onlyFiles ? true : undefined,
@@ -182,7 +192,7 @@ if (props.src === 'antenna') {
 		useShallowRef: true,
 	}));
 } else if (props.src === 'local') {
-	paginator = markRaw(new Paginator('notes/local-timeline', {
+	paginator = markRaw(createPaginator('notes/local-timeline', {
 		computedParams: computed(() => ({
 			withRenotes: props.withRenotes,
 			withReplies: props.withReplies,
@@ -191,7 +201,7 @@ if (props.src === 'antenna') {
 		useShallowRef: true,
 	}));
 } else if (props.src === 'social') {
-	paginator = markRaw(new Paginator('notes/hybrid-timeline', {
+	paginator = markRaw(createPaginator('notes/hybrid-timeline', {
 		computedParams: computed(() => ({
 			withRenotes: props.withRenotes,
 			withReplies: props.withReplies,
@@ -200,7 +210,7 @@ if (props.src === 'antenna') {
 		useShallowRef: true,
 	}));
 } else if (props.src === 'global') {
-	paginator = markRaw(new Paginator('notes/global-timeline', {
+	paginator = markRaw(createPaginator('notes/global-timeline', {
 		computedParams: computed(() => ({
 			withRenotes: props.withRenotes,
 			withFiles: props.onlyFiles ? true : undefined,
@@ -208,18 +218,18 @@ if (props.src === 'antenna') {
 		useShallowRef: true,
 	}));
 } else if (props.src === 'mentions') {
-	paginator = markRaw(new Paginator('notes/mentions', {
+	paginator = markRaw(createPaginator('notes/mentions', {
 		useShallowRef: true,
 	}));
 } else if (props.src === 'directs') {
-	paginator = markRaw(new Paginator('notes/mentions', {
+	paginator = markRaw(createPaginator('notes/mentions', {
 		params: {
 			visibility: 'specified',
 		},
 		useShallowRef: true,
 	}));
 } else if (props.src === 'list') {
-	paginator = markRaw(new Paginator('notes/user-list-timeline', {
+	paginator = markRaw(createPaginator('notes/user-list-timeline', {
 		computedParams: computed(() => ({
 			withRenotes: props.withRenotes,
 			withFiles: props.onlyFiles ? true : undefined,
@@ -228,14 +238,14 @@ if (props.src === 'antenna') {
 		useShallowRef: true,
 	}));
 } else if (props.src === 'channel') {
-	paginator = markRaw(new Paginator('channels/timeline', {
+	paginator = markRaw(createPaginator('channels/timeline', {
 		computedParams: computed(() => ({
 			channelId: props.channel!,
 		})),
 		useShallowRef: true,
 	}));
 } else if (props.src === 'role') {
-	paginator = markRaw(new Paginator('roles/notes', {
+	paginator = markRaw(createPaginator('roles/notes', {
 		computedParams: computed(() => ({
 			roleId: props.role!,
 		})),
