@@ -91,10 +91,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</span>
 
 				<div :class="$style.bio">
+					<!-- 使用 MFM 既有标签导航参数，使 Twitter 简介中的标签进入帖子结果页。 -->
 					<Mfm
 						v-if="user.description"
 						:text="user.description"
-						:isNote="false"
+						:isNote="true"
 						:author="user"
 						class="_selectable"
 					/>
