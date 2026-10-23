@@ -1,6 +1,6 @@
 # Twitter UI 写入后与回访新鲜度
 
-更新：2026-10-18。范围：当前 Twitter 主页面与明确触及的 Compatible 局部。本文描述现行实现；方案取舍见 [ADR-0010](./adr/0010-write-invalidation-and-view-freshness.md)。既有身份展示与设置路由边界继续遵循 ADR-0008，滚动归属遵循 ADR-0009。
+更新：2026-10-23。范围：当前 Twitter 主页面与明确触及的 Compatible 局部。本文描述现行实现；方案取舍见 [ADR-0010](./adr/0010-write-invalidation-and-view-freshness.md)。既有身份展示与设置路由边界继续遵循 ADR-0008，滚动归属遵循 ADR-0009。
 
 ## 数据归属
 
@@ -59,7 +59,9 @@ Twitter 动作栏显式接收回复数、转发数、反应数与本人反应等
 
 ### 通知、关系与社区
 
-通知的全部标签保持原通知流。Mentions 与 Direct Notes 改为复用 `MkStreamingNotesTimeline` 的 mentions/directs 数据源，沿用已有查询、mention 通知和非实时轮询；删除静态分页器和重复回访路径。
+通知的全部标签保持原通知流。`notifications/` 只协调已读写入与账户对账，首次打开、缓存回访、恢复可见、行点击和手动全部已读提交同一动作；实时未读／已读信号使账户查询失效，不本地加减计数。Mentions 与 Direct Notes 复用 `MkStreamingNotesTimeline` 的 mentions/directs 数据源，沿用已有查询、mention 通知和非实时轮询。
+
+`/my/achievements` 的两种界面共同消费 `achievements/` Store。真实申领成功、缓存回访、恢复可见及启用实时模式后的成就通知触发查询；请求代次隔离迟到响应，失败保留最后成功列表。原 `MkAchievements` 的内部查询与申领流程继续服务其他既有消费者。细节见 [成就与通知同步](./achievement-notification-sync.md)。
 
 关注按钮保持原业务实现；关系集合和头部用户计数分别接入关系事件及回访。普通发帖不重载关注关系集合。
 
