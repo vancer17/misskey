@@ -34,3 +34,5 @@ export { getChannelCommunityTabs, resolveChannelCommunityTab } from './channel-d
 export type { ChannelDetailState, ChannelCommunityTab, ChannelFeaturedOperation, ChannelFeaturedPage, ChannelFeaturedState } from './channel-detail.js';
 /** 用户主页标签及其独立查询范围。 */
 export type { TwitterUserTimelineTab } from './user-timeline.js';
+/** 手动时间线查询的唯一结果语义，不由页面或提示文案反向推断。 */
+export type { TwitterTimelineRefreshResult } from './timeline-refresh.js';
