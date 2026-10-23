@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * 文件领域：Twitter 个人资料时间线的视图结构验证。
+ * 作用：检查路由链接与保留面板的渲染契约，不验证查询或浏览器布局。
+ * 数据链：静态用户输入 → Vue 视图；指示条几何与转场由真实浏览器用例证明。
+ */
+
 import { afterEach, assert, describe, test } from 'vitest';
 import { cleanup, render } from '@testing-library/vue';
 import * as Misskey from 'misskey-js';
@@ -37,6 +43,8 @@ describe('TwitterUserTimeline', () => {
 				components,
 				directives,
 				stubs: {
+					/** 本用例不测量布局，浏览器专用展示组件由 E2E 覆盖。 */
+					TwitterTabIndicator: true,
 					MkNotesTimeline: true,
 					TwitterNote: true,
 				},
@@ -63,6 +71,8 @@ describe('TwitterUserTimeline', () => {
 				components,
 				directives,
 				stubs: {
+					/** 保留面板测试只检查节点身份，不模拟 FontFaceSet 或布局结果。 */
+					TwitterTabIndicator: true,
 					MkNotesTimeline: true,
 					TwitterNote: true,
 				},
