@@ -32,7 +32,7 @@
 | **P-03** | 帖子详情与回复线程 | `/notes/:noteId/:initialTab?` | `packages/frontend/src/pages/note.vue`；`packages/frontend/src/components/MkNoteDetailed.vue`；`packages/frontend/src/components/MkNoteSub.vue` | Full | P-02 | 详情页大字号排版、metadata、回复列表和线程连接。 |
 | **P-04** | 用户主页 | `/@:acct/:page?` | `packages/frontend/src/pages/user/index.vue`；`packages/frontend/src/pages/user/TwitterHome.vue`；`packages/frontend/src/pages/user/index.timeline.vue`；`packages/frontend/src/pages/user/notes.vue` | Full | P-02 | Banner、avatar、身份信息、follow / edit 操作、tabs 和用户时间线；Twitter 简介标签导航至 P-15 帖子结果页。 |
 | **P-05** | 发帖 / 回复 / 引用 | 全局 composer；由时间线、详情页、FAB、菜单和快捷键打开 | `packages/frontend/src/components/MkPostForm.vue`；`packages/frontend/src/components/MkPostFormDialog.vue`；`packages/frontend/src/components/MkPostFormAttaches.vue`；`packages/frontend/src/os.ts` | Full | P-00 | 内联编辑器、全局对话框、回复、引用、可见性、媒体和提交状态。 |
-| **P-06** | 通知 | `/my/notifications` | `packages/frontend/src/pages/notifications.vue` | Full | P-00、P-09 | 通知行、类型图标、已读 / 未读、跳转和分页状态。 |
+| **P-06** | 通知 | `/my/notifications` | `packages/frontend/src/pages/notifications.vue`；`packages/frontend/src/ui/twitter/NotificationRow.vue` | Full | P-00、P-09 | 通知行、类型图标、已读 / 未读、跳转和分页状态；成就通知进入第二阶段 P-20 的 `/my/achievements` Compatible 面。 |
 | **P-07** | 搜索 | `/search` | `packages/frontend/src/pages/search.vue`；`packages/frontend/src/pages/search.note.vue`；`packages/frontend/src/pages/search.user.vue`；`packages/frontend/src/ui/twitter/UserResult.vue` | Full | P-02 | 搜索输入、结果 tabs、帖子结果、用户结果和无结果状态；共享用户结果行的简介标签导航至 P-15，覆盖搜索、关注／粉丝列表及二维码用户结果。 |
 | **P-08** | 全局菜单与对话框 | Note 菜单、用户菜单、repost 菜单、reaction picker、确认 / 提示、tooltip | `packages/frontend/src/components/MkMenu.vue`；`packages/frontend/src/components/MkMenu.child.vue`；`packages/frontend/src/components/MkPopupMenu.vue`；`packages/frontend/src/components/MkContextMenu.vue`；`packages/frontend/src/components/MkModal.vue`；`packages/frontend/src/components/MkModalWindow.vue`；`packages/frontend/src/components/MkDialog.vue`；`packages/frontend/src/components/MkEmojiPickerDialog.vue`；`packages/frontend/src/utility/reaction-picker.ts` | Full | P-00、P-05 | 主路径覆盖层的容器、交互和视觉语言。 |
 | **P-09** | 共享页面状态 | 必做页面的 empty / loading / error / no-results / not-found / retry | `packages/frontend/src/pages/_loading_.vue`；`packages/frontend/src/pages/_error_.vue`；`packages/frontend/src/pages/not-found.vue`；各页面使用的结果与加载组件 | Full | P-00 | 统一必做页面的基础状态和重试行为。 |
@@ -71,6 +71,7 @@
 | OAuth / Miauth / auth | `packages/frontend/src/pages/auth.vue`；`packages/frontend/src/pages/miauth.vue`；`packages/frontend/src/pages/oauth.vue` | 仅保持功能基线，不做 Twitter 化。 |
 | About / 实例信息 | `packages/frontend/src/pages/about*.vue`；`packages/frontend/src/pages/instance-info.vue` | Phase 2 Compatible。 |
 | 公告 | `packages/frontend/src/pages/announcements*.vue` | Phase 2 Compatible，除非运营立即需要。 |
+| 本人成就 `/my/achievements` | `packages/frontend/src/pages/achievements.vue`；`packages/frontend/src/achievements/`；`packages/frontend/src/ui/twitter/components/TwitterAchievementsShell.vue` | Phase 2 P-20 Compatible；两种界面共用本人成就 Store，申领成功、缓存回访和恢复可见后查询服务端事实。通知已读统一对账账户角标；见 [同步契约](./achievement-notification-sync.md) 与 [ADR-0025](./adr/0025-achievement-notification-sync.md)。 |
 | 通用 404 | `packages/frontend/src/pages/not-found.vue` | 纳入 P-09。 |
 
 ## 依赖关系
@@ -112,6 +113,7 @@ packages/frontend/src/navbar.ts
 packages/frontend/src/utility/get-note-menu.ts
 packages/frontend/src/utility/get-user-menu.ts
 packages/frontend/src/pages/settings/index.vue
+packages/frontend/src/ui/twitter/NotificationRow.vue
 packages/frontend/src/ui/_common_/navbar.vue
 packages/frontend/src/ui/_common_/mobile-footer-menu.vue
 ```
@@ -126,3 +128,5 @@ packages/frontend/src/ui/_common_/mobile-footer-menu.vue
 该规则用于避免用户从 Twitter 风格主路径意外进入未处理的 Misskey 旧样式页面。
 
 简介中的 MFM 标签链接同样属于导航入口审计：`TwitterHome.vue`、`ui/twitter/UserResult.vue`、`TwitterChannel.vue` 通过既有公开参数 `isNote=true` 将标签导航至 `/tags/:tag`。频道头部和“关于”页的简介遵循相同语义；默认 Misskey 界面保留 `/user-tags/:tag` 行为。
+
+成就通知的目标 `/my/achievements` 属于第二阶段 P-20 Compatible 面：原路由选择页面壳，两种界面共同使用 `achievements/` 的本人成就业务容器与唯一 Store；Twitter 列表消费既有 Token。目录、徽章和文案共用权威来源，其他用户继续使用原 `MkAchievements`。通知角标从服务端账户事实统一对账，见 [同步契约](./achievement-notification-sync.md)。
