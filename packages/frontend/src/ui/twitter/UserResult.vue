@@ -24,7 +24,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<div :class="$style.body">
 			<div v-if="user.description" :class="$style.description">
-				<Mfm :text="user.description" :isNote="false" :author="user"/>
+				<!-- 使用 MFM 既有标签导航参数，使 Twitter 用户简介中的标签进入帖子结果页。 -->
+				<Mfm :text="user.description" :isNote="true" :author="user"/>
 		</div>
 		<p v-else :class="$style.emptyDescription">{{ i18n.ts.noAccountDescription }}</p>
 	</div>

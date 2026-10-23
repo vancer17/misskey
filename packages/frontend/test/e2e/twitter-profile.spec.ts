@@ -4,8 +4,10 @@
  */
 
 /**
- * Twitter 资料编辑真实后端回归：保存、缓存回访、嵌套路由与身份显示一致性。
- * 仅操作既有隔离测试实例；延迟/中断传输不伪造领域响应，不读取开发账户。
+ * 文件领域：Twitter 用户资料的真实后端浏览器回归。
+ * 作用：验证保存、缓存回访、嵌套路由、身份显示与简介标签导航。
+ * 数据链：隔离实例真实账号／资料／帖子 → 页面查询与用户操作 → 结果与可见状态；不读取开发账户。
+ * 延迟／中断只作用于真实传输，不伪造领域响应。
  */
 import { test, expect } from '@playwright/test';
 import type { ElementHandle, FileChooser, Locator, Page, PlaywrightTestArgs, Request, Response, Route, TestInfo } from '@playwright/test';
@@ -233,6 +235,89 @@ test('默认 UI 的设置子页保持可用', /** 修复不得要求切换 Twitt
 	await page.locator('a[href="/settings/avatar-decoration"]').click();
 	await page.goBack();
 	await expect(page.getByTestId('profile-name')).toBeVisible();
+	await expect(page.getByTestId('twitter-root')).toHaveCount(0);
+	expect(errors).toEqual([]);
+});
+
+test('标签导航：个人简介中文标签进入帖子结果且支持返回和 Enter', /** 真实标签查询决定成员，鼠标与键盘共用既有链接导航。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	const errors: string[] = errorsIn(page);
+	const tag: string = '资料导航';
+	const tagPath: string = `/tags/${encodeURIComponent(tag)}`;
+	await api(BASE_URL, 'i/update', { i: user.token, description: `Profile bio #${tag}` });
+	const matching: Misskey.entities.Note = await createNote(user, `Matching note #${tag}`);
+	const unrelated: Misskey.entities.Note = await createNote(user, 'Unrelated profile note');
+	await openProfile(page);
+	const bioTag: Locator = page.getByTestId('twitter-profile').locator(`a[href="${tagPath}"]`).first();
+	await bioTag.click();
+	await expect(page).toHaveURL(`${BASE_URL}${tagPath}`);
+	await expect(page.getByRole('heading', { name: `#${tag}`, exact: true })).toBeVisible();
+	await expect(page.locator(`[data-testid="twitter-note"][data-note-id="${matching.id}"]`)).toHaveCount(1);
+	await expect(page.locator(`[data-testid="twitter-note"][data-note-id="${unrelated.id}"]`)).toHaveCount(0);
+	await backToProfile(page);
+	await bioTag.focus();
+	await bioTag.press('Enter');
+	await expect(page).toHaveURL(`${BASE_URL}${tagPath}`);
+	await expect(page.locator(`[data-testid="twitter-note"][data-note-id="${matching.id}"]`)).toBeVisible();
+	expect(errors).toEqual([]);
+});
+
+test('标签导航：只有简介包含标签时显示帖子空态', /** 用户标签索引不能作为帖子结果或用户卡片混入标签时间线。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	const errors: string[] = errorsIn(page);
+	const tag: string = 'profile_bio_only';
+	const tagPath: string = `/tags/${encodeURIComponent(tag)}`;
+	await api(BASE_URL, 'i/update', { i: user.token, description: `Bio without tagged notes #${tag}` });
+	await createNote(user, 'Ordinary note without the bio tag');
+	await openProfile(page);
+	await page.getByTestId('twitter-profile').locator(`a[href="${tagPath}"]`).click();
+	await expect(page).toHaveURL(`${BASE_URL}${tagPath}`);
+	await expect(page.getByRole('heading', { name: 'No notes', exact: true })).toBeVisible();
+	await expect(page.getByTestId('twitter-note')).toHaveCount(0);
+	await expect(page.locator(`a[href="/@${user.username}"]`).filter({ hasText: user.username })).toHaveCount(0);
+	expect(errors).toEqual([]);
+});
+
+test('标签导航：搜索及关注和粉丝共享用户行都进入帖子结果', /** 三个真实列表复用同一业务行，不能留下简介用户标签入口。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	const errors: string[] = errorsIn(page);
+	const other: AccountWithToken = await createUser('profile_tagged');
+	const tag: string = 'shared_profile_tag';
+	const tagPath: string = `/tags/${encodeURIComponent(tag)}`;
+	await api(BASE_URL, 'i/update', { i: other.token, description: `Shared result bio #${tag}` });
+	await api(BASE_URL, 'following/create', { i: user.token, userId: other.id });
+	await api(BASE_URL, 'following/create', { i: other.token, userId: user.id });
+	const matching: Misskey.entities.Note = await createNote(other, `Shared result matching note #${tag}`);
+	await openProfile(page);
+	const relationPages: readonly string[] = ['following', 'followers'];
+	for (let index: number = 0; index < relationPages.length; index++) {
+		const relation: string = relationPages[index];
+		await page.getByTestId('twitter-profile').locator(`a[href="/@${user.username}/${relation}"]`).click();
+		const result: Locator = page.locator('article').filter({ has: page.locator(`a[href="/@${other.username}"]`) });
+		await expect(result).toHaveCount(1);
+		await result.locator(`a[href="${tagPath}"]`).click();
+		await expect(page).toHaveURL(`${BASE_URL}${tagPath}`);
+		await expect(page.locator(`[data-testid="twitter-note"][data-note-id="${matching.id}"]`)).toBeVisible();
+		await page.goBack();
+		await expect(result).toBeVisible();
+		await backToProfile(page);
+	}
+	await page.goto(`${BASE_URL}/search?ui=twitter&type=user&q=${encodeURIComponent(other.username)}`);
+	const searchResult: Locator = page.getByRole('tabpanel').locator('article').filter({ has: page.locator(`a[href="/@${other.username}"]`) });
+	await expect(searchResult).toHaveCount(1);
+	await searchResult.locator(`a[href="${tagPath}"]`).click();
+	await expect(page).toHaveURL(`${BASE_URL}${tagPath}`);
+	await expect(page.locator(`[data-testid="twitter-note"][data-note-id="${matching.id}"]`)).toBeVisible();
+	expect(errors).toEqual([]);
+});
+
+test('标签导航：默认 UI 简介保留用户标签结果', /** 默认界面继续使用基础 MFM 的用户标签语义，不受 Twitter 业务调用影响。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	const errors: string[] = errorsIn(page);
+	const tag: string = 'default_profile_tag';
+	const tagPath: string = `/user-tags/${encodeURIComponent(tag)}`;
+	await api(BASE_URL, 'i/update', { i: user.token, description: `Default UI bio #${tag}` });
+	await seedSession(page, user);
+	await page.goto(`${BASE_URL}/@${user.username}`);
+	await page.locator('.description').locator(`a[href="${tagPath}"]`).click();
+	await expect(page).toHaveURL(`${BASE_URL}${tagPath}`);
+	await expect(page.locator(`a[href="/@${user.username}"]`).filter({ hasText: user.username })).toBeVisible();
 	await expect(page.getByTestId('twitter-root')).toHaveCount(0);
 	expect(errors).toEqual([]);
 });
