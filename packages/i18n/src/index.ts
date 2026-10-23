@@ -23,8 +23,20 @@ type PrimaryLang = keyof typeof primaries;
 
 type Locales = Record<Language, ILocale>;
 
-/** fork 明确允许补充的业务区域，命名空间与叶子键由日文源生成类型派生。 */
-type ForkChineseNamespaces = Pick<Locale, '_avatarDecorationCalibration' | '_channel'>;
+/** 时间线手动刷新只补充三个结果提示；此键表同时约束类型投影与运行时校验。 */
+const twitterRefreshChineseKeys = {
+	/** 已取得新帖子时的完成提示。 */
+	timelineUpdated: true,
+	/** 检查成功但没有新帖子时的轻量提示。 */
+	timelineUpToDate: true,
+	/** 检查失败时的重试提示。 */
+	timelineRefreshFailed: true,
+} as const satisfies Readonly<Partial<Record<keyof Locale['_twitterUi'], true>>>;
+
+/** fork 明确允许补充的业务区域，刷新提示仅从日文权威类型派生获准的三个叶子键。 */
+type ForkChineseNamespaces = Pick<Locale, '_avatarDecorationCalibration' | '_channel'> & {
+	_twitterUi: Pick<Locale['_twitterUi'], keyof typeof twitterRefreshChineseKeys>;
+};
 
 /** 每个允许区域只补尚未进入正式中文资源的叶子键，不复制完整语言模型。 */
 type ForkChineseSupplement = { [Namespace in keyof ForkChineseNamespaces]?: Partial<ForkChineseNamespaces[Namespace]> };
@@ -35,6 +47,8 @@ const forkChineseNamespaces = {
 	_avatarDecorationCalibration: true,
 	/** 频道资料库的空态与加载结束文案。 */
 	_channel: true,
+	/** 时间线手动刷新的三个结果提示，叶子键另受白名单约束。 */
+	_twitterUi: true,
 } as const satisfies Readonly<Record<keyof ForkChineseNamespaces, true>>;
 
 /** 判断外部 JSON 是否为普通对象，避免数组、空值或标量被当作翻译字典。 */
@@ -65,6 +79,7 @@ function loadForkChineseSupplement(rawLocales: Locales, moduleUrl: string): Fork
 		const nativeChinese: unknown = rawLocales['zh-CN'][namespace];
 		const sectionSupplement: Record<string, string> = {};
 		for (const [key, value] of Object.entries(section)) {
+			if (namespace === '_twitterUi' && !Object.hasOwn(twitterRefreshChineseKeys, key)) throw new Error(`Fork zh-CN supplement has unsupported key: ${namespace}.${key}`);
 			if (!Object.hasOwn(source, key) || typeof source[key] !== 'string') throw new Error(`Fork zh-CN supplement has unknown key: ${namespace}.${key}`);
 			if (typeof value !== 'string' || value.trim().length === 0) throw new Error(`Fork zh-CN ${namespace}.${key} must be a nonempty string.`);
 			if (isLocaleRecord(nativeChinese) && Object.hasOwn(nativeChinese, key)) {

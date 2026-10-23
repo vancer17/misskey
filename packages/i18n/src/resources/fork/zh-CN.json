@@ -23,5 +23,10 @@
 		"noOwned": "你还没有管理的频道",
 		"noFavorites": "你还没有收藏的频道",
 		"allShown": "已显示全部频道"
+	},
+	"_twitterUi": {
+		"timelineUpdated": "时间线已更新",
+		"timelineUpToDate": "本次检查暂无新帖子",
+		"timelineRefreshFailed": "刷新失败，请重试"
 	}
 }

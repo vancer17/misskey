@@ -66,8 +66,10 @@ async function runIsolatedPublication(assertions: string): Promise<void> {
 
 		/** 测试输入直接沿用生成的权威语言字段，不复制另一套业务键定义。 */
 		type CalibrationMessages = Locale['_avatarDecorationCalibration'];
+		/** 手动刷新文案从权威语言类型派生，测试只接收本次明确授权的三个叶子字段。 */
+		type TimelineRefreshMessages = Pick<Locale['_twitterUi'], 'timelineUpdated' | 'timelineUpToDate' | 'timelineRefreshFailed'>;
 		/** 文件载荷只作为构建输入，不能被当作已合并的完整语言。 */
-		type ForkSupplement = { _avatarDecorationCalibration: CalibrationMessages };
+		type ForkSupplement = { _avatarDecorationCalibration: CalibrationMessages; _twitterUi: TimelineRefreshMessages };
 		/** 当前临时副本的中文补充路径，与真实构建的资源布局相同。 */
 		const supplementPath: string = './resources/fork/zh-CN.json';
 		/** 读取真实补充资源作为期望值，不在测试内复制18条译文。 */
@@ -82,6 +84,26 @@ async function runIsolatedPublication(assertions: string): Promise<void> {
 		function writeOfficialMessages(messages: Partial<CalibrationMessages>): void {
 			const chinese: Record<string, unknown> = loadYaml(readFileSync('./locales/zh-CN.yml', 'utf-8')) as Record<string, unknown>;
 			chinese._avatarDecorationCalibration = messages;
+			writeFileSync('./locales/zh-CN.yml', dumpYaml(chinese), 'utf-8');
+		}
+
+		/** 投影刷新提示，避免将其他 Twitter UI 词条误纳入本次翻译补充的断言。 */
+		function refreshMessages(locale: Pick<Locale, '_twitterUi'>): TimelineRefreshMessages {
+			return {
+				/** 有新帖子时展示的刷新结果。 */
+				timelineUpdated: locale._twitterUi.timelineUpdated,
+				/** 成功查询但无新帖子时展示的刷新结果。 */
+				timelineUpToDate: locale._twitterUi.timelineUpToDate,
+				/** 查询失败时展示的刷新结果。 */
+				timelineRefreshFailed: locale._twitterUi.timelineRefreshFailed,
+			};
+		}
+
+		/** 仅在临时官方资源加入刷新文案，保留该命名空间内其他已有译文。 */
+		function writeOfficialRefreshMessages(messages: Partial<TimelineRefreshMessages>): void {
+			const chinese: Record<string, unknown> = loadYaml(readFileSync('./locales/zh-CN.yml', 'utf-8')) as Record<string, unknown>;
+			const twitter: Record<string, unknown> = chinese._twitterUi as Record<string, unknown>;
+			chinese._twitterUi = { ...twitter, ...messages };
 			writeFileSync('./locales/zh-CN.yml', dumpYaml(chinese), 'utf-8');
 		}
 
@@ -112,6 +134,9 @@ describe('frontend locale publication', /** 验证发布结果而不替换文件
 		expect(chineseLocale._version_).toBe(meta.version);
 		expect(chineseLocale._uploader.videoCompressionFallback).toBe(locales['zh-CN']._uploader.videoCompressionFallback);
 		expect(chineseLocale._uploader.videoCompressionFallback).toContain('{name}');
+		expect(chineseLocale._twitterUi.timelineUpdated).toBe('时间线已更新');
+		expect(chineseLocale._twitterUi.timelineUpToDate).toBe('本次检查暂无新帖子');
+		expect(chineseLocale._twitterUi.timelineRefreshFailed).toBe('刷新失败，请重试');
 		expect(await readdir(directory)).toHaveLength(languages.length);
 		const originalChinese: Awaited<ReturnType<typeof stat>> = await stat(chinesePath);
 		const originalJapanese: Awaited<ReturnType<typeof stat>> = await stat(japanesePath);
@@ -159,20 +184,65 @@ describe('frontend locale publication', /** 验证发布结果而不替换文件
 		`);
 	});
 
+	it('publishes the three Chinese refresh messages and preserves native language fallbacks', /** 真实发布链只补简体中文刷新提示，其他语言保持原始回退，移除补充后恢复中文原生回退。 */ async (): Promise<void> => {
+		await runIsolatedPublication(`
+			const expected: TimelineRefreshMessages = {
+				/** 成功查询到新帖子时提供中文确认。 */
+				timelineUpdated: '时间线已更新',
+				/** 无新帖子时提供中文检查结果。 */
+				timelineUpToDate: '本次检查暂无新帖子',
+				/** 查询失败与无新帖子采用不同的中文反馈。 */
+				timelineRefreshFailed: '刷新失败，请重试',
+			};
+			const japanese: Locale = loadYaml(readFileSync('./locales/ja-JP.yml', 'utf-8')) as Locale;
+			const english: Partial<Locale> = loadYaml(readFileSync('./locales/en-US.yml', 'utf-8')) as Partial<Locale>;
+			const rawChinese: Partial<Locale> = loadYaml(readFileSync('./locales/zh-CN.yml', 'utf-8')) as Partial<Locale>;
+			const rawTraditional: Partial<Locale> = loadYaml(readFileSync('./locales/zh-TW.yml', 'utf-8')) as Partial<Locale>;
+			await writeFrontendLocalesJson('./published', 'test-version');
+			assert.deepEqual(supplement._twitterUi, expected);
+			assert.deepEqual(refreshMessages(build()['zh-CN']), expected);
+			assert.deepEqual(refreshMessages(published('zh-CN')), expected);
+			assert.deepEqual(refreshMessages(published('ja-JP')), refreshMessages(japanese));
+			assert.deepEqual(refreshMessages(published('en-US')), refreshMessages({ _twitterUi: { ...japanese._twitterUi, ...english._twitterUi } }));
+			assert.deepEqual(refreshMessages(published('zh-TW')), refreshMessages({ _twitterUi: {
+				...japanese._twitterUi, ...english._twitterUi, ...rawChinese._twitterUi, ...rawTraditional._twitterUi,
+			} }));
+			const unaffectedLanguages: readonly string[] = ['ja-JP', 'en-US', 'zh-TW'];
+			const priorOtherLocales: readonly string[] = unaffectedLanguages.map(
+				/** 保存真实发布字节，确认补充移除不会改写其他语言的任意字段。 */
+				(language: string): string => readFileSync('./published/' + language + '.test-version.json', 'utf-8'),
+			);
+			rmSync(supplementPath);
+			await writeFrontendLocalesJson('./published', 'test-version');
+			assert.deepEqual(refreshMessages(published('zh-CN')), refreshMessages({ _twitterUi: {
+				...japanese._twitterUi, ...english._twitterUi, ...rawChinese._twitterUi,
+			} }));
+			unaffectedLanguages.forEach(/** 缺文件回退继续保持语言隔离。 */ (language: string, index: number): void => {
+				assert.equal(readFileSync('./published/' + language + '.test-version.json', 'utf-8'), priorOtherLocales[index]);
+			});
+		`);
+	});
+
 	it('reads changed supplements again within the same native module instance', /** 同进程第二次发布必须读取新文件，不能复用 import JSON 缓存或污染其他语言。 */ async (): Promise<void> => {
 		await runIsolatedPublication(`
 			await writeFrontendLocalesJson('./published', 'test-version');
 			const originalChinese: Locale = published('zh-CN');
 			const originalJapanese: string = readFileSync('./published/ja-JP.test-version.json', 'utf-8');
 			const originalEnglish: string = readFileSync('./published/en-US.test-version.json', 'utf-8');
+			const originalTraditional: string = readFileSync('./published/zh-TW.test-version.json', 'utf-8');
 			const updated: string = originalChinese._avatarDecorationCalibration.title + '（同进程更新）';
+			const updatedRefresh: string = originalChinese._twitterUi.timelineUpToDate + '（同进程更新）';
 			supplement._avatarDecorationCalibration.title = updated;
+			supplement._twitterUi.timelineUpToDate = updatedRefresh;
 			writeFileSync(supplementPath, JSON.stringify(supplement), 'utf-8');
 			assert.equal(build()['zh-CN']._avatarDecorationCalibration.title, updated);
+			assert.equal(build()['zh-CN']._twitterUi.timelineUpToDate, updatedRefresh);
 			await writeFrontendLocalesJson('./published', 'test-version');
 			assert.equal(published('zh-CN')._avatarDecorationCalibration.title, updated);
+			assert.equal(published('zh-CN')._twitterUi.timelineUpToDate, updatedRefresh);
 			assert.equal(readFileSync('./published/ja-JP.test-version.json', 'utf-8'), originalJapanese);
 			assert.equal(readFileSync('./published/en-US.test-version.json', 'utf-8'), originalEnglish);
+			assert.equal(readFileSync('./published/zh-TW.test-version.json', 'utf-8'), originalTraditional);
 		`);
 	});
 
@@ -200,12 +270,39 @@ describe('frontend locale publication', /** 验证发布结果而不替换文件
 		`);
 	});
 
+	it('hands over each refresh message only after its fork supplement is removed', /** 三个刷新提示分别验证正式同键冲突、同值拒绝以及单键移除后的正式资源接管。 */ async (): Promise<void> => {
+		await runIsolatedPublication(`
+			const originalOfficial: string = readFileSync('./locales/zh-CN.yml', 'utf-8');
+			const keys: readonly (keyof TimelineRefreshMessages)[] = Object.keys(supplement._twitterUi) as (keyof TimelineRefreshMessages)[];
+			for (const key of keys) {
+				writeFileSync('./locales/zh-CN.yml', originalOfficial, 'utf-8');
+				writeFileSync(supplementPath, JSON.stringify(supplement), 'utf-8');
+				writeOfficialRefreshMessages({ [key]: '' });
+				assert.equal(build()['zh-CN']._twitterUi[key], supplement._twitterUi[key]);
+				await writeFrontendLocalesJson('./published', 'test-version');
+				const priorChinese: string = readFileSync('./published/zh-CN.test-version.json', 'utf-8');
+				writeOfficialRefreshMessages({ [key]: supplement._twitterUi[key] });
+				assert.throws(/** 即使正式译文内容相同，也要求先移除该叶键补充。 */ (): void => { build(); }, /remove the fork supplement/);
+				await assert.rejects(writeFrontendLocalesJson('./published', 'test-version'), /remove the fork supplement/);
+				assert.equal(readFileSync('./published/zh-CN.test-version.json', 'utf-8'), priorChinese);
+				const remaining: Partial<TimelineRefreshMessages> = { ...supplement._twitterUi };
+				delete remaining[key];
+				writeFileSync(supplementPath, JSON.stringify({ ...supplement, _twitterUi: remaining }), 'utf-8');
+				const officialMessage: string = '正式中文已接管：' + key;
+				writeOfficialRefreshMessages({ [key]: officialMessage });
+				await writeFrontendLocalesJson('./published', 'test-version');
+				assert.deepEqual(refreshMessages(published('zh-CN')), { ...supplement._twitterUi, [key]: officialMessage });
+				assert.deepEqual(published('zh-CN')._avatarDecorationCalibration, supplement._avatarDecorationCalibration);
+			}
+		`);
+	});
+
 	it('rejects unsupported scopes, keys, blank translations and non-string values', /** 补充资源不能扩展到其他命名空间或未声明键，非法文件不得被作为有效译文发布。 */ async (): Promise<void> => {
 		await runIsolatedPublication(`
 			const invalidSupplements: readonly unknown[] = [
 				/** 根节点必须是语言资源对象。 */
 				null, [], '中文资源',
-				/** 仅允许已授权的校准命名空间。 */
+				/** 仅允许已经明确授权的补充命名空间。 */
 				{ _avatarDecorationManager: { title: '越界补充' } },
 				{ _avatarDecorationCalibration: {}, unrelated: {} },
 				/** 命名空间本身也必须是对象。 */
@@ -221,6 +318,16 @@ describe('frontend locale publication', /** 验证发布结果而不替换文件
 				{ _avatarDecorationCalibration: { title: false } },
 				{ _avatarDecorationCalibration: { title: null } },
 				{ _avatarDecorationCalibration: { title: {} } },
+				/** 新增授权只覆盖三个刷新叶键，不覆盖同命名空间的其他真实字段。 */
+				{ _twitterUi: { primaryNavigation: '越界导航补充' } },
+				{ _twitterUi: { nonexistentRefreshKey: '未知刷新字段' } },
+				/** 刷新命名空间与翻译值沿用原有输入守卫。 */
+				{ _twitterUi: null },
+				{ _twitterUi: [] },
+				{ _twitterUi: '错误层级' },
+				{ _twitterUi: { timelineUpdated: '' } },
+				{ _twitterUi: { timelineUpToDate: '   ' } },
+				{ _twitterUi: { timelineRefreshFailed: 1 } },
 			];
 			for (const payload of invalidSupplements) {
 				writeFileSync(supplementPath, JSON.stringify(payload), 'utf-8');
