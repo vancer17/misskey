@@ -8,6 +8,8 @@
 
 `ui/twitter/composables/use-twitter-refresh.ts` 只保存待刷新、激活、请求占用等 UI 调度信息，不存实体，不决定可见性权限或集合成员。`ui/twitter/store/note-counters.ts` 是查看者范围内的计数只读投影，不持久化；类型由 misskey-js Note 派生，不能传回帖子动作或权限判断。所有新增公共入口从 `ui/twitter/index.ts` 导出。
 
+首页 Twitter 时间线的手动刷新由注入的 `TwitterTimelinePaginator` 管理，继续复用原流式组件的接口映射、订阅、轮询及唯一分页集合；查询期间保留内容，回顶与结果提示由页面协调。其结果、并发及分页边界见 [timeline-refresh.md](./timeline-refresh.md)。
+
 ## 成功信号与消费者
 
 | 信号／命令 | 消费范围 | 更新方式 |
