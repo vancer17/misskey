@@ -5,7 +5,7 @@
 
 /**
  * 文件领域：Twitter 频道入口的真实后端交互与布局回归。
- * 作用：验证关注空态、频道横条、头部搜索和独立管理弹窗的可见边界。
+ * 作用：验证关注空态、频道横条、头部搜索、管理弹窗和频道简介标签导航。
  * 数据链：隔离实例真实账号／频道／帖子 → 页面查询所有者 → 浏览器布局和交互；不 Mock 业务响应。
  */
 import { expect, test } from '@playwright/test';
@@ -232,6 +232,36 @@ test('离页关注及取关后回访更新原缓存首页和单一空态', /** �
 	await expect(root.getByTestId('twitter-community-card')).toHaveCount(0);
 	await expect(root.getByTestId('twitter-note')).toHaveCount(0);
 	await expect(root.getByText('No notes', { exact: true })).toHaveCount(0);
+});
+
+test('标签导航：频道头部与关于简介都进入真实帖子结果', /** 两个简介渲染位置都沿用帖子标签导航，结果由真实标签接口决定。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	const tag: string = '频道导航';
+	const tagPath: string = `/tags/${encodeURIComponent(tag)}`;
+	const channel: Misskey.entities.Channel = await api(BASE_URL, 'channels/create', {
+		i: viewer.token,
+		name: 'Hashtag channel',
+		description: `Channel description #${tag}`,
+	});
+	const matching: Misskey.Endpoints['notes/create']['res'] = await api(BASE_URL, 'notes/create', { i: author.token, text: `Matching public note #${tag}` });
+	const unrelated: Misskey.Endpoints['notes/create']['res'] = await api(BASE_URL, 'notes/create', { i: author.token, text: 'Unrelated public note' });
+	await api(BASE_URL, 'channels/follow', { i: viewer.token, channelId: channel.id });
+	const communities: Locator = await open(page);
+	await communities.locator(`a[href="/channels/${channel.id}"]`).click();
+	const detail: Locator = page.getByTestId('twitter-channel');
+	await expect(detail).toBeVisible();
+	await detail.locator('section').first().locator(`a[href="${tagPath}"]`).click();
+	await expect(page).toHaveURL(`${BASE_URL}${tagPath}`);
+	await expect(page.getByRole('heading', { name: `#${tag}`, exact: true })).toBeVisible();
+	await expect(page.locator(`[data-testid="twitter-note"][data-note-id="${matching.createdNote.id}"]`)).toHaveCount(1);
+	await expect(page.locator(`[data-testid="twitter-note"][data-note-id="${unrelated.createdNote.id}"]`)).toHaveCount(0);
+	await page.goBack();
+	await expect(detail).toBeVisible();
+	await detail.getByRole('tab', { name: 'About', exact: true }).click();
+	const aboutTag: Locator = detail.locator('#twitter-channel-panel-about').locator('section').last().locator(`a[href="${tagPath}"]`);
+	await expect(aboutTag).toBeVisible();
+	await aboutTag.click();
+	await expect(page).toHaveURL(`${BASE_URL}${tagPath}`);
+	await expect(page.locator(`[data-testid="twitter-note"][data-note-id="${matching.createdNote.id}"]`)).toBeVisible();
 });
 
 test('独立管理与收藏弹窗按需读取，关闭后主流保持原位', /** 管理实体不进入发现帖子容器，也不预取不可见业务面板。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
