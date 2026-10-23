@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：Twitter 通知页头与横向筛选导航。
+作用：呈现返回、通知操作及通知分类，公共指示条只跟随既有选中值。
+数据链：页面传入只读标签与操作 → 页头展示；切换和重选意图 → 页面所有者，不持有通知事实。
+-->
+
 <template>
 <header :class="[$style.root, { [$style.mobile]: isMobile }]">
 	<div :class="$style.top">
@@ -35,6 +41,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<button
 			v-for="item in tabs"
 			:key="item.key"
+			:data-twitter-tab-key="item.key"
 			:class="$style.tab"
 			class="_button"
 			type="button"
@@ -43,11 +50,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 		>
 			<span :class="$style.tabTitle">{{ item.title }}</span>
 		</button>
+		<TwitterTabIndicator :activeKey="tabModel ?? null"/>
 	</nav>
 </header>
 </template>
 
 <script lang="ts" setup>
+import TwitterTabIndicator from './components/TwitterTabIndicator.vue';
 import type { Tab } from '@/components/global/MkPageHeader.tabs.vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import { i18n } from '@/i18n.js';
@@ -148,6 +157,8 @@ function goBack() {
 }
 
 .tabs {
+	--twitter-tab-indicator-inset: 14px;
+	position: relative;
 	display: flex;
 	height: 50px;
 	min-width: 0;
@@ -175,22 +186,6 @@ function goBack() {
 		background-color var(--twitter-duration-fast) ease,
 		color var(--twitter-duration-fast) ease;
 
-	&::after {
-		content: "";
-		position: absolute;
-		right: 14px;
-		bottom: 0;
-		left: 14px;
-		height: 4px;
-		border-radius: var(--twitter-radius-pill) var(--twitter-radius-pill) 0 0;
-		background: var(--twitter-accent);
-		opacity: 0;
-		transform: scaleX(0.4);
-		transition:
-			opacity var(--twitter-duration-fast) ease,
-			transform var(--twitter-duration-normal) var(--twitter-ease);
-	}
-
 	&:hover {
 		background: color-mix(in srgb, var(--twitter-fg) 6%, transparent);
 		color: var(--twitter-fg);
@@ -203,11 +198,6 @@ function goBack() {
 
 	&[aria-current="page"] {
 		color: var(--twitter-fg);
-
-		&::after {
-			opacity: 1;
-			transform: scaleX(1);
-		}
 	}
 }
 
@@ -219,7 +209,6 @@ function goBack() {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.tab::after,
 	.back,
 	.action {
 		transition: none;
