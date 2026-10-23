@@ -30,10 +30,10 @@
 | **P-01** | 首页时间线 | `/`、`/timeline` | `packages/frontend/src/pages/timeline.vue`；`packages/frontend/src/components/MkStreamingNotesTimeline.vue`；`packages/frontend/src/components/MkNotesTimeline.vue` | Full | P-00 | 时间线 tabs、连续列表、hairline 分隔、新帖提示和加载更多。 |
 | **P-02** | Note / Post 卡片 | 时间线、搜索、列表、个人主页时间线等共享界面 | `packages/frontend/src/components/MkNote.vue`；`packages/frontend/src/components/MkNoteHeader.vue`；`packages/frontend/src/components/MkReactionsViewer.vue`；`packages/frontend/src/components/MkMediaList.vue`；`packages/frontend/src/components/MkNoteMediaGrid.vue`；`packages/frontend/src/components/MkPoll.vue`；`packages/frontend/src/components/MkUrlPreview.vue` | Full | P-00，宜与 P-01 同步 | 共享帖子卡片、头部、操作栏、renote / quote、媒体和富内容。 |
 | **P-03** | 帖子详情与回复线程 | `/notes/:noteId/:initialTab?` | `packages/frontend/src/pages/note.vue`；`packages/frontend/src/components/MkNoteDetailed.vue`；`packages/frontend/src/components/MkNoteSub.vue` | Full | P-02 | 详情页大字号排版、metadata、回复列表和线程连接。 |
-| **P-04** | 用户主页 | `/@:acct/:page?` | `packages/frontend/src/pages/user/index.vue`；`packages/frontend/src/pages/user/index.timeline.vue`；`packages/frontend/src/pages/user/notes.vue` | Full | P-02 | Banner、avatar、身份信息、follow / edit 操作、tabs 和用户时间线。 |
+| **P-04** | 用户主页 | `/@:acct/:page?` | `packages/frontend/src/pages/user/index.vue`；`packages/frontend/src/pages/user/TwitterHome.vue`；`packages/frontend/src/pages/user/index.timeline.vue`；`packages/frontend/src/pages/user/notes.vue` | Full | P-02 | Banner、avatar、身份信息、follow / edit 操作、tabs 和用户时间线；Twitter 简介标签导航至 P-15 帖子结果页。 |
 | **P-05** | 发帖 / 回复 / 引用 | 全局 composer；由时间线、详情页、FAB、菜单和快捷键打开 | `packages/frontend/src/components/MkPostForm.vue`；`packages/frontend/src/components/MkPostFormDialog.vue`；`packages/frontend/src/components/MkPostFormAttaches.vue`；`packages/frontend/src/os.ts` | Full | P-00 | 内联编辑器、全局对话框、回复、引用、可见性、媒体和提交状态。 |
 | **P-06** | 通知 | `/my/notifications` | `packages/frontend/src/pages/notifications.vue` | Full | P-00、P-09 | 通知行、类型图标、已读 / 未读、跳转和分页状态。 |
-| **P-07** | 搜索 | `/search` | `packages/frontend/src/pages/search.vue`；`packages/frontend/src/pages/search.note.vue`；`packages/frontend/src/pages/search.user.vue` | Full | P-02 | 搜索输入、结果 tabs、帖子结果、用户结果和无结果状态。 |
+| **P-07** | 搜索 | `/search` | `packages/frontend/src/pages/search.vue`；`packages/frontend/src/pages/search.note.vue`；`packages/frontend/src/pages/search.user.vue`；`packages/frontend/src/ui/twitter/UserResult.vue` | Full | P-02 | 搜索输入、结果 tabs、帖子结果、用户结果和无结果状态；共享用户结果行的简介标签导航至 P-15，覆盖搜索、关注／粉丝列表及二维码用户结果。 |
 | **P-08** | 全局菜单与对话框 | Note 菜单、用户菜单、repost 菜单、reaction picker、确认 / 提示、tooltip | `packages/frontend/src/components/MkMenu.vue`；`packages/frontend/src/components/MkMenu.child.vue`；`packages/frontend/src/components/MkPopupMenu.vue`；`packages/frontend/src/components/MkContextMenu.vue`；`packages/frontend/src/components/MkModal.vue`；`packages/frontend/src/components/MkModalWindow.vue`；`packages/frontend/src/components/MkDialog.vue`；`packages/frontend/src/components/MkEmojiPickerDialog.vue`；`packages/frontend/src/utility/reaction-picker.ts` | Full | P-00、P-05 | 主路径覆盖层的容器、交互和视觉语言。 |
 | **P-09** | 共享页面状态 | 必做页面的 empty / loading / error / no-results / not-found / retry | `packages/frontend/src/pages/_loading_.vue`；`packages/frontend/src/pages/_error_.vue`；`packages/frontend/src/pages/not-found.vue`；各页面使用的结果与加载组件 | Full | P-00 | 统一必做页面的基础状态和重试行为。 |
 | **P-10** | 移动端布局 | 桌面阈值以下的所有必做界面 | 新增 Twitter 移动 Shell / 底部导航 / FAB；`packages/frontend/src/ui/_common_/mobile-footer-menu.vue` | Full | P-00 | 底部导航、发帖 FAB、safe area、sticky header 和移动触控目标。 |
@@ -46,8 +46,8 @@
 | **P-12** | 正在关注列表 | `/@:acct/following` | `packages/frontend/src/pages/user/following.vue`；`packages/frontend/src/pages/user/follow-list.vue` | Full | P-04 | 用户主页完成后纳入。 |
 | **P-13** | 关注者列表 | `/@:acct/followers` | `packages/frontend/src/pages/user/followers.vue`；`packages/frontend/src/pages/user/follow-list.vue` | Full | P-04 | 用户主页完成后纳入。 |
 | **P-14** | 探索 | `/explore` | `packages/frontend/src/pages/explore.vue`；`packages/frontend/src/pages/explore.featured.vue`；`packages/frontend/src/pages/explore.users.vue`；`packages/frontend/src/pages/explore.roles.vue` | Full 或 Core | P-00、P-02 | 第一阶段左侧导航暴露 Explore 入口时。 |
-| **P-15** | Hashtag 结果页 | `/tags/:tag` | `packages/frontend/src/pages/tag.vue` | Full | P-07 | 搜索和共享帖子列表稳定后纳入。 |
-| **P-16** | 用户标签结果页 | `/user-tags/:tag` | `packages/frontend/src/pages/user-tag.vue` | Full 或 Compatible | P-07 | 公司产品确认保留 user tags 时；否则隐藏。 |
+| **P-15** | Hashtag 结果页 | `/tags/:tag` | `packages/frontend/src/pages/tag.vue` | Full | P-07 | 搜索和共享帖子列表稳定后纳入；Twitter 帖子正文、个人简介、共享用户结果行及频道简介中的标签均查询帖子。 |
+| **P-16** | 用户标签结果页 | `/user-tags/:tag` | `packages/frontend/src/pages/user-tag.vue` | Full 或 Compatible | P-07 | 公司产品确认保留 user tags 时；否则隐藏。Twitter 简介标签不作为该页入口，现行语义见 [ADR-0023](./adr/0023-description-hashtag-navigation.md)。 |
 | **P-17** | 收藏 | `/my/favorites` | `packages/frontend/src/pages/favorites.vue` | Compatible | P-02 | 作为 bookmark-like 功能暴露时。 |
 | **P-18** | 列表时间线 | `/list/:listId`、`/timeline/list/:listId` | `packages/frontend/src/pages/list.vue`；`packages/frontend/src/pages/user-list-timeline.vue` | Compatible | P-01、P-02 | Lists 保留为第一阶段可见功能时。 |
 
@@ -124,3 +124,5 @@ packages/frontend/src/ui/_common_/mobile-footer-menu.vue
 4. 已从公司版导航隐藏。
 
 该规则用于避免用户从 Twitter 风格主路径意外进入未处理的 Misskey 旧样式页面。
+
+简介中的 MFM 标签链接同样属于导航入口审计：`TwitterHome.vue`、`ui/twitter/UserResult.vue`、`TwitterChannel.vue` 通过既有公开参数 `isNote=true` 将标签导航至 `/tags/:tag`。频道头部和“关于”页的简介遵循相同语义；默认 Misskey 界面保留 `/user-tags/:tag` 行为。
