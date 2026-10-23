@@ -27,10 +27,10 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | **P-12** | 正在关注列表 | `/@:acct/following` | `pages/user/following.vue`；`pages/user/follow-list.vue` | Full | P-04 ✅ | 泄漏 A1 转正；与 P-13 共享锚点，宜同 PR |
 | **P-13** | 关注者列表 | `/@:acct/followers` | `pages/user/followers.vue`；`pages/user/follow-list.vue` | Full | P-04 ✅ | 泄漏 A2 转正 |
-| **P-15** | Hashtag 结果页 | `/tags/:tag` | `pages/tag.vue` | Full | P-07 ✅ | 泄漏 A3 转正；消费 P-09 状态件 |
+| **P-15** | Hashtag 结果页 | `/tags/:tag` | `pages/tag.vue`；入口 `pages/user/TwitterHome.vue`、`ui/twitter/UserResult.vue`、`pages/TwitterChannel.vue` | Full | P-07 ✅ | 消费 P-09 状态件；Twitter 帖子正文、个人简介、共享用户结果行及频道两处简介中的标签统一进入帖子结果页，覆盖审计 A3／A8。 |
 | **P-11** | 个人资料设置与二维码入口 | `/settings/profile`、`/qr` | `pages/settings/profile.vue`；`pages/qr{,.show,.read}.vue`；`utility/qr-camera.ts` | Core（二维码 Compatible） | P-00 ✅ | 资料设置、本人菜单与导航中的二维码入口共用 `/qr`，展示和扫描均消费 Twitter 表现层；见 [qr.md](./qr.md)。 |
 | **P-23** | 右栏固定内容：趋势 + 推荐关注 | RightRail 整体替换 | `ui/twitter/RightRail.vue`（移除 widgets 挂载）；新增 `ui/twitter/components/TwitterTrending.vue`、`TwitterWhoToFollow.vue`；数据源 `hashtags/trend`、`users/recommendation` | 新功能件 | 决策 D2；R-1 | `MkWidgets` 本体不动（其他 UI 继续使用）；推荐数据源实现前先 spike，fallback：meta.pinnedUsers / explore featured；权威类型入 `ui/twitter/domain/` |
-| **P-25** | Channels 页 | `/channels`、`/channels/:id` | `pages/channels.vue`；`pages/channel.vue`；`pages/channel-editor.vue` | Compatible（入口 Communities IA） | 决策 D4；P-00 ✅ | 帖子卡频道链接（A5）保留；入口采用 Home／Explore 横向频道卡片与聚合流，管理／收藏经独立窗口，见 [当前契约](./communities-layout.md) 与 [ADR-0015](./adr/0015-community-strip-layout.md) |
+| **P-25** | Channels 页 | `/channels`、`/channels/:id` | `pages/channels.vue`；`pages/channel.vue`；`pages/channel-editor.vue`；`pages/TwitterChannel.vue` | Compatible（入口 Communities IA） | 决策 D4；P-00 ✅ | 帖子卡频道链接（A5）保留；入口采用 Home／Explore 横向频道卡片与聚合流，管理／收藏经独立窗口；头部与“关于”页简介的标签进入 P-15。见 [当前契约](./communities-layout.md) 与 [ADR-0015](./adr/0015-community-strip-layout.md)。 |
 | **P-20** | Compatible 面：设置首页、About、公告、Drive | `/settings`、`/about*`、`/announcements*`、`/drive*` | `pages/settings/*`；`pages/about*.vue`；`pages/announcements.vue`、`announcement.vue`；`pages/drive*.vue` | Compatible | P-00 ✅ | 复用 Shell/Token/header/按钮，不重做信息架构；含审计 A6（`/notes/:id/reactions` 为 note.vue 的 `initialTab` 标签，作详情页标签复核而非独立页面） |
 | **P-26** | 匿名入口与业务 Shell 边界 | 未登录 `/`；公开内容的访客头部；登录／注册入口 | `ui/twitter.vue`；`pages/welcome.vue`；`ui/twitter/components/TwitterWelcome.vue`、`TwitterAuthButtons.vue` | Core（认证复用 Compatible） | P-00；ADR-0007 | 独立入口、初始化优先、业务组件不挂载；X 归档仅补充 Nitter 无对应部分，见 `anonymous-entry.md` |
 | **P-19** | 视觉回归 + 验收测试基线 | Playwright 截图基线（页面 × 视口 × 明暗） | 新增测试基建 | 基建 | R-1~R-4、P-11~P-26 全部完成 + 走查复核通过 | **位置后置**：在泄漏清零前建基线会把泄漏固化为期望快照 |
@@ -41,7 +41,7 @@
 | 项 | 裁决 | 依据 |
 | --- | --- | --- |
 | P-14 Explore | 不纳入（导航无入口） | 第一阶段清单纳入条件未触发 |
-| P-16 user-tags | 不纳入，待产品确认 | 同上 |
+| P-16 user-tags | 不纳入，待产品确认；Twitter 简介标签统一进入 P-15，不产生该页入口 | [ADR-0023](./adr/0023-description-hashtag-navigation.md)；默认 Misskey 的用户标签语义保持原有实现 |
 | P-17 favorites / P-18 lists | 不纳入（无可见入口） | 同上 |
 | 其余阶段外路由（Chat/Gallery/Pages/Play/Clips/Games/Admin 等） | 沿用第一阶段处置表 | [phase-1-page-inventory.md](./phase-1-page-inventory.md) |
 
