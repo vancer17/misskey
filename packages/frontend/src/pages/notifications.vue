@@ -50,8 +50,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, inject, ref, useTemplateRef } from 'vue';
+import type { Component, ComputedRef, Ref, ShallowRef } from 'vue';
 import { notificationTypes } from 'misskey-js';
 import type { PageHeaderItem } from '@/types/page-header.js';
+import type { MenuItem } from '@/types/menu.js';
+import type { Tab } from '@/components/global/MkPageHeader.tabs.vue';
 import MkStreamingNotificationsTimeline from '@/components/MkStreamingNotificationsTimeline.vue';
 import PageWithHeader from '@/components/global/PageWithHeader.vue';
 import * as os from '@/os.js';
@@ -61,40 +64,49 @@ import { DI } from '@/di.js';
 import { definePage } from '@/page.js';
 import TwitterNotificationsShell from '@/ui/twitter/NotificationsShell.vue';
 import MkStreamingNotesTimeline from '@/components/MkStreamingNotesTimeline.vue';
+import { confirmNotificationsRead, useNotificationsRead } from '@/notifications/index.js';
 
-const tab = ref('all');
-const uiStyle = inject(DI.uiStyle, ref('default'));
-const isTwitterUi = computed(() => uiStyle.value === 'twitter');
-const pageComponent = computed(() => isTwitterUi.value ? TwitterNotificationsShell : PageWithHeader);
-const initialUnreadCount = $i?.unreadNotificationsCount ?? 0;
-const notificationsTimeline = useTemplateRef('notificationsTimeline');
-const includeTypes = ref<string[] | null>(null);
-const excludeTypes = computed(() => includeTypes.value ? notificationTypes.filter(t => !includeTypes.value!.includes(t)) : null);
+const tab: Ref<string> = ref('all');
+const uiStyle: Ref<string> = inject(DI.uiStyle, ref('default'));
+const isTwitterUi: ComputedRef<boolean> = computed(/** UI 选择只改变页面壳，不改变通知已读语义。 */ (): boolean => uiStyle.value === 'twitter');
+const pageComponent: ComputedRef<Component> = computed(/** 在两种展示壳之间选择，数据继续由同一页面持有。 */ (): Component => isTwitterUi.value ? TwitterNotificationsShell : PageWithHeader);
+const initialUnreadCount: number = $i?.unreadNotificationsCount ?? 0;
+const notificationsTimeline: Readonly<ShallowRef<InstanceType<typeof MkStreamingNotificationsTimeline> | null>> = useTemplateRef('notificationsTimeline');
+const includeTypes: Ref<string[] | null> = ref(null);
+const excludeTypes: ComputedRef<Array<(typeof notificationTypes)[number]> | null> = computed(/** 从过滤选择派生原通知查询参数，不保存实体副本。 */ (): Array<(typeof notificationTypes)[number]> | null => includeTypes.value ? notificationTypes.filter(/** 保留没有被用户选择排除的通知种类。 */ (type: (typeof notificationTypes)[number]): boolean => !includeTypes.value!.includes(type)) : null);
 
-function setFilter(ev: PointerEvent) {
-	const typeItems = notificationTypes.map(t => ({
+useNotificationsRead(/** 提及和私信面板不产生全部通知已读动作。 */ (): boolean => tab.value === 'all');
+
+/** 将原通知类型过滤操作传入菜单，过滤条件仅用于查询参数。 */
+function setFilter(ev: PointerEvent): void {
+	const typeItems: MenuItem[] = notificationTypes.map(/** 为每个既有通知种类创建菜单动作。 */ (t: (typeof notificationTypes)[number]): MenuItem => ({
 		text: i18n.ts._notification._types[t],
 		active: (includeTypes.value && includeTypes.value.includes(t)) ?? false,
-		action: () => {
+		action: /** 提交单种过滤选择，不在菜单保存通知状态。 */ (): void => {
 			includeTypes.value = [t];
 		},
 	}));
-	const items = includeTypes.value != null ? [{
+	const items: MenuItem[] = includeTypes.value != null ? [{
 		icon: 'ti ti-x',
 		text: i18n.ts.clear,
-		action: () => {
+		action: /** 清除过滤参数，恢复原通知查询范围。 */ (): void => {
 			includeTypes.value = null;
 		},
 	}, { type: 'divider' as const }, ...typeItems] : typeItems;
 	os.popupMenu(items, ev.currentTarget ?? ev.target);
 }
 
-async function markAllAsRead() {
-	await os.apiWithDialog('notifications/mark-all-as-read', {});
-	notificationsTimeline.value?.clearUnreadMarkers();
+/** 手动已读成功并完成账户对账后清除局部标记；失败保留旧展示并使用既有错误弹窗。 */
+async function markAllAsRead(): Promise<void> {
+	const confirmed: boolean = await confirmNotificationsRead();
+	if (confirmed) {
+		notificationsTimeline.value?.clearUnreadMarkers();
+	} else {
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	}
 }
 
-const headerActions = computed<PageHeaderItem[]>(() => ([tab.value === 'all' ? {
+const headerActions: ComputedRef<PageHeaderItem[]> = computed(/** 将当前面板允许的动作交给原页面头，不直接改业务状态。 */ (): PageHeaderItem[] => ([tab.value === 'all' ? {
 	text: i18n.ts.filter,
 	icon: 'ti ti-filter',
 	highlighted: includeTypes.value != null,
@@ -102,12 +114,12 @@ const headerActions = computed<PageHeaderItem[]>(() => ([tab.value === 'all' ? {
 } : undefined, tab.value === 'all' ? {
 	text: i18n.ts.markAllAsRead,
 	icon: 'ti ti-check',
-	handler: () => {
+	handler: /** 用户明确点击后提交已读动作，完成错误处理后结束。 */ (): void => {
 		void markAllAsRead();
 	},
-} : undefined] as (PageHeaderItem | undefined)[]).filter(x => x !== undefined));
+} : undefined] as (PageHeaderItem | undefined)[]).filter(/** 排除其他面板不支持的头部动作。 */ (item: PageHeaderItem | undefined): item is PageHeaderItem => item !== undefined));
 
-const headerTabs = computed(() => [{
+const headerTabs: ComputedRef<Tab[]> = computed(/** 沿用三类通知面板的路由内 UI 选择。 */ (): Tab[] => [{
 	key: 'all',
 	title: i18n.ts.all,
 	icon: 'ti ti-point',
@@ -121,7 +133,7 @@ const headerTabs = computed(() => [{
 	icon: 'ti ti-mail',
 }]);
 
-definePage(() => ({
+definePage(/** 页面元信息与通知实体状态独立。 */ (): { title: string; icon: string } => ({
 	title: i18n.ts.notifications,
 	icon: 'ti ti-bell',
 }));

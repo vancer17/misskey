@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/** 通知领域服务：维护通知流及已读水位；已读动作完成后才向 HTTP 与实时消费者确认。 */
+
 import { setTimeout } from 'node:timers/promises';
 import * as Redis from 'ioredis';
 import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
@@ -46,26 +48,41 @@ export class NotificationService implements OnApplicationShutdown {
 	) {
 	}
 
+	/** 将已读水位单向推进到本次观察到的最新通知，持久化完成后发布同步信号。 */
 	@bindThis
 	public async readAllNotification(
 		userId: MiUser['id'],
-		force = false,
-	) {
-		const latestReadNotificationId = await this.redisClient.get(`latestReadNotification:${userId}`);
-
-		const latestNotificationIdsRes = await this.redisClient.xrevrange(
+		force: boolean = false,
+	): Promise<void> {
+		const latestNotificationIdsRes: Array<[string, string[]]> = await this.redisClient.xrevrange(
 			`notificationTimeline:${userId}`,
 			'+',
 			'-',
 			'COUNT', 1);
-		const latestNotificationId = latestNotificationIdsRes[0]?.[0];
+		const latestNotificationId: string | undefined = latestNotificationIdsRes[0]?.[0];
 
 		if (latestNotificationId == null) return;
 
-		this.redisClient.set(`latestReadNotification:${userId}`, latestNotificationId);
+		// Stream ID 的毫秒和序号均按无符号十进制比较，不能用整串字典序或有精度损失的浮点数。
+		const advanced: unknown = await this.redisClient.eval(`
+			local current = redis.call('GET', KEYS[1])
+			if not current then
+				redis.call('SET', KEYS[1], ARGV[1])
+				return 1
+			end
+			local currentMs, currentSeq = string.match(current, '^(%d+)%-(%d+)$')
+			local nextMs, nextSeq = string.match(ARGV[1], '^(%d+)%-(%d+)$')
+			local newerMs = #nextMs > #currentMs or (#nextMs == #currentMs and nextMs > currentMs)
+			local newerSeq = #nextSeq > #currentSeq or (#nextSeq == #currentSeq and nextSeq > currentSeq)
+			if newerMs or (nextMs == currentMs and newerSeq) then
+				redis.call('SET', KEYS[1], ARGV[1])
+				return 1
+			end
+			return 0
+		`, 1, `latestReadNotification:${userId}`, latestNotificationId);
 
-		if (force || latestReadNotificationId == null || (latestReadNotificationId < latestNotificationId)) {
-			return this.postReadAllNotifications(userId);
+		if (force || advanced === 1) {
+			this.postReadAllNotifications(userId);
 		}
 	}
 
