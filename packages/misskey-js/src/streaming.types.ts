@@ -51,6 +51,8 @@ export type Channels = {
 			notificationFlushed: () => void;
 			unreadAntenna: (payload: Antenna) => void;
 			newChatMessage: (payload: ChatMessage) => void;
+			/** 账号级聊天失效通知；消费者重新查询会话与未读事实，不据此构造消息。 */
+			chatUpdated: (payload: { type: 'user' | 'room' | 'all'; id?: string; }) => void;
 			readAllAnnouncements: () => void;
 			myTokenRegenerated: () => void;
 			signin: (payload: Signin) => void;
