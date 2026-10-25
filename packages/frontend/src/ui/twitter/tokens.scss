@@ -74,6 +74,8 @@ body[data-ui='twitter'] {
 	--twitter-duration-normal: 180ms;
 	--twitter-duration-slow: 240ms;
 	--twitter-ease: cubic-bezier(0.4, 0, 0.2, 1);
+	/* 路由和右栏仅作保持内容可见的轻淡入，不建立完全透明的私信阅读阶段。 */
+	--twitter-route-entry-opacity: 0.7;
 
 	/* ——— 排版阶梯（ADR-0001 暂缓项于 R-4 落地；档位对应 nitter 真值：正文 15 /
 	   全名 14 / 次要 13 / 辅助 12，仅定义实际被消费档位；非阶梯字面量待
@@ -107,6 +109,12 @@ body[data-ui='twitter'] {
 	--twitter-space-4: 16px;
 	/* 大组分隔 */
 	--twitter-space-6: 32px;
+
+	/* 私信空状态容器：XChat pin-page-rweb 与 xchat-init 的源码提取值。
+	   工作区列宽、页头和字体统一消费主页既有 Nitter 语义 Token。 */
+	--twitter-chat-empty-size: 96px;
+	/* 私信空状态图标：保持 XChat 源码提取的图标与外部容器比例。 */
+	--twitter-chat-empty-icon-size: 48px;
 
 	/* ——— 发帖正文（X 采集版本的基准排版，原生 textarea 适配；见 ADR-0001） ——— */
 	/* 正文常规字号：X headline1 对应 20px，窄容器沿用组件现有字号适配。 */

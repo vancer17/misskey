@@ -41,6 +41,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</MkA>
 
 	<MkA
+		v-if="$i != null && $i.policies.chatAvailability !== 'unavailable'"
+		:class="$style.item"
+		:activeClass="$style.active"
+		to="/chat"
+		:aria-label="chatAriaLabel"
+		data-testid="twitter-messages-nav"
+	>
+		<i class="ti ti-messages ti-fw" aria-hidden="true"></i>
+		<span v-if="$i.hasUnreadChatMessages" :class="$style.indicator" aria-hidden="true"></span>
+	</MkA>
+
+	<MkA
 		v-if="profilePath != null"
 		:class="$style.item"
 		:activeClass="$style.active"
@@ -57,6 +69,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted } from 'vue';
+import type { ComputedRef } from 'vue';
 import { preloadTwitterNotificationsPage, preloadTwitterUserPage } from './routing/index.js';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
@@ -71,6 +84,10 @@ const notificationAriaLabel = computed(() => notificationCount.value === ''
 	? i18n.ts.notifications
 	: i18n.tsx._twitterUi.notificationsWithCount({ count: notificationCount.value }));
 
+/** 账号未读事实统一来自既有账户状态，聊天内容不参与导航判定。 */
+const chatAriaLabel: ComputedRef<string> = computed(/** 点状未读使用文字名称向辅助技术说明。 */ (): string => $i?.hasUnreadChatMessages
+	? `${i18n.ts.directMessage_short} (${i18n.ts.unread})` : i18n.ts.directMessage_short);
+
 onMounted(() => {
 	window.document.body.style.setProperty('--MI-minBottomSpacing', 'var(--MI-minBottomSpacingMobile)');
 });
@@ -83,7 +100,8 @@ onBeforeUnmount(() => {
 <style lang="scss" module>
 .root {
 	display: grid;
-	grid-template-columns: repeat(4, 1fr);
+	grid-auto-flow: column;
+	grid-auto-columns: minmax(0, 1fr);
 	height: var(--twitter-bottom-bar-height);
 	padding-right: env(safe-area-inset-right, 0px);
 	padding-left: env(safe-area-inset-left, 0px);

@@ -1401,6 +1401,33 @@ export type paths = {
          */
         post: operations['charts___users'];
     };
+    '/chat/contacts/show': {
+        /**
+         * chat/contacts/show
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:chat*
+         */
+        post: operations['chat___contacts___show'];
+    };
+    '/chat/conversations/list': {
+        /**
+         * chat/conversations/list
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:chat*
+         */
+        post: operations['chat___conversations___list'];
+    };
+    '/chat/conversations/read': {
+        /**
+         * chat/conversations/read
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:chat*
+         */
+        post: operations['chat___conversations___read'];
+    };
     '/chat/history': {
         /**
          * chat/history
@@ -5721,6 +5748,7 @@ export type components = {
             owner: components['schemas']['UserLite'];
             name: string;
             description: string;
+            isMember?: boolean;
             isMuted?: boolean;
             invitationExists?: boolean;
         };
@@ -17085,6 +17113,259 @@ export interface operations {
             };
         };
     };
+    chat___contacts___show: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    userId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        canRead: boolean;
+                        canSend: boolean;
+                        /** @enum {string|null} */
+                        reason: 'SELF' | 'REMOTE_USER' | 'CHAT_UNAVAILABLE' | 'CHAT_READ_ONLY' | 'RECIPIENT_UNAVAILABLE' | 'BLOCKED' | 'RECIPIENT_SCOPE' | null;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    chat___conversations___list: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /**
+                     * @default all
+                     * @enum {string}
+                     */
+                    kind?: 'all' | 'user' | 'room';
+                    query?: string;
+                    /** @default 30 */
+                    limit?: number;
+                    cursor?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        items: {
+                            key: string;
+                            target: {
+                                /** @enum {string} */
+                                type: 'user' | 'room';
+                                /** Format: id */
+                                id: string;
+                            };
+                            latestMessage: components['schemas']['ChatMessage'] | null;
+                            unread: boolean;
+                            user?: components['schemas']['UserLite'];
+                            room?: components['schemas']['ChatRoom'];
+                        }[];
+                        nextCursor: string | null;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    chat___conversations___read: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    userId?: string;
+                    /** Format: misskey:id */
+                    roomId?: string;
+                    /** Format: misskey:id */
+                    messageId: string;
+                } & (unknown | unknown);
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     chat___history: {
         requestBody: {
             content: {
@@ -17440,6 +17721,8 @@ export interface operations {
         requestBody: {
             content: {
                 'application/json': {
+                    /** @default true */
+                    markAsRead?: boolean;
                     /** @default 10 */
                     limit?: number;
                     /** Format: misskey:id */
@@ -17515,6 +17798,8 @@ export interface operations {
             content: {
                 'application/json': {
                     query: string;
+                    /** Format: misskey:id */
+                    untilId?: string;
                     /** @default 10 */
                     limit?: number;
                     /** Format: misskey:id */
@@ -17715,6 +18000,8 @@ export interface operations {
         requestBody: {
             content: {
                 'application/json': {
+                    /** @default true */
+                    markAsRead?: boolean;
                     /** @default 10 */
                     limit?: number;
                     /** Format: misskey:id */

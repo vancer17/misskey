@@ -26,6 +26,7 @@ width = max(0, 标签.width − 2 × 内缩)
 | 频道入口 | `12px` | `pages/TwitterCommunities.vue` |
 | 频道详情 | `12px` | `pages/TwitterChannel.vue` |
 | 个人资料 | `12px` | `pages/user/TwitterUserTimeline.vue` |
+| 私信收件箱（三个筛选按钮） | `12px` | `ui/twitter/messages/pages/MessagesPage.vue`；选中值来自 `state.inbox.kind`，筛选仍经原 Store Action |
 
 内缩由现有标签栏的局部 CSS 参数提供；共享指示条统一使用 `var(--twitter-radius-pill) var(--twitter-radius-pill) 0 0`，仅上角圆、下角直，不提供页面级圆角覆盖参数。高度保持 `4px`、颜色保持 `--twitter-accent`。标签布局与命中区域不参与动画；个人资料容器保留 `position: sticky`，不被共享组件改为相对定位。横向溢出只调整标签栏自身的滚动范围，不移动 Shell 主滚动宿主。连续切换先中止该容器上一次未完成的平滑滚动，再以最新目标计算可见范围，避免旧目标将新选中标签滚出视口。
 
