@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/** 聊天实体打包领域：从数据库关系派生只读协议模型及当前账号的群聊成员事实。 */
+
 import { Inject, Injectable } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
 import type { MiUser, ChatMessagesRepository, MiChatMessage, ChatRoomsRepository, MiChatRoom, MiChatRoomInvitation, ChatRoomInvitationsRepository, MiChatRoomMembership, ChatRoomMembershipsRepository } from '@/models/_.js';
@@ -234,6 +236,7 @@ export class ChatEntityService {
 		return Promise.all(messages.map(message => this.packMessageLiteForRoom(message, { _hint_: { packedFiles, packedUsers } })));
 	}
 
+	/** 将群聊及当前账号成员关系打包为唯一对外实体，不从邀请推断正式成员。 */
 	@bindThis
 	public async packRoom(
 		src: MiChatRoom['id'] | MiChatRoom,
@@ -246,10 +249,10 @@ export class ChatEntityService {
 			};
 		},
 	): Promise<Packed<'ChatRoom'>> {
-		const room = typeof src === 'object' ? src : await this.chatRoomsRepository.findOneByOrFail({ id: src });
+		const room: MiChatRoom = typeof src === 'object' ? src : await this.chatRoomsRepository.findOneByOrFail({ id: src });
 
-		const membership = me && me.id !== room.ownerId ? (options?._hint_?.myMemberships?.get(room.id) ?? (await this.chatRoomMembershipsRepository.findOneBy({ roomId: room.id, userId: me.id }))) : null;
-		const invitation = me && me.id !== room.ownerId ? (options?._hint_?.myInvitations?.get(room.id) ?? (await this.chatRoomInvitationsRepository.findOneBy({ roomId: room.id, userId: me.id }))) : null;
+		const membership: MiChatRoomMembership | null | undefined = me && me.id !== room.ownerId ? (options?._hint_?.myMemberships?.get(room.id) ?? (await this.chatRoomMembershipsRepository.findOneBy({ roomId: room.id, userId: me.id }))) : null;
+		const invitation: MiChatRoomInvitation | null | undefined = me && me.id !== room.ownerId ? (options?._hint_?.myInvitations?.get(room.id) ?? (await this.chatRoomInvitationsRepository.findOneBy({ roomId: room.id, userId: me.id }))) : null;
 
 		return {
 			id: room.id,
@@ -258,6 +261,8 @@ export class ChatEntityService {
 			description: room.description,
 			ownerId: room.ownerId,
 			owner: options?._hint_?.packedOwners.get(room.ownerId) ?? (await this.userEntityService.pack(room.owner ?? room.ownerId, me)),
+			// 成员事实只在服务端从群主关系与正式成员记录派生。
+			isMember: me ? room.ownerId === me.id || membership != null : undefined,
 			isMuted: membership != null ? membership.isMuted : false,
 			invitationExists: invitation != null,
 		};
