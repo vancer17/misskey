@@ -1,10 +1,13 @@
 <!--
 SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
+
+文件领域：Misskey 基础图片展示。负责复用现有图片加载、敏感内容控制与附件菜单。
+自然尺寸观测只向上层提供已允许加载资源的展示参数，不参与附件业务状态判断。
 -->
 
 <template>
-<div :class="[hide ? $style.hidden : $style.visible, (image.isSensitive && prefer.s.highlightSensitiveMedia) && $style.sensitive]" @click="onClick" @contextmenu.stop="onContextmenu">
+<div ref="mediaRoot" :class="[hide ? $style.hidden : $style.visible, (image.isSensitive && prefer.s.highlightSensitiveMedia) && $style.sensitive]" @click="onClick" @contextmenu.stop="onContextmenu" @load.capture="onIntrinsicImageLoad">
 	<component
 		:is="disableImageLink ? 'div' : 'a'"
 		v-bind="disableImageLink ? {
@@ -44,6 +47,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:title="image.comment || image.name"
 			:class="$style.image"
 			:data-marker="marker"
+			draggable="false"
 		/>
 	</component>
 	<template v-if="hide">
@@ -69,6 +73,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { watch, ref, computed } from 'vue';
+import type { Ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { MediaComponentExposes } from '@/types/media-component.js';
 import { getStaticImageUrl } from '@/utility/media-proxy.js';
@@ -95,7 +100,12 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
 	(event: 'mediaClick', ev: PointerEvent): void;
+	/** 将当前已揭示图片的自然尺寸传递给上层布局，不改写附件模型。 */
+	(event: 'intrinsicSize', width: number, height: number): void;
 }>();
+
+/** 当前图片的展示容器，仅用于观测既有 DOM 中已加载的图片。 */
+const mediaRoot: Ref<HTMLDivElement | null> = ref<HTMLDivElement | null>(null);
 
 const hide = ref(true);
 
@@ -105,6 +115,34 @@ const url = computed(() => (props.raw || prefer.s.loadRawImages)
 		? getStaticImageUrl(props.image.url)
 		: props.image.thumbnailUrl!,
 );
+
+/** 校验图片仍属于当前资源后，向附件展示链上报有效的自然尺寸。 */
+function reportIntrinsicImageSize(imageElement: HTMLImageElement): void {
+	if (hide.value || !mediaRoot.value?.contains(imageElement) || !imageElement.complete || !url.value) return;
+	/** 当前实际解码的资源地址，用于拒绝资源切换后迟到的加载事件。 */
+	const loadedSource: string = imageElement.currentSrc || imageElement.src;
+	if (loadedSource !== new URL(url.value, window.document.baseURI).href) return;
+	/** 浏览器解码的宽度，只作为本次渲染的几何参数。 */
+	const width: number = imageElement.naturalWidth;
+	/** 浏览器解码的高度，只作为本次渲染的几何参数。 */
+	const height: number = imageElement.naturalHeight;
+	if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
+	emit('intrinsicSize', width, height);
+}
+
+/** 捕获现有图片的加载事件，不创建额外的图片请求或预加载。 */
+function onIntrinsicImageLoad(event: Event): void {
+	if (event.target instanceof HTMLImageElement) reportIntrinsicImageSize(event.target);
+}
+
+/** 揭示图片或切换资源后，补报浏览器已经缓存并加载完成的尺寸。 */
+function reportRenderedImageSize(): void {
+	/** 图片组件内部已有的图片元素，不包含任何额外测量资源。 */
+	const renderedImage: HTMLImageElement | null | undefined = mediaRoot.value?.querySelector('img');
+	if (renderedImage) reportIntrinsicImageSize(renderedImage);
+}
+
+watch([hide, url, mediaRoot], reportRenderedImageSize, { flush: 'post' });
 
 async function onClick(ev: PointerEvent) {
 	if (!props.controls) {
@@ -189,18 +227,18 @@ defineExpose<MediaComponentExposes>({
 .visible {
 	position: relative;
 	//box-shadow: 0 0 0 1px var(--MI_THEME-divider) inset;
-	background: var(--MI_THEME-bg);
+	background: var(--media-preview-background, var(--MI_THEME-bg));
 	background-size: 16px 16px;
 }
 
 html[data-color-scheme=dark] .visible {
 	--c: rgb(255 255 255 / 2%);
-	background-image: linear-gradient(45deg, var(--c) 16.67%, var(--MI_THEME-bg) 16.67%, var(--MI_THEME-bg) 50%, var(--c) 50%, var(--c) 66.67%, var(--MI_THEME-bg) 66.67%, var(--MI_THEME-bg) 100%);
+	background-image: var(--media-preview-background-image, linear-gradient(45deg, var(--c) 16.67%, var(--MI_THEME-bg) 16.67%, var(--MI_THEME-bg) 50%, var(--c) 50%, var(--c) 66.67%, var(--MI_THEME-bg) 66.67%, var(--MI_THEME-bg) 100%));
 }
 
 html[data-color-scheme=light] .visible {
 	--c: rgb(0 0 0 / 2%);
-	background-image: linear-gradient(45deg, var(--c) 16.67%, var(--MI_THEME-bg) 16.67%, var(--MI_THEME-bg) 50%, var(--c) 50%, var(--c) 66.67%, var(--MI_THEME-bg) 66.67%, var(--MI_THEME-bg) 100%);
+	background-image: var(--media-preview-background-image, linear-gradient(45deg, var(--c) 16.67%, var(--MI_THEME-bg) 16.67%, var(--MI_THEME-bg) 50%, var(--c) 50%, var(--c) 66.67%, var(--MI_THEME-bg) 66.67%, var(--MI_THEME-bg) 100%));
 }
 
 .menu {
