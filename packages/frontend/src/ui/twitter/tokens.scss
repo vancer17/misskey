@@ -66,6 +66,9 @@ body[data-ui='twitter'] {
 	--twitter-radius-large: 16px;
 	--twitter-radius-pill: 999px;
 
+	/* 附件预览上限：Nitter still-image 的 379.5px，保留既有半视口约束。 */
+	--twitter-media-max-height: min(379.5px, 50svh);
+
 	/* ——— 动效（nitter 无动效体系，本组为自定 motion spec，见 ADR-0001） ——— */
 	--twitter-duration-fast: 120ms;
 	--twitter-duration-normal: 180ms;

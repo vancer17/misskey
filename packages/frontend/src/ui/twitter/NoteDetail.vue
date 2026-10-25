@@ -151,7 +151,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 
 				<div v-if="appearNote.files?.length" :class="$style.media">
-					<MkMediaList ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user"/>
+					<TwitterNoteMedia ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user"/>
 				</div>
 
 				<MkPoll
@@ -388,7 +388,7 @@ import { makeHotkey } from '@/utility/hotkey.js';
 import type { Keymap } from '@/utility/hotkey.js';
 import MkCwButton from '@/components/MkCwButton.vue';
 import MkInstanceTicker from '@/components/MkInstanceTicker.vue';
-import MkMediaList from '@/components/MkMediaList.vue';
+import TwitterNoteMedia from './components/TwitterNoteMedia.vue';
 import MkPagination from '@/components/MkPagination.vue';
 import MkPoll from '@/components/MkPoll.vue';
 import MkReactionIcon from '@/components/MkReactionIcon.vue';
@@ -419,7 +419,8 @@ const menuButton = useTemplateRef('menuButton');
 const renoteButton = shallowRef<HTMLElement | null>(null);
 const renoteTime = useTemplateRef('renoteTime');
 const reactButton = shallowRef<HTMLElement | null>(null);
-const galleryEl = useTemplateRef<InstanceType<typeof MkMediaList>>('galleryEl');
+/** 保留原快捷键入口，转交同一完整附件图库。 */
+const galleryEl: ReturnType<typeof useTemplateRef<InstanceType<typeof TwitterNoteMedia>>> = useTemplateRef<InstanceType<typeof TwitterNoteMedia>>('galleryEl');
 /** 主帖回复动作只转发焦点，不新建第二个编辑器。 */
 const replyComposer = useTemplateRef<InstanceType<typeof TwitterReplyComposer>>('replyComposer');
 

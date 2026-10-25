@@ -97,7 +97,7 @@ S-1 裁决建议：三栏 Shell 是 phase-1 P-00 的产品决策（总表原文"
 | --- | --- | --- | --- | --- | --- |
 | E-1 | 引用卡整体 | `quote.scss`：margin-top **10px** ✓、border **1px dark_grey**、radius **10px**、bg_elements；name-row padding **8/10/6/10**、正文 **10px** | `NoteQuote.vue`：margin 10 ✓、radius **10px**（PF-1）、border **1px**（PF-2 N-4 连带）；padding 10/12 属 nitter 实测例外档（4/8/10/12 并存），保留并已注明 | ✅ 已修复 | A→闭合 |
 | E-2 | 链接卡 | `card.scss`：border 1px dark_grey、radius **10px** | `MkUrlPreview.vue` twitter 块 radius ~~16px~~ → **PF-1 已修 10px**（含播放器容器） | ✅ radius 已修复 | A→闭合 |
-| E-3 | 媒体组 | `media.scss`：attachments radius **7px**、margin-top 0.35em、gallery max **379.5/533px** | `MkMediaList.vue`：radius 8px（ladder 舍入）、gap 4px（≈0.25em ✓）、max 379.5 已注明 ✓ | ⚠️ | B（7→8 舍入补记） |
+| E-3 | 媒体组 | `media.scss`：attachments radius **7px**、margin-top 0.35em、gallery max-height **379.5px**／max-width **533px**；原布局会分行 | `TwitterNoteMedia` + `MkMediaList` 展示横条：单附件按比例，多附件单行、顶部对齐、原生横滚、gap **4px**、max-height **379.5px** 及既有半视口约束；完整保留内容与逐项 **16px** 圆角 Token 适配见 [ADR-0030](./adr/0030-proportional-media-strip.md)，现行契约见 [附件布局](./media-attachments.md) | ✅ 已成文 | C（Nitter 尺度 + X 桌面交互参考 + 产品适配） |
 | E-4 | 投票 | `poll.scss`：meter 高 **26px** ✓、margin **6px 0** ✓、radius **5px**、bar dark_grey / 领先 accent_dark | `MkPoll.vue` twitter 块：26/6 ✓、radius 4px（small）、bar = accent 35% color-mix | ⚠️ | B（4 vs 5、色值 token 派生补记） |
 | E-5 | unavailable / community-note | radius 10px、border dark_grey | Misskey 无等价物（帖子删除态走本地终态件） | — | N/A |
 
@@ -215,8 +215,8 @@ S-1 裁决建议：三栏 Shell 是 phase-1 P-00 的产品决策（总表原文"
 | 类 | 数量 | 明细 |
 | --- | --- | --- |
 | **A（未记录偏离 / 规则违反）** | ~~11~~ → **0** | 全部闭合：PF-1 修复 T-5、S-2、S-3、S-6、N-1、N-8、E-1、E-2；PF-2 裁决（2026-10-09：**全部对齐 nitter**）修复 N-2、N-3、N-5、H-1、U-5 |
-| **B（待成文的 X-behavior）** | ~~12~~ → **8** | N-4、N-9、N-11 已按裁决对齐闭合；剩余 T-7、S-1、S-4、N-6（操作栏）、E-3、E-4、U-1、U-2、U-3、D-3 中，T-7/S-1/S-4/U-1/U-3 属 Shell 信息架构族（PF-3），N-6/E-3/E-4/D-3 为派生色与舍入登记项 |
-| **C（已合规 / 已记录）** | 17+ | T-1~T-4、T-6、T-8、S-5、N-7、N-10、D-1（待走查）、U-4、U-6、U-7、U-8、H-2、H-3、O-1~O-5、RR-1~RR-6（P-23 滚动登记，2026-10-09） |
+| **B（待成文的 X-behavior）** | ~~12~~ → ~~8~~ → **7** | N-4、N-9、N-11 已按裁决对齐闭合，E-3 已由 ADR-0030 成文；剩余 T-7、S-1、S-4、N-6（操作栏）、E-4、U-1、U-2、U-3、D-3 中，T-7/S-1/S-4/U-1/U-3 属 Shell 信息架构族（PF-3），N-6/E-4/D-3 为派生色与舍入登记项 |
+| **C（已合规 / 已记录）** | 18+ | T-1~T-4、T-6、T-8、S-5、N-7、N-10、D-1（待走查）、U-4、U-6、U-7、U-8、H-2、H-3、O-1~O-5、RR-1~RR-6（P-23 滚动登记，2026-10-09）、E-3（ADR-0030，2026-10-25） |
 | **D（实现级 bug，已修复留档）** | 2 | UserResult 头像 44（P-12 批次修复）；P-11 相机角标 + 叠压 + 容器底色（#21 fix） |
 
 ## 修复批次建议
