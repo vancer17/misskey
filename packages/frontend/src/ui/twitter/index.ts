@@ -28,6 +28,8 @@ export { default as TwitterSettingsShell } from './SettingsShell.vue';
 /** 本人成就页只替换页面外观，数据和查看计时继续由原页面及组件持有。 */
 export { default as TwitterAchievementsShell } from './components/TwitterAchievementsShell.vue';
 export { default as TwitterNote } from './Note.vue';
+/** 帖子附件按自身比例排列，所有交互仍交由同一个原有图库处理。 */
+export { default as TwitterNoteMedia } from './components/TwitterNoteMedia.vue';
 export { default as TwitterSearchField } from './SearchField.vue';
 /** 频道集合的横向展示及独立管理／收藏窗口。 */
 export { default as TwitterCommunityStrip } from './components/TwitterCommunityStrip.vue';
