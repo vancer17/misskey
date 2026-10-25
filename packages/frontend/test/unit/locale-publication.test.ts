@@ -74,7 +74,12 @@ async function runIsolatedPublication(assertions: string): Promise<void> {
 			_channel: Pick<Locale['_channel'], 'noFollowing'>;
 		};
 		/** 文件载荷只作为构建输入，不能被当作已合并的完整语言。 */
-		type ForkSupplement = SupplementMessages & { _avatarDecorationCalibration: CalibrationMessages };
+		type ForkSupplement = SupplementMessages & MigratedSupplementMessages & { _avatarDecorationCalibration: CalibrationMessages };
+		/** 从既有权威类型派生迁移资源协议，上传与二维码仅包含缺少正式译文的字段。 */
+		type MigratedSupplementMessages = Pick<Locale, '_avatarDecorationSettings' | '_avatarDecorationManager'> & {
+			_uploader: Pick<Locale['_uploader'], 'videoCompressionFallback'>;
+			_qr: Partial<Locale['_qr']>;
+		};
 		/** 原始 YAML 和 JSON 的递归字符串树，仅用于发布前的翻译覆盖检查。 */
 		type SourceMessages = { [key: string]: string | SourceMessages };
 		/** 当前临时副本的中文补充路径，与真实构建的资源布局相同。 */
@@ -202,6 +207,62 @@ describe('frontend locale publication', /** 验证发布结果而不替换文件
 			rmSync(supplementPath);
 			await writeFrontendLocalesJson('./published', 'test-version');
 			assert.deepEqual(published('zh-TW')._avatarDecorationCalibration, traditionalChinese);
+		`);
+	});
+
+	it('publishes migrated Chinese resources without overriding official messages or other languages', /** 真实静态资源逐叶映射到发布结果，移除四个补充区域不改变其他语言。 */ async (): Promise<void> => {
+		await runIsolatedPublication(`
+			const namespaces: readonly (keyof MigratedSupplementMessages)[] = ['_uploader', '_qr', '_avatarDecorationSettings', '_avatarDecorationManager'];
+			const officialChinese: Record<string, string> = sourceLeaves(loadYaml(readFileSync('./locales/zh-CN.yml', 'utf-8')) as SourceMessages);
+			await writeFrontendLocalesJson('./published', 'test-version');
+			const chinese: Record<string, string> = sourceLeaves(published('zh-CN') as unknown as SourceMessages);
+			const merged: Record<string, string> = sourceLeaves(build()['zh-CN'] as unknown as SourceMessages);
+			for (const namespace of namespaces) {
+				const migrated: Record<string, string> = sourceLeaves(supplement[namespace] as SourceMessages, namespace);
+				assert.ok(Object.keys(migrated).length > 0);
+				for (const [key, value] of Object.entries(migrated)) {
+					assert.ok(!Object.hasOwn(officialChinese, key));
+					assert.equal(merged[key], value);
+					assert.equal(chinese[key], value);
+				}
+			}
+			for (const [key, value] of Object.entries(officialChinese)) assert.equal(chinese[key], value);
+			const unaffectedLanguages: readonly string[] = ['ja-JP', 'en-US', 'zh-TW'];
+			const previous: readonly string[] = unaffectedLanguages.map(/** 保存其他语言实际发布字节，用于检查补充范围隔离。 */ (language: string): string => readFileSync('./published/' + language + '.test-version.json', 'utf-8'));
+			const remaining: Partial<ForkSupplement> = { ...supplement };
+			for (const namespace of namespaces) delete remaining[namespace];
+			writeFileSync(supplementPath, JSON.stringify(remaining), 'utf-8');
+			await writeFrontendLocalesJson('./published', 'test-version');
+			unaffectedLanguages.forEach(/** 移除迁移资源只能影响简体中文目标，不能改变其他语言。 */ (language: string, index: number): void => {
+				assert.equal(readFileSync('./published/' + language + '.test-version.json', 'utf-8'), previous[index]);
+			});
+		`);
+	});
+
+	it('requires removing migrated supplements before official translations take over', /** 每个迁移区域仍拒绝覆盖正式译文，逐项删除补充后由真实发布链采用官方值。 */ async (): Promise<void> => {
+		await runIsolatedPublication(`
+			const namespaces: readonly (keyof MigratedSupplementMessages)[] = ['_uploader', '_qr', '_avatarDecorationSettings', '_avatarDecorationManager'];
+			const originalOfficial: string = readFileSync('./locales/zh-CN.yml', 'utf-8');
+			for (const namespace of namespaces) {
+				const section: SourceMessages = supplement[namespace] as SourceMessages;
+				const key: string | undefined = Object.keys(section)[0];
+				if (key === undefined) throw new Error('Expected migrated resource in ' + namespace);
+				const official: SourceMessages = loadYaml(originalOfficial) as SourceMessages;
+				const officialSection: SourceMessages = (official[namespace] ?? {}) as SourceMessages;
+				officialSection[key] = section[key];
+				official[namespace] = officialSection;
+				writeFileSync(supplementPath, JSON.stringify(supplement), 'utf-8');
+				writeFileSync('./locales/zh-CN.yml', dumpYaml(official), 'utf-8');
+				assert.throws(/** 同值正式译文也要求显式移除补充，避免双份权威来源。 */ (): void => { build(); }, /remove the fork supplement/);
+				const remaining: SourceMessages = { ...supplement, [namespace]: { ...section } } as unknown as SourceMessages;
+				delete (remaining[namespace] as SourceMessages)[key];
+				writeFileSync(supplementPath, JSON.stringify(remaining), 'utf-8');
+				const officialValue: string = '正式中文接管：' + namespace + '.' + key;
+				officialSection[key] = officialValue;
+				writeFileSync('./locales/zh-CN.yml', dumpYaml(official), 'utf-8');
+				await writeFrontendLocalesJson('./published', 'test-version');
+				assert.equal(sourceLeaves(published('zh-CN') as unknown as SourceMessages)[namespace + '.' + key], officialValue);
+			}
 		`);
 	});
 
@@ -455,7 +516,7 @@ describe('frontend locale publication', /** 验证发布结果而不替换文件
 				/** 根节点必须是语言资源对象。 */
 				null, [], '中文资源',
 				/** 仅允许已经明确授权的补充命名空间。 */
-				{ _avatarDecorationManager: { title: '越界补充' } },
+				{ _initialAccountSetting: { accountCreated: '越界补充' } },
 				{ _avatarDecorationCalibration: {}, unrelated: {} },
 				/** 命名空间本身也必须是对象。 */
 				{ _avatarDecorationCalibration: null },
@@ -463,6 +524,9 @@ describe('frontend locale publication', /** 验证发布结果而不替换文件
 				{ _avatarDecorationCalibration: '错误层级' },
 				/** 叶键必须来自日文源的当前权威字段。 */
 				{ _avatarDecorationCalibration: { nonexistentCalibrationKey: '未知字段' } },
+				/** 混合上游区域仅放行此次迁移叶键，不能借新增命名空间扩大补充能力。 */
+				{ _uploader: { editImage: '越界上传补充' } },
+				{ _qr: { chooseCamera: '越界设备补充' } },
 				/** 已知叶键只接受非空字符串。 */
 				{ _avatarDecorationCalibration: { title: '' } },
 				{ _avatarDecorationCalibration: { title: '   ' } },
