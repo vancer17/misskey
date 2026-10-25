@@ -1,4 +1,6 @@
 {
+	"trending": "趋势",
+	"whoToFollow": "推荐关注",
 	"_avatarDecorationCalibration": {
 		"open": "调整素材位置与大小",
 		"title": "调整头像挂件素材",
@@ -20,13 +22,28 @@
 		"prepared": "调整后的图片已上传，在管理页面保存后生效。原图已保留。"
 	},
 	"_channel": {
+		"searchPlaceholder": "搜索频道名称或简介",
+		"noFollowing": "你还没有关注的频道",
 		"noOwned": "你还没有管理的频道",
 		"noFavorites": "你还没有收藏的频道",
 		"allShown": "已显示全部频道"
 	},
+	"_twitterSearch": {
+		"lookupUrl": "查询此链接",
+		"showUser": "查看此用户",
+		"showHashtag": "查看此话题标签"
+	},
 	"_twitterUi": {
+		"primaryNavigation": "主导航",
+		"notificationsWithCount": "通知（{count} 条未读）",
+		"newNotesWithCount": "新帖子（{count} 条）",
 		"timelineUpdated": "时间线已更新",
 		"timelineUpToDate": "本次检查暂无新帖子",
-		"timelineRefreshFailed": "刷新失败，请重试"
+		"timelineRefreshFailed": "刷新失败，请重试",
+		"scheduleDate": "日期",
+		"scheduleTime": "时间",
+		"previousMonth": "上个月",
+		"nextMonth": "下个月",
+		"scheduleTimeIsInThePast": "请选择晚于当前时间的日期和时间"
 	}
 }
