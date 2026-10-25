@@ -259,10 +259,12 @@ function onTabClick(tab: Tab, ev: PointerEvent): void {
 
 /* 移动布局（≤500px）经 Shell 权威断点切换 class，不写媒体查询（ADR-0001 决策 4） */
 .root.mobile {
-	grid-template-columns: minmax(40px, 0.6fr) minmax(0, 3fr) minmax(40px, 0.6fr);
+	/* 两侧按头像与操作实际占宽，剩余空间全部交给标签导航。 */
+	grid-template-columns: auto minmax(0, 1fr) auto;
 
 	.tab {
-		flex: 0 0 auto;
+		/* 沿用 nitter tab-item 的零基准等分；保留最小宽度，标签过多时横向滚动。 */
+		flex: 1 0 0;
 		min-width: 48px;
 		padding: 0 10px;
 	}
