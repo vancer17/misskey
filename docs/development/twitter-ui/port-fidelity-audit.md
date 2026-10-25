@@ -130,6 +130,7 @@ S-1 裁决建议：三栏 Shell 是 phase-1 P-00 的产品决策（总表原文"
 | H-2 | 搜索 tabs | `search.nim` Top/Latest/Media/Users + `.tab-item` | 双 tab（Notes/Users）下划线模式 ✓；无 Media/Top（无数据源，#19/#20 范式） | ✅ | C |
 | H-3 | hashtag 页 | 复用搜索时间线结构（600px + tab + 行） | `TwitterTag` 壳 + MkNotesTimeline ✓；无 tab 偏离已记录 | ✅ | C（#20） |
 | H-4 | 搜索页头部 | 无对应物（nitter 无 sticky 返回头） | 53px（并入 S-2）；`@media 500px`（并入 S-6） | ❌ | A |
+| H-5 | 搜索筛选与结果工具条 | `views/search.nim` 的 `renderSearchPanel` 有折叠高级筛选和时间范围；`sass/search.scss` 定义紧凑面板。无单独的排序／日期定位／刷新工具条 | Twitter 自动搜索不挂载原生“选项”表单，保留现有分页工具条和路由用户／主机筛选；默认 Misskey 保留完整手动表单。此为用户产品选择，明确偏离 Nitter 高级筛选结构，见 [ADR-0032](./adr/0032-search-options-presentation.md)；运行验证由对应测试及截图 diff 单独提供 | ✅ 偏离已成文 | C（ADR-0032） |
 
 ## 八、通知 / 状态件 / Composer / 覆盖层（P-06 / P-09 / P-05 / P-08 / R-1 / R-3 / R-4）
 
