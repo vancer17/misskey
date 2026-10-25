@@ -74,7 +74,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<TwitterMobileBar v-if="chatLayout !== 'conversation'" :class="$style.mobileBar" data-testid="twitter-mobile-bar"/>
 		<TwitterComposeFab v-if="!isMessagesWorkspace"/>
 	</template>
-	<XCommon/>
+	<XCommon>
+		<template #streamIndicator>
+			<TwitterStreamNotice :visible="streamNoticeVisible" @dismiss="streamNotice.dismiss" @reload="reloadAfterDisconnect"/>
+		</template>
+	</XCommon>
 </div>
 </template>
 
@@ -92,7 +96,8 @@ import XPreferenceRestore from './_common_/PreferenceRestore.vue';
 import XReloadSuggestion from './_common_/ReloadSuggestion.vue';
 import XThemePreviewing from './_common_/ThemePreviewing.vue';
 import XTitlebar from './_common_/titlebar.vue';
-import { TwitterAuthButtons, TwitterRouteLoading, provideTwitterScrollHost, useTwitterRouteEntry } from './twitter/index.js';
+import { TwitterAuthButtons, TwitterRouteLoading, TwitterStreamNotice, createTwitterStreamNotice, provideTwitterScrollHost, useTwitterRouteEntry } from './twitter/index.js';
+import type { TwitterStreamNoticeController } from './twitter/index.js';
 import { useTwitterLayout, resolveTwitterShellLayout } from '@/ui/twitter/context/index.js';
 import type { TwitterShellLayout } from '@/ui/twitter/context/index.js';
 import type { PathResolvedResult } from '@/lib/nirax.js';
@@ -118,6 +123,16 @@ const XStatusBars: Component = defineAsyncComponent(
 	(): Promise<typeof import('./_common_/statusbars.vue')> => import('./_common_/statusbars.vue'),
 );
 const { isMobile, showRightRail, showSidebar } = useTwitterLayout();
+/** 一个 Shell 只拥有一个提示观察者，路由切换不创建新的连接消费者。 */
+const streamNotice: TwitterStreamNoticeController = createTwitterStreamNotice();
+/** 模板仅消费临时可见性投影，不保存另一份传输或业务状态。 */
+const streamNoticeVisible: Readonly<Ref<boolean>> = streamNotice.visible;
+
+/** 用户明确选择刷新时才重载当前文档，前台恢复与自动重连均不调用此入口。 */
+function reloadAfterDisconnect(): void {
+	window.location.reload();
+}
+
 /** 已解析路由单向派生列宽，异步页面元信息不参与 Shell 的结构决策。 */
 const shellLayout: ComputedRef<TwitterShellLayout> = computed(
 	/** 拼接路由器实际解析的模板，保留两个真实存量管理宽页的展示边界。 */
@@ -203,6 +218,7 @@ window.document.body.dataset.ui = 'twitter';
 onBeforeUnmount(
 	/** 整个 UI 卸载时才清理风格作用域；路由切换不拆除全局弹层宿主。 */
 	(): void => {
+		streamNotice.dispose();
 		if (window.document.body.dataset.ui === 'twitter') delete window.document.body.dataset.ui;
 	},
 );
