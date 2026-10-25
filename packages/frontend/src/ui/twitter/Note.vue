@@ -177,7 +177,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 
 					<div v-if="appearNote.files?.length" data-twitter-note-interactive :class="$style.media">
-						<MkMediaList ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user"/>
+						<TwitterNoteMedia ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user"/>
 					</div>
 
 					<MkPoll
@@ -319,7 +319,7 @@ import { makeHotkey } from '@/utility/hotkey.js';
 import type { Keymap } from '@/utility/hotkey.js';
 import MkCwButton from '@/components/MkCwButton.vue';
 import MkInstanceTicker from '@/components/MkInstanceTicker.vue';
-import MkMediaList from '@/components/MkMediaList.vue';
+import TwitterNoteMedia from './components/TwitterNoteMedia.vue';
 import MkPoll from '@/components/MkPoll.vue';
 import MkReactionsViewer from '@/components/MkReactionsViewer.vue';
 import MkUrlPreview from '@/components/MkUrlPreview.vue';
@@ -371,7 +371,8 @@ const renoteButton = shallowRef<HTMLElement | null>(null);
 const renoteTime = useTemplateRef('renoteTime');
 const reactButton = shallowRef<HTMLElement | null>(null);
 const clipButton = shallowRef<HTMLElement | null>(null);
-const galleryEl = useTemplateRef<InstanceType<typeof MkMediaList>>('galleryEl');
+/** 保留原快捷键入口，转交同一完整附件图库。 */
+const galleryEl: ReturnType<typeof useTemplateRef<InstanceType<typeof TwitterNoteMedia>>> = useTemplateRef<InstanceType<typeof TwitterNoteMedia>>('galleryEl');
 
 const {
 	note,
@@ -720,8 +721,7 @@ const noteCounters: ComputedRef<TwitterNoteCounters> = useTwitterNoteCounters(
 
 .media {
 	margin-top: 10px;
-	border-radius: var(--twitter-radius-large);
-	overflow: clip;
+	min-width: 0;
 }
 
 .poll,
