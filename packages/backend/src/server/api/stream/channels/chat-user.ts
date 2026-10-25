@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/** 聊天会话流适配器：在订阅与事件交付时验证服务端阅读权限。 */
+
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { bindThis } from '@/decorators.js';
 import type { GlobalEvents } from '@/core/GlobalEventService.js';
@@ -28,10 +30,12 @@ export class ChatUserChannel extends Channel {
 		super(request);
 	}
 
+	/** 只为具有聊天阅读权限的当前账号建立订阅。 */
 	@bindThis
 	public async init(params: JsonObject): Promise<boolean> {
 		if (typeof params.otherId !== 'string') return false;
 		if (!this.user) return false;
+		if (!(await this.chatService.getChatAvailability(this.user.id)).read) return false;
 		if (params.otherId === this.user.id) return false;
 
 		this.otherId = params.otherId;
@@ -41,8 +45,10 @@ export class ChatUserChannel extends Channel {
 		return true;
 	}
 
+	/** 权限撤销后不继续向已建立的流交付聊天内容。 */
 	@bindThis
-	private async onEvent(data: GlobalEvents['chatUser']['payload']) {
+	private async onEvent(data: GlobalEvents['chatUser']['payload']): Promise<void> {
+		if (!this.user || !(await this.chatService.getChatAvailability(this.user.id)).read) return;
 		this.send(data.type, data.body);
 	}
 

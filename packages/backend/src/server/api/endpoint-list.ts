@@ -3,11 +3,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-/*
- * This file contains list of all endpoints exported as pathname of API endpoint
- *
- * When you add new endpoint, you should add it to this file.
- * This file is used to generate API documentation and EndpointsModule.
+/**
+ * REST API 的集中注册索引，按请求路径公开端点适配器。
+ * API 文档生成与 EndpointsModule 共用此列表，新增端点在此登记后进入既有鉴权和调度链。
  */
 
 export * as 'admin/abuse-report/notification-recipient/create' from './endpoints/admin/abuse-report/notification-recipient/create.js';
@@ -447,6 +445,9 @@ export * as 'chat/rooms/invitations/create' from './endpoints/chat/rooms/invitat
 export * as 'chat/rooms/invitations/ignore' from './endpoints/chat/rooms/invitations/ignore.js';
 export * as 'chat/rooms/invitations/inbox' from './endpoints/chat/rooms/invitations/inbox.js';
 export * as 'chat/rooms/invitations/outbox' from './endpoints/chat/rooms/invitations/outbox.js';
+export * as 'chat/conversations/list' from './endpoints/chat/conversations/list.js';
+export * as 'chat/conversations/read' from './endpoints/chat/conversations/read.js';
+export * as 'chat/contacts/show' from './endpoints/chat/contacts/show.js';
 export * as 'chat/history' from './endpoints/chat/history.js';
 export * as 'chat/read-all' from './endpoints/chat/read-all.js';
 export * as 'v2/admin/emoji/list' from './endpoints/v2/admin/emoji/list.js';

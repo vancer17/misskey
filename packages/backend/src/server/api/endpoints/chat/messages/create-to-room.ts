@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/** 聊天发送适配器：解析请求内容、校验附件所有权并返回结构化业务结果。 */
+
 import { Inject, Injectable } from '@nestjs/common';
 import ms from 'ms';
 import { Endpoint } from '@/server/api/endpoint-base.js';
@@ -10,8 +12,14 @@ import { GetterService } from '@/server/api/GetterService.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { ChatService } from '@/core/ChatService.js';
-import type { DriveFilesRepository, MiUser } from '@/models/_.js';
+import type { DriveFilesRepository, MiDriveFile, MiUser, MiChatRoom } from '@/models/_.js';
 
+import { ChatPermissionError } from '@/core/chat/domain/index.js';
+import type { SchemaType, Packed } from '@/misc/json-schema.js';
+import type { MiLocalUser } from '@/models/User.js';
+import { IdentifiableError } from '@/misc/identifiable-error.js';
+
+/** 声明聊天发送 HTTP 协议及可预期的业务拒绝。 */
 export const meta = {
 	tags: ['chat'],
 
@@ -33,6 +41,8 @@ export const meta = {
 	},
 
 	errors: {
+		/** 权限限制以原因码交给界面解释，服务端仍在写入前重新校验。 */
+		chatSendDenied: { message: 'Chat message cannot be sent.', code: 'CHAT_SEND_DENIED', id: 'bc9b8892-dab6-490d-9286-f75e5696b3de' },
 		noSuchRoom: {
 			message: 'No such room.',
 			code: 'NO_SUCH_ROOM',
@@ -53,6 +63,7 @@ export const meta = {
 	},
 } as const;
 
+/** 发送请求仅携带内容及目标身份，不接受客户端权限结果。 */
 export const paramDef = {
 	type: 'object',
 	properties: {
@@ -63,8 +74,10 @@ export const paramDef = {
 	required: ['toRoomId'],
 } as const;
 
+/** 将 HTTP 内容映射到唯一聊天服务并转换领域错误。 */
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
+	/** 注入附件所有权查询和聊天领域服务。 */
 	constructor(
 		@Inject(DI.driveFilesRepository)
 		private driveFilesRepository: DriveFilesRepository,
@@ -72,35 +85,21 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private getterService: GetterService,
 		private chatService: ChatService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
-			await this.chatService.checkChatAvailability(me.id, 'write');
-
-			const room = await this.chatService.findRoomById(ps.toRoomId);
-			if (room == null) {
-				throw new ApiError(meta.errors.noSuchRoom);
-			}
-
-			let file = null;
+		/** 解析附件所有权并提交发送，以服务端回执作为消息事实。 */
+		super(meta, paramDef, async (ps: SchemaType<typeof paramDef>, me: MiLocalUser): Promise<Packed<'ChatMessageLiteForRoom'>> => {
+			let file: MiDriveFile | null = null;
 			if (ps.fileId != null) {
-				file = await this.driveFilesRepository.findOneBy({
-					id: ps.fileId,
-					userId: me.id,
-				});
-
-				if (file == null) {
-					throw new ApiError(meta.errors.noSuchFile);
-				}
+				file = await this.driveFilesRepository.findOneBy({ id: ps.fileId, userId: me.id });
+				if (file == null) throw new ApiError(meta.errors.noSuchFile);
 			}
-
-			// テキストが無いかつ添付ファイルも無かったらエラー
-			if (ps.text == null && file == null) {
-				throw new ApiError(meta.errors.contentRequired);
+			const text: string | null = ps.text?.trim() || null;
+			if (text == null && file == null) throw new ApiError(meta.errors.contentRequired);
+			const room: MiChatRoom | null = await this.chatService.findRoomById(ps.toRoomId);
+			if (!room) throw new ApiError(meta.errors.noSuchRoom);
+			try { return await this.chatService.createMessageToRoom(me, room, { text, file }); } catch (error: unknown) {
+				if (error instanceof ChatPermissionError) throw new ApiError(meta.errors.chatSendDenied, { reason: error.reason });
+				throw error;
 			}
-
-			return await this.chatService.createMessageToRoom(me, room, {
-				text: ps.text,
-				file: file,
-			});
 		});
 	}
 }
