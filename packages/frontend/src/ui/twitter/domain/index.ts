@@ -36,3 +36,7 @@ export type { ChannelDetailState, ChannelCommunityTab, ChannelFeaturedOperation,
 export type { TwitterUserTimelineTab } from './user-timeline.js';
 /** 手动时间线查询的唯一结果语义，不由页面或提示文案反向推断。 */
 export type { TwitterTimelineRefreshResult } from './timeline-refresh.js';
+
+/** 附件自然尺寸只向临时展示比例派生，不复制文件业务模型。 */
+export { getTwitterMediaAspectRatio } from './media-layout.js';
+export type { TwitterMediaMeasurement } from './media-layout.js';
