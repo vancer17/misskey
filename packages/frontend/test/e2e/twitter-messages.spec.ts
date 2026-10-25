@@ -8,8 +8,11 @@
  * 隔离实例内的真实账户、消息、群成员和网盘文件经过产品 UI 与真实流式通道验证；
  * 不伪造 HTTP 业务响应，不访问开发账户，数据库重置仅使用专用 61812 测试实例。
  */
-import { expect, test } from '@playwright/test';
-import type { APIResponse, Browser, BrowserContext, Locator, Page, PlaywrightTestArgs, PlaywrightWorkerArgs, Request, Route, TestInfo, WebSocket } from '@playwright/test';
+import { spawn } from 'node:child_process';
+import { mkdir, readFile } from 'node:fs/promises';
+import { chromium, expect, test } from '@playwright/test';
+import type { ChildProcess } from 'node:child_process';
+import type { APIResponse, Browser, BrowserContext, JSHandle, Locator, Page, PlaywrightTestArgs, PlaywrightWorkerArgs, Request, Route, TestInfo, WebSocket, WebSocketRoute } from '@playwright/test';
 import type * as Misskey from 'misskey-js';
 import type { AccountWithToken } from '../../src/accounts/index.js';
 import type { PossiblyNonNormalizedPreferencesProfile } from '../../src/preferences/manager.js';
@@ -172,7 +175,81 @@ function messageScroll(page: Page): Locator {
 	return page.getByTestId('twitter-messages-conversation').locator('[tabindex="0"][aria-label="メッセージ"]');
 }
 
+/** 故障控制器只关闭传输或暂停握手，正常阶段始终连接真实服务端。 */
+type StreamFault = Readonly<{
+	disconnect: () => Promise<void>;
+	reconnect: () => void;
+	connections: () => number;
+	subscriptions: () => number;
+}>;
+
+/** 记录展示层是否出现过提示，防止短时闪现被最终隐藏断言遗漏。 */
+type StreamNoticeObservation = { shown: boolean; stop: () => void };
+
+/** 在浏览器建立首个通道前安装传输故障，不构造任何业务帧或 HTTP 响应。 */
+async function controlStream(page: Page): Promise<StreamFault> {
+	let blocked: boolean = false;
+	let connections: number = 0;
+	let subscriptions: number = 0;
+	page.on('websocket', /** 只观察真实客户端送出的频道订阅，不干预帧转发。 */ (socket: WebSocket): void => {
+		if (new URL(socket.url()).pathname !== '/streaming') return;
+		socket.on('framesent', /** 仅提取传输层频道名，认证信息和业务正文不进入诊断。 */ (frame: { payload: string | Buffer }): void => {
+			try {
+				const envelope: { type?: unknown; body?: { channel?: unknown } } = JSON.parse(typeof frame.payload === 'string' ? frame.payload : frame.payload.toString()) as { type?: unknown; body?: { channel?: unknown } };
+				if (envelope.type === 'connect' && envelope.body?.channel === 'chatUser') subscriptions++;
+			} catch { /* 非 JSON 心跳不属于频道订阅。 */ }
+		});
+	});
+	const active: Set<WebSocketRoute> = new Set();
+	const pending: Set<() => void> = new Set();
+	await page.routeWebSocket(/** 仅匹配本用例真实实例的流式端点，认证参数不输出。 */ (url: URL): boolean => url.pathname === '/streaming' && url.port === '61812', /** 暂停握手期间不能产生虚假的 connected 事件。 */ async (socket: WebSocketRoute): Promise<void> => {
+		let closed: boolean = false;
+		if (blocked) {
+			await new Promise<void>(/** 客户端超时会撤销旧握手，恢复时只连接仍有效的请求。 */ (resolve: () => void): void => {
+				pending.add(resolve);
+				socket.onClose(/** 尚未连接服务端的握手只需释放等待。 */ (): void => { closed = true; pending.delete(resolve); resolve(); });
+			});
+		}
+		if (closed) return;
+		const server: WebSocketRoute = socket.connectToServer();
+		/** 将客户端关闭正常传递给真实服务端，包含从暂停中释放的连接。 */
+		socket.onClose(/** 只传播关闭，不截获或改写业务消息。 */ async (): Promise<void> => { active.delete(socket); await server.close(); });
+		active.add(socket);
+		connections++;
+	});
+	return Object.freeze({
+		/** 切断当前真实连接，并在恢复前暂停后续握手。 */
+		disconnect: async (): Promise<void> => {
+			await expect.poll(/** 首次故障前必须确认真实 chatUser 已订阅，编辑器就绪不能代替连接就绪。 */ (): number => subscriptions).toBeGreaterThan(0);
+			blocked = true;
+			await Promise.all([...active].map(/** 关闭客户端后由既有 SDK 发起重连。 */ async (socket: WebSocketRoute): Promise<void> => { await socket.close({ code: 1012, reason: 'integration transport interruption' }); }));
+			active.clear();
+		},
+		/** 释放暂停的握手，之后由正常真实服务器完成连接。 */
+		reconnect: (): void => {
+			blocked = false;
+			pending.forEach(/** 恢复每个仍在等待的连接握手。 */ (resume: () => void): void => resume());
+			pending.clear();
+		},
+		/** 仅提供握手次数观测，恢复成功另由真实消息和产品 UI 验证。 */
+		connections: (): number => connections,
+		/** 真实订阅帧已发出后才允许下一条消息证明恢复链路。 */
+		subscriptions: (): number => subscriptions,
+	});
+}
+
+/** 观察真实 DOM 提示的新增，不触碰连接事实或业务状态。 */
+async function observeStreamNotice(page: Page): Promise<JSHandle<StreamNoticeObservation>> {
+	return await page.evaluateHandle(/** 捕获提示闪现，返回的句柄仅在当前测试页有效。 */ (): StreamNoticeObservation => {
+		const observation: StreamNoticeObservation = { shown: false, /** 句柄销毁前释放观察器。 */ stop: (): void => observer.disconnect() };
+		const observer: MutationObserver = new MutationObserver(/** 只记录提示节点是否实际进入 DOM。 */ (): void => { if (document.querySelector('[data-testid="twitter-stream-notice"]')) observation.shown = true; });
+		observer.observe(document.body, { childList: true, subtree: true });
+		return observation;
+	});
+}
+
 test.beforeEach(/** 每个用例仅重置一次专用测试实例。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	if (new URL(BASE_URL).port !== '61812') throw new Error('Messages regression requires the isolated 61812 instance');
 	await resetState(BASE_URL);
 	admin = await registerUser(BASE_URL, 'dm_admin', 'dm-admin-password', true);
 	alice = await createAccount('dm_alice', 'DM Alice');
@@ -614,4 +691,228 @@ test('真实写入后丢失发送回执保持待确认且不会自动重发', /*
 	await expect(warning).toHaveCount(0);
 	expect(sendRequests).toBe(1);
 	expect((await history(alice, bob.id)).filter(/** 显式解锁也不能代替用户再次点击发送。 */ (item: Misskey.Endpoints['chat/messages/user-timeline']['res'][number]): boolean => item.text === content)).toHaveLength(1);
+});
+
+/** 原生浏览器及独立临时用户目录只服务于真实标签页生命周期验收。 */
+type NativeVisibilityBrowser = Readonly<{ page: Page; context: BrowserContext; dispose: () => Promise<void> }>;
+
+/** Playwright 默认焦点模拟使所有标签页可见，采用无默认模拟的原生 Chromium 连接保留真实生命周期。 */
+async function nativeVisibilityBrowser(info: TestInfo): Promise<NativeVisibilityBrowser> {
+	const profile: string = info.outputPath('native-visibility-profile');
+	await mkdir(profile, { recursive: true });
+	const chromiumProcess: ChildProcess = spawn(chromium.executablePath(), ['--no-sandbox', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-dev-shm-usage', 'about:blank'], { stdio: 'ignore' });
+	let browser: Browser | null = null;
+	try {
+		let debuggingPort: number = 0;
+		await expect.poll(/** Chromium 将随机本地调试端口写入当前测试专属目录。 */ async (): Promise<number> => {
+			try { debuggingPort = Number((await readFile(`${profile}/DevToolsActivePort`, 'utf8')).split('\n')[0]); } catch { debuggingPort = 0; }
+			return debuggingPort;
+		}).toBeGreaterThan(0);
+		browser = await chromium.connectOverCDP(`http://127.0.0.1:${debuggingPort}`, { noDefaults: true });
+		const context: BrowserContext | undefined = browser.contexts()[0];
+		if (!context) throw new Error('Expected the native Chromium default context');
+		const page: Page = context.pages()[0] ?? await context.newPage();
+		observeErrors(page);
+		return Object.freeze({
+			page, context,
+			/** 关闭调试连接及本用例进程，用户目录随测试产物隔离。 */
+			dispose: async (): Promise<void> => { try { await browser?.close(); } finally { chromiumProcess.kill('SIGTERM'); } },
+		});
+	} catch (error: unknown) {
+		try { await browser?.close(); } finally { chromiumProcess.kill('SIGTERM'); }
+		throw error;
+	}
+}
+
+/** 无显示服务的 CI 继续执行真实传输用例；实际后台可见性只在原生有头浏览器中验证。 */
+test.describe('stream recovery native visibility', /** Headless Chromium 始终报告标签页可见，不能据此伪造后台验收。 */ (): void => {
+	test.skip(!process.env.DISPLAY, 'Actual tab visibility requires a display server');
+
+	test('stream recovery 短暂后台和短时断线保留草稿且不刷新', /** 实际切换浏览器标签页，再注入短暂传输故障验证恢复宽限。 */ async ({}: Pick<PlaywrightTestArgs, never>, info: TestInfo): Promise<void> => {
+		const native: NativeVisibilityBrowser = await nativeVisibilityBrowser(info);
+		const page: Page = native.page;
+		let fault: StreamFault | null = null;
+		let observation: JSHandle<StreamNoticeObservation> | null = null;
+		try {
+			await page.setViewportSize({ width: 390, height: 900 });
+			fault = await controlStream(page);
+			await openAs(page, alice, `/chat/user/${bob.id}`);
+			await expect(composer(page)).toBeEnabled();
+			await composer(page).fill('foreground-private-draft');
+			let navigations: number = 0;
+			page.on('request', /** 顶层文档请求代表实际刷新，不把恢复查询误计为刷新。 */ (request: Request): void => { if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigations++; });
+			observation = await observeStreamNotice(page);
+			const otherTab: Page = await native.context.newPage();
+			await otherTab.bringToFront();
+			await expect.poll(/** 真正的 hidden 事实来自浏览器，不覆盖 document 字段。 */ async (): Promise<boolean> => page.evaluate(/** 页面生命周期只作为观测证据。 */ (): boolean => document.hidden)).toBe(true);
+			await page.bringToFront();
+			await expect.poll(/** 恢复前台后才开始观测连接提示。 */ async (): Promise<boolean> => page.evaluate(/** 读取原生可见性。 */ (): boolean => document.hidden)).toBe(false);
+			await expect(composer(page)).toHaveValue('foreground-private-draft');
+			await expect(page.getByTestId('twitter-stream-notice')).toHaveCount(0);
+			const before: number = fault.connections();
+			await fault.disconnect();
+			await page.waitForTimeout(350);
+			fault.reconnect();
+			await expect.poll(/** 真实通道握手数必须增加，不能只检查提示消失。 */ (): number => fault?.connections() ?? 0).toBeGreaterThan(before);
+			const received: Misskey.Endpoints['chat/messages/create-to-user']['res'] = await realApi(bob, 'chat/messages/create-to-user', { toUserId: alice.id, text: 'short-outage-real-message' });
+			await expect(message(page, received.id)).toHaveCount(1);
+			await page.waitForTimeout(3_100);
+			await expect(composer(page)).toHaveValue('foreground-private-draft');
+			expect(await observation.evaluate(/** 任意瞬时提示也应使短断线验收失败。 */ (result: StreamNoticeObservation): boolean => result.shown)).toBe(false);
+			expect(navigations).toBe(0);
+		} finally {
+			fault?.reconnect();
+			await observation?.evaluate(/** 清理测试观察器，不修改产品状态。 */ (result: StreamNoticeObservation): void => result.stop());
+			await observation?.dispose();
+			await native.dispose();
+		}
+	});
+
+	test('stream recovery 后台重连对账保留服务端未读事实', /** 隐藏期间恢复真实连接及 HTTP 对账，也不能由程序恢复自动标读。 */ async ({}: Pick<PlaywrightTestArgs, never>, info: TestInfo): Promise<void> => {
+		const native: NativeVisibilityBrowser = await nativeVisibilityBrowser(info);
+		const page: Page = native.page;
+		let fault: StreamFault | null = null;
+		try {
+			const seed: Misskey.Endpoints['chat/messages/create-to-user']['res'] = await realApi(bob, 'chat/messages/create-to-user', { toUserId: alice.id, text: 'hidden-recovery-seed' });
+			fault = await controlStream(page);
+			await openAs(page, alice, `/chat/user/${bob.id}`);
+			await expect(message(page, seed.id)).toBeVisible();
+			await expect.poll(/** 初始可见会话先完成正常阅读，随后才隔离后台行为。 */ async (): Promise<boolean> => (await realApi(alice, 'i', {})).hasUnreadChatMessages).toBe(false);
+			let readRequests: number = 0;
+			page.on('request', /** 只统计真实标读请求，不干预任何响应。 */ (request: Request): void => { if (request.url().endsWith('/api/chat/conversations/read')) readRequests++; });
+			const otherTab: Page = await native.context.newPage();
+			await otherTab.bringToFront();
+			await expect.poll(/** 必须先观察到浏览器后台状态再开始故障。 */ async (): Promise<boolean> => page.evaluate(/** 只读真实可见性。 */ (): boolean => document.hidden)).toBe(true);
+			await fault.disconnect();
+			const unread: Misskey.Endpoints['chat/messages/create-to-user']['res'] = await realApi(bob, 'chat/messages/create-to-user', { toUserId: alice.id, text: 'unread-through-hidden-reconnect' });
+			const before: number = fault.connections();
+			fault.reconnect();
+			await expect.poll(/** 重新握手后由真实后端提供遗漏消息。 */ (): number => fault?.connections() ?? 0).toBeGreaterThan(before);
+			await expect(message(page, unread.id)).toHaveCount(1);
+			await expect(page.getByTestId('twitter-stream-notice')).toHaveCount(0);
+			expect(await page.evaluate(/** DOM 查询不能把测试页切回前台。 */ (): boolean => document.hidden)).toBe(true);
+			expect((await realApi(alice, 'i', {})).hasUnreadChatMessages).toBe(true);
+			expect(readRequests).toBe(0);
+			await page.bringToFront();
+			await expect(page.getByTestId('twitter-stream-notice')).toHaveCount(0);
+			const live: Misskey.Endpoints['chat/messages/create-to-user']['res'] = await realApi(bob, 'chat/messages/create-to-user', { toUserId: alice.id, text: 'after-hidden-reconnect-live' });
+			await expect(message(page, live.id)).toHaveCount(1);
+		} finally {
+			fault?.reconnect();
+			await native.dispose();
+		}
+	});
+});
+
+test('stream recovery 短时断线在宽限内恢复不闪现提示', /** 无显示服务的 CI 也必须证明短故障抑制以及真实订阅恢复。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	const fault: StreamFault = await controlStream(page);
+	await openAs(page, alice, `/chat/user/${bob.id}`);
+	await expect(composer(page)).toBeEnabled();
+	await composer(page).fill('short-outage-draft');
+	const observation: JSHandle<StreamNoticeObservation> = await observeStreamNotice(page);
+	try {
+		const before: number = fault.subscriptions();
+		await fault.disconnect();
+		await page.waitForTimeout(350);
+		fault.reconnect();
+		await expect.poll(/** 实际频道重订阅后才检验后续实时消息。 */ (): number => fault.subscriptions()).toBeGreaterThan(before);
+		const live: Misskey.Endpoints['chat/messages/create-to-user']['res'] = await realApi(bob, 'chat/messages/create-to-user', { toUserId: alice.id, text: 'live-after-short-outage' });
+		await expect(message(page, live.id)).toHaveCount(1);
+		await page.waitForTimeout(3_100);
+		expect(await observation.evaluate(/** 不能只用最终隐藏状态掩盖提示闪现。 */ (result: StreamNoticeObservation): boolean => result.shown)).toBe(false);
+		await expect(composer(page)).toHaveValue('short-outage-draft');
+	} finally {
+		fault.reconnect();
+		await observation.evaluate(/** 清理仅用于本次 UI 观测的资源。 */ (result: StreamNoticeObservation): void => result.stop());
+		await observation.dispose();
+	}
+});
+
+test('stream recovery 持续断线、关闭提示和再次断线恢复真实消息', /** 一轮真实连接故障验证提示生命周期，并用服务端写入证明遗漏数据及订阅恢复。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>, info: TestInfo): Promise<void> => {
+	await page.setViewportSize({ width: 390, height: 900 });
+	const removed: Misskey.Endpoints['chat/messages/create-to-user']['res'] = await realApi(bob, 'chat/messages/create-to-user', { toUserId: alice.id, text: 'removed-during-stream-outage' });
+	const reacted: Misskey.Endpoints['chat/messages/create-to-user']['res'] = await realApi(alice, 'chat/messages/create-to-user', { toUserId: bob.id, text: 'reacted-during-stream-outage' });
+	const fault: StreamFault = await controlStream(page);
+	await openAs(page, alice, `/chat/user/${bob.id}`);
+	await expect(message(page, removed.id)).toBeVisible();
+	await expect(message(page, reacted.id)).toBeVisible();
+	await composer(page).fill('sustained-outage-draft');
+	let navigations: number = 0;
+	page.on('request', /** 恢复数据必须通过原查询链，不能刷新整个文档。 */ (request: Request): void => { if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigations++; });
+	const notice: Locator = page.getByTestId('twitter-stream-notice');
+	await fault.disconnect();
+	await expect(notice).toBeVisible();
+	await expect(notice).toHaveCount(1);
+	const bounds: Awaited<ReturnType<Locator['boundingBox']>> = await notice.boundingBox();
+	if (!bounds) throw new Error('Expected a visible mobile stream notice');
+	expect(bounds.x).toBeGreaterThanOrEqual(0);
+	expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+	expect(bounds.y + bounds.height).toBeLessThanOrEqual(900);
+	await page.screenshot({ path: info.outputPath('twitter-stream-notice-mobile.png'), animations: 'disabled' });
+	await notice.getByRole('button', { name: 'なにもしない', exact: true }).click();
+	await expect(notice).toHaveCount(0);
+	await realApi(bob, 'chat/messages/delete', { messageId: removed.id });
+	await realApi(bob, 'chat/messages/react', { messageId: reacted.id, reaction: '👍' });
+	const missed: Misskey.Endpoints['chat/messages/create-to-user']['res'] = await realApi(bob, 'chat/messages/create-to-user', { toUserId: alice.id, text: 'created-during-stream-outage' });
+	await page.waitForTimeout(3_100);
+	await expect(notice).toHaveCount(0);
+	await expect(message(page, removed.id)).toHaveCount(1);
+	await expect(message(page, missed.id)).toHaveCount(0);
+	fault.reconnect();
+	await expect(message(page, removed.id)).toHaveCount(0);
+	await expect(message(page, missed.id)).toHaveCount(1);
+	await expect(message(page, reacted.id).getByRole('button', { name: 'リアクション: 👍', exact: true })).toBeVisible();
+	const live: Misskey.Endpoints['chat/messages/create-to-user']['res'] = await realApi(bob, 'chat/messages/create-to-user', { toUserId: alice.id, text: 'live-after-stream-recovery' });
+	await expect(message(page, live.id)).toHaveCount(1);
+	await expect(notice).toHaveCount(0);
+	await fault.disconnect();
+	await expect(notice).toBeVisible();
+	await expect(notice).toHaveCount(1);
+	fault.reconnect();
+	await expect(notice).toHaveCount(0);
+	await expect(composer(page)).toHaveValue('sustained-outage-draft');
+	expect(navigations).toBe(0);
+	expect((await history(alice, bob.id)).filter(/** 重连查询与流式订阅不能把同一真实消息插入两次。 */ (item: Misskey.Endpoints['chat/messages/user-timeline']['res'][number]): boolean => item.id === missed.id)).toHaveLength(1);
+});
+
+test('stream recovery 浏览器离线后联网恢复数据且无需再次切页', /** 浏览器 HTTP 离线和真实流式重连共同恢复，故障期服务端写入仍由独立 API 完成。 */ async ({ page, context }: Pick<PlaywrightTestArgs, 'page' | 'context'>): Promise<void> => {
+	const fault: StreamFault = await controlStream(page);
+	await openAs(page, alice, `/chat/user/${bob.id}`);
+	await expect(composer(page)).toBeEnabled();
+	await composer(page).fill('offline-recovery-draft');
+	try {
+		await fault.disconnect();
+		await context.setOffline(true);
+		await expect(page.getByTestId('twitter-stream-notice')).toBeVisible();
+		const missed: Misskey.Endpoints['chat/messages/create-to-user']['res'] = await realApi(bob, 'chat/messages/create-to-user', { toUserId: alice.id, text: 'created-while-browser-offline' });
+		await expect(message(page, missed.id)).toHaveCount(0);
+		await context.setOffline(false);
+		fault.reconnect();
+		await expect(page.getByTestId('twitter-stream-notice')).toHaveCount(0);
+		await expect(message(page, missed.id)).toHaveCount(1);
+		await expect(composer(page)).toHaveValue('offline-recovery-draft');
+		const live: Misskey.Endpoints['chat/messages/create-to-user']['res'] = await realApi(bob, 'chat/messages/create-to-user', { toUserId: alice.id, text: 'live-after-browser-online' });
+		await expect(message(page, live.id)).toHaveCount(1);
+	} finally {
+		await context.setOffline(false);
+		fault.reconnect();
+	}
+});
+
+test('stream recovery 原生 UI 保留现有断线提示回退', /** 共享宿主插槽不得修改非 Twitter UI 既有提示的展示与关闭行为。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	await realApi(bob, 'chat/messages/create-to-user', { toUserId: alice.id, text: 'native-stream-recovery-seed' });
+	const fault: StreamFault = await controlStream(page);
+	await openAs(page, alice, `/chat/user/${bob.id}`, false);
+	await expect(page.getByText('native-stream-recovery-seed', { exact: true })).toBeVisible();
+	const before: number = fault.subscriptions();
+	await fault.disconnect();
+	await expect(page.getByText('サーバーから切断されました', { exact: true })).toBeVisible();
+	fault.reconnect();
+	await expect.poll(/** 真实 chatUser 重订阅帧发出后才发送恢复证明消息。 */ (): number => fault.subscriptions()).toBeGreaterThan(before);
+	const live: Misskey.Endpoints['chat/messages/create-to-user']['res'] = await realApi(bob, 'chat/messages/create-to-user', { toUserId: alice.id, text: 'native-live-after-reconnect' });
+	await expect(page.getByText(live.text ?? '', { exact: true })).toBeVisible();
+	await expect(page.getByTestId('twitter-stream-notice')).toHaveCount(0);
+	await expect(page.getByText('サーバーから切断されました', { exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'なにもしない', exact: true }).click();
+	await expect(page.getByText('サーバーから切断されました', { exact: true })).toHaveCount(0);
 });
