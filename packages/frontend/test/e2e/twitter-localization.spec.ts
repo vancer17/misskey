@@ -214,6 +214,13 @@ test('定时发布的日期时间、月份名称和过去时间提示在窄屏�
 
 test('真实未读通知数量在桌面和移动导航使用中文可访问名称', /** 实际反应通知经过后端落库后读取数量，不注入账户计数。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>, info: TestInfo): Promise<void> => {
 	const note: Misskey.entities.Note = await createNote(viewer, '真实通知目标');
+	/** 提前完成首次发帖成就，避免启动时的既有成就弹出层把目标反应通知一并标读。 */
+	await api(BASE_URL, 'i/claim-achievement', { i: viewer.token, name: 'notes1' });
+	await expect.poll(/** 等待真实异步成就通知落库，不把申领回执当成通知已写入。 */ async (): Promise<boolean> => {
+		const notifications: Misskey.entities.Notification[] = await api(BASE_URL, 'i/notifications', { i: viewer.token, markAsRead: false, limit: 100 });
+		return notifications.some(/** 只确认本次首次发帖成就，不依赖其他通知数量。 */ (notification: Misskey.entities.Notification): boolean => notification.type === 'achievementEarned' && notification.achievement === 'notes1');
+	}).toBe(true);
+	await api(BASE_URL, 'notifications/mark-all-as-read', { i: viewer.token });
 	await api(BASE_URL, 'notes/reactions/create', { i: author.token, noteId: note.id, reaction: '❤️' });
 	await expect.poll(/** 后端异步通知必须真实写入账户状态。 */ async (): Promise<number> => {
 		await refreshViewer();
