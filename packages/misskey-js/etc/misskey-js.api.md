@@ -678,6 +678,10 @@ export type Channels = {
             notificationFlushed: () => void;
             unreadAntenna: (payload: Antenna) => void;
             newChatMessage: (payload: ChatMessage) => void;
+            chatUpdated: (payload: {
+                type: 'user' | 'room' | 'all';
+                id?: string;
+            }) => void;
             readAllAnnouncements: () => void;
             myTokenRegenerated: () => void;
             signin: (payload: Signin) => void;
@@ -1090,6 +1094,21 @@ type ChartsUsersRequest = operations['charts___users']['requestBody']['content']
 
 // @public (undocumented)
 type ChartsUsersResponse = operations['charts___users']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type ChatContactsShowRequest = operations['chat___contacts___show']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChatContactsShowResponse = operations['chat___contacts___show']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type ChatConversationsListRequest = operations['chat___conversations___list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChatConversationsListResponse = operations['chat___conversations___list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type ChatConversationsReadRequest = operations['chat___conversations___read']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type ChatHistoryRequest = operations['chat___history']['requestBody']['content']['application/json'];
@@ -1778,6 +1797,11 @@ declare namespace entities {
         ChartsUserReactionsResponse,
         ChartsUsersRequest,
         ChartsUsersResponse,
+        ChatContactsShowRequest,
+        ChatContactsShowResponse,
+        ChatConversationsListRequest,
+        ChatConversationsListResponse,
+        ChatConversationsReadRequest,
         ChatHistoryRequest,
         ChatHistoryResponse,
         ChatMessagesCreateToRoomRequest,
@@ -3787,8 +3811,8 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 // Warnings were encountered during analysis:
 //
 // src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:226:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:241:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:228:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:243:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 
