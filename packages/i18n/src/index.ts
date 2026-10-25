@@ -23,37 +23,91 @@ type PrimaryLang = keyof typeof primaries;
 
 type Locales = Record<Language, ILocale>;
 
-/** 时间线手动刷新只补充三个结果提示；此键表同时约束类型投影与运行时校验。 */
-const twitterRefreshChineseKeys = {
+/** 根级中文仅补右栏标题；此键表同时约束权威类型投影与运行时读取。 */
+const forkChineseRootKeys = {
+	/** 右栏热门话题区域的标题。 */
+	trending: true,
+	/** 右栏推荐账户区域的标题。 */
+	whoToFollow: true,
+} as const satisfies Readonly<Partial<Record<keyof Locale, true>>>;
+
+/** 搜索快捷入口只补三个当前缺失的提示，不开放整个搜索语言区域。 */
+const twitterSearchChineseKeys = {
+	/** 将当前搜索词作为链接查询的入口提示。 */
+	lookupUrl: true,
+	/** 打开匹配账户的入口提示。 */
+	showUser: true,
+	/** 打开匹配话题标签的入口提示。 */
+	showHashtag: true,
+} as const satisfies Readonly<Partial<Record<keyof Locale['_twitterSearch'], true>>>;
+
+/** Twitter 中文仅补已确认缺失的导航、刷新和定时发布文案。 */
+const twitterUiChineseKeys = {
+	/** 主导航区域的无障碍名称。 */
+	primaryNavigation: true,
+	/** 带未读数量的通知入口名称。 */
+	notificationsWithCount: true,
+	/** 带数量的新帖子加载入口名称。 */
+	newNotesWithCount: true,
 	/** 已取得新帖子时的完成提示。 */
 	timelineUpdated: true,
 	/** 检查成功但没有新帖子时的轻量提示。 */
 	timelineUpToDate: true,
 	/** 检查失败时的重试提示。 */
 	timelineRefreshFailed: true,
+	/** 定时发布表单中的日期字段名称。 */
+	scheduleDate: true,
+	/** 定时发布表单中的时间字段名称。 */
+	scheduleTime: true,
+	/** 日期选择器切换至上个月的按钮名称。 */
+	previousMonth: true,
+	/** 日期选择器切换至下个月的按钮名称。 */
+	nextMonth: true,
+	/** 定时发布时间已经过去时的校验提示。 */
+	scheduleTimeIsInThePast: true,
 } as const satisfies Readonly<Partial<Record<keyof Locale['_twitterUi'], true>>>;
 
-/** fork 明确允许补充的业务区域，刷新提示仅从日文权威类型派生获准的三个叶子键。 */
+/** fork 明确允许补充的业务区域，搜索与 Twitter 提示只投影白名单内的权威叶子键。 */
 type ForkChineseNamespaces = Pick<Locale, '_avatarDecorationCalibration' | '_channel'> & {
-	_twitterUi: Pick<Locale['_twitterUi'], keyof typeof twitterRefreshChineseKeys>;
+	_twitterSearch: Pick<Locale['_twitterSearch'], keyof typeof twitterSearchChineseKeys>;
+	_twitterUi: Pick<Locale['_twitterUi'], keyof typeof twitterUiChineseKeys>;
 };
 
-/** 每个允许区域只补尚未进入正式中文资源的叶子键，不复制完整语言模型。 */
-type ForkChineseSupplement = { [Namespace in keyof ForkChineseNamespaces]?: Partial<ForkChineseNamespaces[Namespace]> };
+/** 根叶子与各允许区域只补尚未进入正式中文资源的键，不复制完整语言模型。 */
+type ForkChineseSupplement = Partial<Pick<Locale, keyof typeof forkChineseRootKeys>> & {
+	[Namespace in keyof ForkChineseNamespaces]?: Partial<ForkChineseNamespaces[Namespace]>;
+};
 
 /** 补充范围保持显式白名单，避免任意业务区域意外绕过原生回退。 */
 const forkChineseNamespaces = {
 	/** 头像挂件素材校准的本地业务文案。 */
 	_avatarDecorationCalibration: true,
-	/** 频道资料库的空态与加载结束文案。 */
+	/** 频道搜索、资料库空态与加载结束文案。 */
 	_channel: true,
-	/** 时间线手动刷新的三个结果提示，叶子键另受白名单约束。 */
+	/** 搜索快捷入口提示，叶子键另受白名单约束。 */
+	_twitterSearch: true,
+	/** Twitter 导航、刷新和定时发布提示，叶子键另受白名单约束。 */
 	_twitterUi: true,
 } as const satisfies Readonly<Record<keyof ForkChineseNamespaces, true>>;
 
 /** 判断外部 JSON 是否为普通对象，避免数组、空值或标量被当作翻译字典。 */
 function isLocaleRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** 校验单个补充叶子及其占位符，确保补充与日文权威文案协议一致且不遮蔽正式中文。 */
+function validateForkChineseValue(path: string, source: unknown, value: unknown, hasOfficialChinese: boolean): string {
+	if (typeof source !== 'string') throw new Error(`Fork zh-CN supplement has unknown key: ${path}`);
+	if (typeof value !== 'string' || value.trim().length === 0) throw new Error(`Fork zh-CN ${path} must be a nonempty string.`);
+	if (hasOfficialChinese) throw new Error(`Official zh-CN already contains ${path}; remove the fork supplement for this key.`);
+
+	const expectedParameters: ReadonlySet<string> = new Set<string>(source.match(/\{[^}]+\}/g) ?? []);
+	const actualParameters: ReadonlySet<string> = new Set<string>(value.match(/\{[^}]+\}/g) ?? []);
+	if (expectedParameters.size !== actualParameters.size) throw new Error(`Fork zh-CN supplement has mismatched placeholders: ${path}`);
+	for (const parameter of expectedParameters) {
+		if (!actualParameters.has(parameter)) throw new Error(`Fork zh-CN supplement has mismatched placeholders: ${path}`);
+	}
+	return value;
 }
 
 /**
@@ -71,6 +125,11 @@ function loadForkChineseSupplement(rawLocales: Locales, moduleUrl: string): Fork
 	if (!isLocaleRecord(parsed)) throw new Error('Fork zh-CN supplement must be an object.');
 	const supplement: ForkChineseSupplement = {};
 	for (const [rawNamespace, section] of Object.entries(parsed)) {
+		if (Object.hasOwn(forkChineseRootKeys, rawNamespace)) {
+			const rootKey: keyof typeof forkChineseRootKeys = rawNamespace as keyof typeof forkChineseRootKeys;
+			supplement[rootKey] = validateForkChineseValue(rootKey, rawLocales['ja-JP'][rootKey], section, Object.hasOwn(rawLocales['zh-CN'], rootKey));
+			continue;
+		}
 		if (!Object.hasOwn(forkChineseNamespaces, rawNamespace)) throw new Error(`Fork zh-CN supplement has unsupported namespace: ${rawNamespace}`);
 		const namespace: keyof ForkChineseNamespaces = rawNamespace as keyof ForkChineseNamespaces;
 		if (!isLocaleRecord(section)) throw new Error(`Fork zh-CN ${namespace} must be an object.`);
@@ -79,13 +138,10 @@ function loadForkChineseSupplement(rawLocales: Locales, moduleUrl: string): Fork
 		const nativeChinese: unknown = rawLocales['zh-CN'][namespace];
 		const sectionSupplement: Record<string, string> = {};
 		for (const [key, value] of Object.entries(section)) {
-			if (namespace === '_twitterUi' && !Object.hasOwn(twitterRefreshChineseKeys, key)) throw new Error(`Fork zh-CN supplement has unsupported key: ${namespace}.${key}`);
-			if (!Object.hasOwn(source, key) || typeof source[key] !== 'string') throw new Error(`Fork zh-CN supplement has unknown key: ${namespace}.${key}`);
-			if (typeof value !== 'string' || value.trim().length === 0) throw new Error(`Fork zh-CN ${namespace}.${key} must be a nonempty string.`);
-			if (isLocaleRecord(nativeChinese) && Object.hasOwn(nativeChinese, key)) {
-				throw new Error(`Official zh-CN already contains ${namespace}.${key}; remove the fork supplement for this key.`);
-			}
-			sectionSupplement[key] = value;
+			if (namespace === '_twitterSearch' && !Object.hasOwn(twitterSearchChineseKeys, key)) throw new Error(`Fork zh-CN supplement has unsupported key: ${namespace}.${key}`);
+			if (namespace === '_twitterUi' && !Object.hasOwn(twitterUiChineseKeys, key)) throw new Error(`Fork zh-CN supplement has unsupported key: ${namespace}.${key}`);
+			if (!Object.hasOwn(source, key)) throw new Error(`Fork zh-CN supplement has unknown key: ${namespace}.${key}`);
+			sectionSupplement[key] = validateForkChineseValue(`${namespace}.${key}`, source[key], value, isLocaleRecord(nativeChinese) && Object.hasOwn(nativeChinese, key));
 		}
 		supplement[namespace] = sectionSupplement;
 	}
