@@ -147,11 +147,13 @@ test('匿名访问不额外验证账户',
 );
 
 test('有效缓存只验证一次且正常启动',
-	/** 验证新启动边界没有额外重复刷新账户。 */
+	/** 隔离连接后的业务对账，验证启动认证边界只读取一次有效账户。 */
 	async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
 		const user: TestAccount = await createAccount();
 		const errors: string[] = collectPageErrors(page);
 		await seedAccount(page, user.account);
+		/** 使用既有设备偏好隔离实时未读对账；实时恢复由消息集成回归另行验证。 */
+		await page.evaluate(deviceStateInBrowser, { realtimeMode: false });
 		let accountRequests: number = 0;
 		page.on('request',
 			/** 统计本次页面启动的账户验证请求。 */
