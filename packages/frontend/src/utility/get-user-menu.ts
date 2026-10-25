@@ -1,6 +1,10 @@
 /*
  * SPDX-FileCopyrightText: syuilo and misskey-project
  * SPDX-License-Identifier: AGPL-3.0-only
+ *
+ * 文件领域：Misskey 用户操作菜单。
+ * 作用：沿用既有用户操作与授权边界，搜索入口只读取响应式能力的当前值。
+ * 数据链：用户资料与账户策略 → 菜单动作 → 既有路由或 API。
  */
 
 import { toUnicode } from 'punycode.js';
@@ -225,7 +229,7 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 		});
 	}
 
-	if (notesSearchAvailable && (user.host == null || canSearchNonLocalNotes)) {
+	if (notesSearchAvailable.value && (user.host == null || canSearchNonLocalNotes.value)) {
 		menuItems.push({
 			icon: 'ti ti-search',
 			text: i18n.ts.searchThisUsersNotes,
