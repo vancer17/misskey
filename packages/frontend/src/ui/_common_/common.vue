@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：各 UI 共用的系统展示宿主。
+作用：承载全局弹层、通知和运行状态提示；连接提示可由 UI 通过具名插槽替换。
+数据链：既有系统事件与弹层集合 → 共享宿主；未提供插槽的 UI 继续挂载原连接提示。
+-->
+
 <template>
 <Transition
 	:enterActiveClass="prefer.s.animation ? $style.transition_menuDrawerBg_enterActive : ''"
@@ -87,7 +93,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 </component>
 
-<XStreamIndicator/>
+<slot name="streamIndicator">
+	<XStreamIndicator/>
+</slot>
 
 <div v-if="pendingApiRequestsCount > 0" id="wait"></div>
 
