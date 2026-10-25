@@ -1,6 +1,6 @@
 # Twitter UI 第二阶段页面总表
 
-本文档只维护第二阶段 Twitter 风格 UI 的范围、路由、当前代码锚点、处理等级和依赖关系。阶段目标、实施排期、进度状态和验收细节不在本文档维护；泄漏明细见 [leak-audit.md](./leak-audit.md)，产品决策见 [ADR-0002](./adr/0002-product-decisions-leak-remediation.md)。
+本文档只维护第二阶段 Twitter 风格 UI 的范围、路由、当前代码锚点、处理等级和依赖关系。阶段目标、实施排期、进度状态和验收细节不在本文档维护；泄漏明细见 [leak-audit.md](./leak-audit.md)，产品决策见 [ADR-0002](./adr/0002-product-decisions-leak-remediation.md)；捐赠自动提示处置见 [ADR-0036](./adr/0036-twitter-donation-prompt-policy.md)。
 
 ## 阶段定位与出口
 
@@ -16,7 +16,7 @@
 
 | ID | 范围 | 当前代码锚点 | 架构路径 | 来源 |
 | --- | --- | --- | --- | --- |
-| **R-1** | 交互选择器/窗口与启动弹窗、Shell 系统层：VisibilityPicker、UserSelect、DriveFileSelect、AbuseReport、UserSetup（决策 D1：保留弹出）、Updated、Announcement×2、Donation（决策 D3：保留）、SourceCodeAvailable、systemChrome 五件 | `MkVisibilityPicker.vue`；`MkUserSelectDialog.vue`；`MkDriveFileSelectDialog.vue`；`MkAbuseReportWindow.vue`；`MkUserSetupDialog.vue`；`MkUpdated.vue`；`MkAnnouncementDialog.vue`；`MkDonation.vue`；`MkSourceCodeAvailablePopup.vue`；`ui/_common_/{announcements,statusbars,ReloadSuggestion,PreferenceRestore,ThemePreviewing}.vue` | P-08 三层模式（useIsTwitterUi 变体 + overlay.scss） | 审计 C5-C8 / B1-B5 / D4 |
+| **R-1** | 交互选择器/窗口与启动弹窗、Shell 系统层：VisibilityPicker、UserSelect、DriveFileSelect、AbuseReport、UserSetup（决策 D1：保留弹出）、Updated、Announcement×2（决策 D3：保留）、Donation（Hide：Twitter UI 不自动弹出，见 ADR-0036）、SourceCodeAvailable、systemChrome 五件 | `MkVisibilityPicker.vue`；`MkUserSelectDialog.vue`；`MkDriveFileSelectDialog.vue`；`MkAbuseReportWindow.vue`；`MkUserSetupDialog.vue`；`MkUpdated.vue`；`MkAnnouncementDialog.vue`；`boot/main-boot.ts`（捐赠触发策略）；`MkSourceCodeAvailablePopup.vue`；`ui/_common_/{announcements,statusbars,ReloadSuggestion,PreferenceRestore,ThemePreviewing}.vue` | P-08 三层模式（useIsTwitterUi 变体 + overlay.scss）；捐赠提示由 Bootstrap 按最终根 UI 阻止创建 | 审计 C5-C8 / B1-B5 / D4 |
 | **R-2** | 帖子卡片内容内嵌件：投票、链接卡、CW、反应条、远程实例条、媒体网格 | `MkPoll.vue`；`MkUrlPreview.vue`；`MkCwButton.vue`；`MkReactionsViewer.vue`；`MkInstanceTicker.vue`；`MkMediaList.vue` | 组件变体 | 审计 D3 |
 | **R-3** | 发帖表单内嵌件：上传列表、预览、投票编辑、简化帖、信息条、涟漪 | `MkUploaderItems.vue`；`MkNotePreview.vue`；`MkPollEditor.vue`；`MkNoteSimple.vue`；`MkInfo.vue`；`MkRippleEffect.vue` | 组件变体（Ripple 在 twitter 上下文禁用或替换） | 审计 D2 |
 | **R-4** | 动效与尺度债务：MkModal 过渡校准、涟漪、Tooltip 时长、emoji 选择器内部、字号/间距阶梯收敛 | `MkModal.vue`；`MkTooltip.vue`；`MkEmojiPickerDialog.vue` 内部；各组件字面量字号 | motion token / 阶梯收敛 | 审计 E1/E2/E4/C4 + ADR-0001 暂缓项 |
