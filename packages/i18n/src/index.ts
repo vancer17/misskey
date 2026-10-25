@@ -68,7 +68,7 @@ const twitterUiChineseKeys = {
 } as const satisfies Readonly<Partial<Record<keyof Locale['_twitterUi'], true>>>;
 
 /** fork 明确允许补充的业务区域，搜索与 Twitter 提示只投影白名单内的权威叶子键。 */
-type ForkChineseNamespaces = Pick<Locale, '_avatarDecorationCalibration' | '_channel'> & {
+type ForkChineseNamespaces = Pick<Locale, '_avatarDecorationCalibration' | '_channel' | '_twitterMessages'> & {
 	_twitterSearch: Pick<Locale['_twitterSearch'], keyof typeof twitterSearchChineseKeys>;
 	_twitterUi: Pick<Locale['_twitterUi'], keyof typeof twitterUiChineseKeys>;
 };
@@ -88,6 +88,8 @@ const forkChineseNamespaces = {
 	_twitterSearch: true,
 	/** Twitter 导航、刷新和定时发布提示，叶子键另受白名单约束。 */
 	_twitterUi: true,
+	/** 新私信工作区的 fork 自有文案；正式中文接管对应键后移除补充。 */
+	_twitterMessages: true,
 } as const satisfies Readonly<Record<keyof ForkChineseNamespaces, true>>;
 
 /** 判断外部 JSON 是否为普通对象，避免数组、空值或标量被当作翻译字典。 */

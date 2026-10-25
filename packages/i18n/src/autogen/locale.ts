@@ -5913,6 +5913,272 @@ export interface Locale extends ILocale {
          */
         "oldest": string;
     };
+    "_twitterMessages": {
+        /**
+         * メッセージ
+         */
+        "title": string;
+        /**
+         * 新しいメッセージ
+         */
+        "newChat": string;
+        /**
+         * グループを作成
+         */
+        "newRoom": string;
+        /**
+         * すべて
+         */
+        "all": string;
+        /**
+         * ユーザー
+         */
+        "people": string;
+        /**
+         * グループ
+         */
+        "groups": string;
+        /**
+         * 会話を検索
+         */
+        "inboxSearch": string;
+        /**
+         * 受信トレイは空です
+         */
+        "emptyInbox": string;
+        /**
+         * メッセージを送って会話を始めましょう。
+         */
+        "emptyInboxDescription": string;
+        /**
+         * 会話を始める
+         */
+        "startConversation": string;
+        /**
+         * 会話を選ぶか、新しいメッセージを作成してください。
+         */
+        "chooseConversation": string;
+        /**
+         * まだメッセージはありません
+         */
+        "noMessages": string;
+        /**
+         * 最初のメッセージを送ってみましょう。
+         */
+        "noMessagesDescription": string;
+        /**
+         * 検索結果がありません
+         */
+        "noSearchResults": string;
+        /**
+         * メッセージを読み込めませんでした
+         */
+        "loadFailed": string;
+        /**
+         * もう一度試す
+         */
+        "retry": string;
+        /**
+         * 以前のメッセージを読み込む
+         */
+        "olderMessages": string;
+        /**
+         * メッセージを検索
+         */
+        "searchMessages": string;
+        /**
+         * すべてのメッセージを検索
+         */
+        "searchAllMessages": string;
+        /**
+         * 会話に戻る
+         */
+        "backToConversation": string;
+        /**
+         * メッセージを入力
+         */
+        "messagePlaceholder": string;
+        /**
+         * 添付ファイル
+         */
+        "attachment": string;
+        /**
+         * 添付ファイルを外す
+         */
+        "removeAttachment": string;
+        /**
+         * Enter で改行、Ctrl または ⌘ + Enter で送信
+         */
+        "sendHint": string;
+        /**
+         * Enter で送信、Shift + Enter で改行
+         */
+        "sendHintEnter": string;
+        /**
+         * 会話を再読み込み
+         */
+        "checkSendResult": string;
+        /**
+         * 確認して再送を有効にする
+         */
+        "allowSendAgain": string;
+        /**
+         * 会話を確認して、このメッセージが送信されていないことを確認しましたか？重複送信を避けるため、確認後に再送してください。
+         */
+        "allowSendAgainConfirm": string;
+        /**
+         * 送信中…
+         */
+        "sending": string;
+        /**
+         * 送信できませんでした。入力内容は保持されています。
+         */
+        "sendFailed": string;
+        /**
+         * 送信結果を確認できませんでした。会話を確認してから再送してください。
+         */
+        "sendUncertain": string;
+        /**
+         * このユーザーへのメッセージは許可されていません。
+         */
+        "forbidden": string;
+        /**
+         * 現在、チャットは閲覧のみ利用できます。
+         */
+        "readOnly": string;
+        /**
+         * 現在、このアカウントまたはサーバーではチャットを利用できません。
+         */
+        "unavailable": string;
+        /**
+         * ブロックの設定によりメッセージを送信できません。
+         */
+        "blocked": string;
+        /**
+         * リモートユーザーにはメッセージを送信できません。
+         */
+        "remoteUser": string;
+        /**
+         * 自分自身にはメッセージを送信できません。
+         */
+        "selfChat": string;
+        /**
+         * 送信条件を確認しています…
+         */
+        "contactLoading": string;
+        /**
+         * 送信条件を確認できませんでした。もう一度お試しください。
+         */
+        "contactFailed": string;
+        /**
+         * メンバー
+         */
+        "members": string;
+        /**
+         * グループの詳細
+         */
+        "roomDetails": string;
+        /**
+         * 招待
+         */
+        "invitations": string;
+        /**
+         * グループに参加
+         */
+        "joinRoom": string;
+        /**
+         * 招待を辞退
+         */
+        "ignoreInvitation": string;
+        /**
+         * グループを退出
+         */
+        "leaveRoom": string;
+        /**
+         * グループの通知をミュート
+         */
+        "muteRoom": string;
+        /**
+         * グループのミュートを解除
+         */
+        "unmuteRoom": string;
+        /**
+         * このグループに招待されています。参加するとメッセージを閲覧できます。
+         */
+        "invitedRoom": string;
+        /**
+         * グループに参加していません。
+         */
+        "notMember": string;
+        /**
+         * グループ名
+         */
+        "roomName": string;
+        /**
+         * グループの説明
+         */
+        "roomDescription": string;
+        /**
+         * 招待を送信しました
+         */
+        "invitationSent": string;
+        /**
+         * 操作を完了できませんでした
+         */
+        "operationFailed": string;
+        /**
+         * このメッセージを削除しますか？
+         */
+        "deleteMessageConfirm": string;
+        /**
+         * 新しいメッセージ
+         */
+        "newMessages": string;
+        /**
+         * メッセージへのリンク
+         */
+        "messageLink": string;
+        /**
+         * 添付ファイル
+         */
+        "attachmentOnly": string;
+        /**
+         * このグループを退出しますか？
+         */
+        "leaveRoomConfirm": string;
+        /**
+         * このグループを削除しますか？
+         */
+        "deleteRoomConfirm": string;
+        /**
+         * グループへの招待
+         */
+        "receivedInvitation": string;
+        /**
+         * 送信した招待
+         */
+        "sentInvitations": string;
+        /**
+         * メッセージが見つからないか、閲覧する権限がありません。
+         */
+        "messageUnavailable": string;
+        /**
+         * プロフィールを開く
+         */
+        "openProfile": string;
+        /**
+         * メッセージを表示
+         */
+        "jumpToMessage": string;
+        /**
+         * 他のメンバーはまだいません
+         */
+        "roomNoMembers": string;
+        /**
+         * アカウントが切り替わりました。もう一度開いてください。
+         */
+        "accountChanged": string;
+    };
     "_chat": {
         /**
          * メッセージ
