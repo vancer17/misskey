@@ -23,6 +23,8 @@ export { default as TwitterTabIndicator } from './components/TwitterTabIndicator
 export { default as TwitterTimelineLoadBoundary } from './components/TwitterTimelineLoadBoundary.vue';
 /** 路由代码未就绪时的主题一致占位，不读取业务数据。 */
 export { default as TwitterRouteLoading } from './components/TwitterRouteLoading.vue';
+/** 路由与右栏仅协调现存 DOM 的轻淡入，不持有页面或业务状态。 */
+export { useTwitterRouteEntry, useTwitterVisibilityEntry } from './composables/use-twitter-route-entry.js';
 export { default as TwitterUserResult } from './UserResult.vue';
 export { default as TwitterSettingsShell } from './SettingsShell.vue';
 /** 本人成就页只替换页面外观，数据和查看计时继续由原页面及组件持有。 */
