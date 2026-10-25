@@ -12,7 +12,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile } from 'node:fs/promises';
 import { chromium, expect, test } from '@playwright/test';
 import type { ChildProcess } from 'node:child_process';
-import type { APIResponse, Browser, BrowserContext, JSHandle, Locator, Page, PlaywrightTestArgs, PlaywrightWorkerArgs, Request, Route, TestInfo, WebSocket, WebSocketRoute } from '@playwright/test';
+import type { APIResponse, Browser, BrowserContext, JSHandle, Locator, Page, PlaywrightTestArgs, PlaywrightWorkerArgs, Request, Response, Route, TestInfo, WebSocket, WebSocketRoute } from '@playwright/test';
 import type * as Misskey from 'misskey-js';
 import type { AccountWithToken } from '../../src/accounts/index.js';
 import type { PossiblyNonNormalizedPreferencesProfile } from '../../src/preferences/manager.js';
@@ -359,20 +359,63 @@ for (const width of [320, 390, 500, 501, 1279, 1280, 1440, 1920] as const) {
 test('跨分栏与移动断点调整窗口保留草稿、历史锚点和未读事实', /** 仅改变浏览器几何，不能重选会话或标读尚未观察的新消息。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>, info: TestInfo): Promise<void> => {
 	test.setTimeout(120_000);
 	for (let index: number = 0; index < 65; index++) await realApi(bob, 'chat/messages/create-to-user', { toUserId: alice.id, text: `anchor-${index.toString().padStart(2, '0')}` });
-	await page.setViewportSize({ width: 1440, height: 900 });
-	await openAs(page, alice, `/chat/user/${bob.id}`);
-	await expect.poll(/** 初次底部观察可以按产品规则标读，后面的布局观测从此稳定状态开始。 */ async (): Promise<boolean> => (await realApi(alice, 'i', {})).hasUnreadChatMessages).toBe(false);
-	await page.getByRole('button', { name: '以前のメッセージを読み込む', exact: true }).click();
-	await expect(page.getByTestId('twitter-messages-conversation').locator('[data-message-id]')).toHaveCount(60);
-	await page.getByRole('button', { name: '以前のメッセージを読み込む', exact: true }).click();
-	await expect(page.getByTestId('twitter-messages-conversation').locator('[data-message-id]')).toHaveCount(65);
-	await composer(page).fill('resize-private-draft');
-	await messageScroll(page).evaluate(/** 进入历史阅读位置，实际 scroll 事件会撤销到底部的读租约。 */ (viewport: HTMLElement): void => { viewport.scrollTo({ top: 500, behavior: 'instant' }); });
-	await expect.poll(/** 只有原生消息视口确实滚动后才建立锚点。 */ async (): Promise<number> => messageScroll(page).evaluate(/** 只读消息容器几何。 */ (viewport: HTMLElement): number => viewport.scrollTop)).toBe(500);
-	await realApi(bob, 'chat/messages/create-to-user', { toUserId: alice.id, text: 'unobserved-during-resize' });
-	await expect(page.getByTestId('twitter-messages-conversation').getByText('unobserved-during-resize', { exact: true })).toHaveCount(1);
-	await expect.poll(/** 服务端保存真实未读；测试不通过 UI 文案推断这一业务事实。 */ async (): Promise<boolean> => (await realApi(alice, 'i', {})).hasUnreadChatMessages).toBe(true);
-	await page.waitForLoadState('networkidle');
+	/** 后创建的未读消息标识用于确认服务端延迟通知已经实际送达。 */
+	let delayedMessageId: string | null = null;
+	/** 只有真实 main 通道收到目标消息通知后才接受随后对账请求。 */
+	let delayedNotificationObserved: boolean = false;
+	/** 由真实流式事件释放准备阶段，不通过固定等待猜测服务端计时器。 */
+	let resolveDelayedNotification: () => void;
+	/** 完成条件只来自本次目标消息的真实延迟广播。 */
+	const delayedNotification: Promise<void> = new Promise<void>(/** 保存本次目标通知的完成入口。 */ (resolve: () => void): void => { resolveDelayedNotification = resolve; });
+	/** 只保留本用例监听过的真实连接，以便在准备结束时完整撤下观察器。 */
+	const observedSockets: Set<WebSocket> = new Set();
+
+	/** 只按真实通知名称和消息标识判定到达，不改写或输出帧内容。 */
+	function observeDelayedNotification(frame: { payload: string | Buffer }): void {
+		try {
+			const envelope: { type?: unknown; body?: { type?: unknown; body?: { id?: unknown } } } = JSON.parse(typeof frame.payload === 'string' ? frame.payload : frame.payload.toString()) as { type?: unknown; body?: { type?: unknown; body?: { id?: unknown } } };
+			if (delayedMessageId !== null && envelope.type === 'channel' && envelope.body?.type === 'newChatMessage' && envelope.body.body?.id === delayedMessageId) {
+				delayedNotificationObserved = true;
+				resolveDelayedNotification();
+			}
+		} catch { /* 非 JSON 心跳不属于目标消息通知。 */ }
+	}
+
+	/** 在页面建立真实流式通道时安装只读监听，不接触认证查询参数。 */
+	function observeSocket(socket: WebSocket): void {
+		if (new URL(socket.url()).pathname !== '/streaming') return;
+		observedSockets.add(socket);
+		socket.on('framereceived', observeDelayedNotification);
+	}
+
+	page.on('websocket', observeSocket);
+	try {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await openAs(page, alice, `/chat/user/${bob.id}`);
+		await expect.poll(/** 初次底部观察可以按产品规则标读，后面的布局观测从此稳定状态开始。 */ async (): Promise<boolean> => (await realApi(alice, 'i', {})).hasUnreadChatMessages).toBe(false);
+		await page.getByRole('button', { name: '以前のメッセージを読み込む', exact: true }).click();
+		await expect(page.getByTestId('twitter-messages-conversation').locator('[data-message-id]')).toHaveCount(60);
+		await page.getByRole('button', { name: '以前のメッセージを読み込む', exact: true }).click();
+		await expect(page.getByTestId('twitter-messages-conversation').locator('[data-message-id]')).toHaveCount(65);
+		await composer(page).fill('resize-private-draft');
+		await messageScroll(page).evaluate(/** 进入历史阅读位置，实际 scroll 事件会撤销到底部的读租约。 */ (viewport: HTMLElement): void => { viewport.scrollTo({ top: 500, behavior: 'instant' }); });
+		await expect.poll(/** 只有原生消息视口确实滚动后才建立锚点。 */ async (): Promise<number> => messageScroll(page).evaluate(/** 只读消息容器几何。 */ (viewport: HTMLElement): number => viewport.scrollTop)).toBe(500);
+		const unread: Misskey.Endpoints['chat/messages/create-to-user']['res'] = await realApi(bob, 'chat/messages/create-to-user', { toUserId: alice.id, text: 'unobserved-during-resize' });
+		delayedMessageId = unread.id;
+		await expect(page.getByTestId('twitter-messages-conversation').getByText('unobserved-during-resize', { exact: true })).toHaveCount(1);
+		await expect.poll(/** 服务端保存真实未读；测试不通过 UI 文案推断这一业务事实。 */ async (): Promise<boolean> => (await realApi(alice, 'i', {})).hasUnreadChatMessages).toBe(true);
+		/** 后端延迟通知会触发合法能力对账；计数窗口必须在这次真实请求完成之后开始。 */
+		const metadataReconciled: Promise<Response | null> = page.waitForRequest(/** 只匹配目标延迟通知之后发起的能力查询。 */ (request: Request): boolean => delayedNotificationObserved && new URL(request.url()).pathname === '/api/chat/contacts/show').then(/** 等待真实响应，不能把发出请求当成对账完成。 */ (request: Request): Promise<Response | null> => request.response());
+		/** 同一轮真实消息窗口对账至少完成首个响应，再等待剩余分页安静。 */
+		const timelineReconciled: Promise<Response | null> = page.waitForRequest(/** 只匹配目标延迟通知之后发起的历史查询。 */ (request: Request): boolean => delayedNotificationObserved && new URL(request.url()).pathname === '/api/chat/messages/user-timeline').then(/** 后续分页继续由原 Store 执行，不伪造结果。 */ (request: Request): Promise<Response | null> => request.response());
+		const [, metadataResponse, timelineResponse]: [void, Response | null, Response | null] = await Promise.all([delayedNotification, metadataReconciled, timelineReconciled]);
+		expect(metadataResponse?.ok()).toBe(true);
+		expect(timelineResponse?.ok()).toBe(true);
+		await page.waitForLoadState('networkidle');
+	} finally {
+		page.off('websocket', observeSocket);
+		for (const socket of observedSockets) socket.off('framereceived', observeDelayedNotification);
+	}
 	const anchor: MessageAnchor = await visibleMessageAnchor(page);
 	/** 只计数已有真实查询，不记录请求头或认证参数。 */
 	let selectionQueries: number = 0;
