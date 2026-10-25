@@ -3,7 +3,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-/** 主 Bootstrap：沿用 Misskey UI 选择与挂载流程；会话恢复已在入口完成，远端配置失败不启动账户向导。 */
+/**
+ * 文件领域：主页面 Bootstrap 的 UI 选择、挂载与登录后初始化。
+ * 作用：消费入口已验证的会话，沿用既有根组件选择和系统初始化；远端配置失败不启动账户向导。
+ * 数据链：共享启动结果与最终根组件选择 → 登录后副作用；Twitter 根组件不自动触发捐助提示。
+ */
 
 import { createApp, defineAsyncComponent, markRaw } from 'vue';
 import { ui } from '@@/js/config.js';
@@ -36,6 +40,8 @@ import { isBirthday } from '@/utility/is-birthday.js';
 
 /** 在主页面入口完成共享启动，受控会话重载时不继续执行登录态副作用。 */
 export async function mainBoot(): Promise<void> {
+	/** 仅由实际根组件选择派生展示策略，不重复解析保存设置或 URL 覆盖规则。 */
+	let isTwitterRoot: boolean = false;
 	const bootResult: Awaited<ReturnType<typeof common>> = await common(
 		/** 按既有 UI 选择规则创建根应用，不额外定义业务身份。 */
 		async (): Promise<App<Element>> => {
@@ -55,6 +61,7 @@ export async function mainBoot(): Promise<void> {
 					rootComponent = await import('@/ui/zen.vue').then(x => x.default);
 					break;
 				case 'twitter':
+					isTwitterRoot = true;
 					rootComponent = await import('@/ui/twitter.vue').then(x => x.default);
 					break;
 				case 'deck':
@@ -293,13 +300,19 @@ export async function mainBoot(): Promise<void> {
 		//}
 		//miLocalStorage.setItem('lastUsed', Date.now().toString());
 
-		const latestDonationInfoShownAt = miLocalStorage.getItem('latestDonationInfoShownAt');
-		const neverShowDonationInfo = miLocalStorage.getItem('neverShowDonationInfo');
-		if (neverShowDonationInfo !== 'true' && (createdAt.getTime() < (Date.now() - (1000 * 60 * 60 * 24 * 3))) && !window.location.pathname.startsWith('/miauth')) {
-			if (latestDonationInfoShownAt == null || (new Date(latestDonationInfoShownAt).getTime() < (Date.now() - (1000 * 60 * 60 * 24 * 30)))) {
-				const { dispose } = popup(defineAsyncComponent(() => import('@/components/MkDonation.vue')), {}, {
-					closed: () => dispose(),
-				});
+		if (!isTwitterRoot) {
+			const latestDonationInfoShownAt: string | null = miLocalStorage.getItem('latestDonationInfoShownAt');
+			const neverShowDonationInfo: string | null = miLocalStorage.getItem('neverShowDonationInfo');
+			if (neverShowDonationInfo !== 'true' && (createdAt.getTime() < (Date.now() - (1000 * 60 * 60 * 24 * 3))) && !window.location.pathname.startsWith('/miauth')) {
+				if (latestDonationInfoShownAt == null || (new Date(latestDonationInfoShownAt).getTime() < (Date.now() - (1000 * 60 * 60 * 24 * 30)))) {
+					const { dispose }: { dispose: () => void } = popup(defineAsyncComponent(
+						/** 仅在其他 UI 原有提醒条件成立时加载捐助展示组件。 */
+						(): Promise<typeof import('@/components/MkDonation.vue')> => import('@/components/MkDonation.vue'),
+					), {}, {
+						/** 弹窗关闭只释放既有实例，本展示策略不写入用户偏好。 */
+						closed: (): void => dispose(),
+					});
+				}
 			}
 		}
 
