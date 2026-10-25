@@ -1,6 +1,9 @@
 <!--
 SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
+
+文件领域：Misskey 基础视频预览。负责保留现有敏感内容控制、封面展示与附件菜单。
+自然尺寸观测仅使用当前已允许加载的封面或视频元数据，向上层提供临时布局参数。
 -->
 
 <template>
@@ -12,6 +15,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 		(video.isSensitive && prefer.s.highlightSensitiveMedia) && $style.sensitive,
 	]"
 	@contextmenu.stop="onContextmenu"
+	@load.capture="onIntrinsicMediaLoad"
+	@loadedmetadata.capture="onIntrinsicMediaLoad"
 >
 	<button v-if="hide" :class="$style.hidden" @click="reveal">
 		<div :class="$style.hiddenTextWrapper">
@@ -27,6 +32,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:class="$style.video"
 			:src="video.thumbnailUrl"
 			:alt="video.comment ?? undefined"
+			draggable="false"
 		/>
 		<video
 			v-else
@@ -48,7 +54,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
+import type { Ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { MediaComponentExposes } from '@/types/media-component.js';
 import bytes from '@/filters/bytes.js';
@@ -64,10 +71,51 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	(event: 'mediaClick', ev: PointerEvent): void;
+	/** 将当前已揭示封面或视频的自然尺寸传递给上层布局。 */
+	(event: 'intrinsicSize', width: number, height: number): void;
 }>();
+
+/** 视频预览容器，仅用于读取既有媒体元素的展示尺寸。 */
+const playerEl: Ref<HTMLDivElement | null> = ref<HTMLDivElement | null>(null);
 
 // eslint-disable-next-line vue/no-setup-props-reactivity-loss
 const hide = ref(shouldHideFileByDefault(props.video));
+
+/** 返回当前预览已有资源的地址，驱动资源切换后的展示观测。 */
+function currentPreviewUrl(): string {
+	return props.video.thumbnailUrl || props.video.url;
+}
+
+/** 确认资源与揭示状态仍有效后，将浏览器取得的尺寸传入展示链。 */
+function reportIntrinsicMediaSize(mediaElement: HTMLImageElement | HTMLVideoElement): void {
+	if (hide.value || !playerEl.value?.contains(mediaElement)) return;
+	/** 当前元素对应的附件资源地址，用于拒绝过期加载事件。 */
+	const expectedSource: string | null = mediaElement instanceof HTMLImageElement ? props.video.thumbnailUrl : props.video.url;
+	if (!expectedSource) return;
+	/** 浏览器实际读取的资源地址，不从附件外部创建测量请求。 */
+	const loadedSource: string = mediaElement.currentSrc || mediaElement.src;
+	if (loadedSource !== new URL(expectedSource, window.document.baseURI).href) return;
+	/** 已加载封面或视频的自然宽度，只用于临时几何派生。 */
+	const width: number = mediaElement instanceof HTMLImageElement ? mediaElement.naturalWidth : mediaElement.videoWidth;
+	/** 已加载封面或视频的自然高度，只用于临时几何派生。 */
+	const height: number = mediaElement instanceof HTMLImageElement ? mediaElement.naturalHeight : mediaElement.videoHeight;
+	if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
+	emit('intrinsicSize', width, height);
+}
+
+/** 捕获已有封面或视频的加载事件，不改变敏感内容或省流加载权限。 */
+function onIntrinsicMediaLoad(event: Event): void {
+	if (event.target instanceof HTMLImageElement || event.target instanceof HTMLVideoElement) reportIntrinsicMediaSize(event.target);
+}
+
+/** 预览揭示或资源切换后，读取当前已经完成加载的媒体元素。 */
+function reportRenderedMediaSize(): void {
+	/** 当前预览实际存在的图片或视频元素。 */
+	const mediaElement: HTMLImageElement | HTMLVideoElement | null | undefined = playerEl.value?.querySelector<HTMLImageElement | HTMLVideoElement>('img, video');
+	if (mediaElement) reportIntrinsicMediaSize(mediaElement);
+}
+
+watch([hide, currentPreviewUrl, playerEl], reportRenderedMediaSize, { flush: 'post' });
 
 async function reveal() {
 	if (!(await canRevealFile(props.video))) {
@@ -126,7 +174,7 @@ defineExpose<MediaComponentExposes>({
 .hidden {
 	width: 100%;
 	height: 100%;
-	background: #000;
+	background: var(--media-placeholder-background, #000);
 	border: none;
 	outline: none;
 	font: inherit;
@@ -141,11 +189,11 @@ defineExpose<MediaComponentExposes>({
 .hiddenTextWrapper {
 	text-align: center;
 	font-size: 0.8em;
-	color: #fff;
+	color: var(--media-placeholder-color, #fff);
 }
 
 .videoRoot {
-	background: #000;
+	background: var(--media-preview-background, #000);
 	position: relative;
 	width: 100%;
 	height: 100%;
