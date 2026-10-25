@@ -8875,6 +8875,10 @@ export interface Locale extends ILocale {
          */
         "nameOnly": string;
         /**
+         * チャンネル名や説明を検索
+         */
+        "searchPlaceholder": string;
+        /**
          * チャンネル外へのリノートと引用リノートを許可する
          */
         "allowRenoteToExternal": string;
