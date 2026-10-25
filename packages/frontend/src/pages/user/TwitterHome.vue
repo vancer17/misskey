@@ -55,6 +55,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 					>
 						<i class="ti ti-dots" aria-hidden="true"></i>
 					</button>
+					<MkA
+						v-if="canOpenChat"
+						:to="`/chat/user/${user.id}`"
+						:class="$style.messageButton"
+						:aria-label="i18n.ts.directMessage"
+						data-testid="twitter-profile-message"
+					>
+						<i class="ti ti-message-circle" aria-hidden="true"></i>
+					</MkA>
 					<button
 						v-if="$i?.id === user.id"
 						class="_button"
@@ -222,6 +231,10 @@ const displayUser: ComputedRef<Readonly<Misskey.entities.UserLite> | null> = use
 	(): Misskey.entities.UserLite | null => props.user,
 );
 
+/** 本地他人主页提供会话导航；实际联系与发送权限由聊天服务端决定，页面不重算互关规则。 */
+const canOpenChat: ComputedRef<boolean> = computed(/** 已登录且拥有聊天读取策略时允许进入会话，自己的主页不显示联系自己。 */ (): boolean => $i != null
+	&& props.user != null && props.user.id !== $i.id && props.user.host == null && $i.policies.chatAvailability !== 'unavailable');
+
 const router = useRouter();
 const bannerStyle = computed(() => {
 	if (props.user?.bannerUrl == null) return {};
@@ -255,6 +268,25 @@ function showMenu(ev: PointerEvent): void {
 </script>
 
 <style lang="scss" module>
+.messageButton {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: var(--twitter-touch-target);
+	height: var(--twitter-touch-target);
+	box-sizing: border-box;
+	border: 1px solid var(--twitter-border);
+	border-radius: var(--twitter-radius-pill);
+	color: var(--twitter-fg);
+	font-size: var(--twitter-font-size-heading);
+	text-decoration: none;
+	transition: background-color var(--twitter-duration-fast) var(--twitter-ease);
+
+	&:hover { background: var(--twitter-hover); }
+	&:focus-visible { outline: 2px solid var(--twitter-accent); outline-offset: 2px; }
+}
+
 .root {
 	min-height: 100%;
 	background: var(--twitter-bg);
@@ -361,7 +393,10 @@ function showMenu(ev: PointerEvent): void {
 
 .actions {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
+	justify-content: flex-end;
+	min-width: 0;
 	gap: 8px;
 	padding-top: 8px;
 }
