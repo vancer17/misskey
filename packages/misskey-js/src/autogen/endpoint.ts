@@ -230,6 +230,11 @@ import type {
 	ChartsUserReactionsResponse,
 	ChartsUsersRequest,
 	ChartsUsersResponse,
+	ChatContactsShowRequest,
+	ChatContactsShowResponse,
+	ChatConversationsListRequest,
+	ChatConversationsListResponse,
+	ChatConversationsReadRequest,
 	ChatHistoryRequest,
 	ChatHistoryResponse,
 	ChatMessagesCreateToRoomRequest,
@@ -826,6 +831,9 @@ export type Endpoints = {
 	'charts/user/pv': { req: ChartsUserPvRequest; res: ChartsUserPvResponse };
 	'charts/user/reactions': { req: ChartsUserReactionsRequest; res: ChartsUserReactionsResponse };
 	'charts/users': { req: ChartsUsersRequest; res: ChartsUsersResponse };
+	'chat/contacts/show': { req: ChatContactsShowRequest; res: ChatContactsShowResponse };
+	'chat/conversations/list': { req: ChatConversationsListRequest; res: ChatConversationsListResponse };
+	'chat/conversations/read': { req: ChatConversationsReadRequest; res: EmptyResponse };
 	'chat/history': { req: ChatHistoryRequest; res: ChatHistoryResponse };
 	'chat/messages/create-to-room': { req: ChatMessagesCreateToRoomRequest; res: ChatMessagesCreateToRoomResponse };
 	'chat/messages/create-to-user': { req: ChatMessagesCreateToUserRequest; res: ChatMessagesCreateToUserResponse };

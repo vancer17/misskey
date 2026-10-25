@@ -30,6 +30,7 @@ import { addCustomEmoji, removeCustomEmojis, updateCustomEmojis } from '@/custom
 import { prefer } from '@/preferences.js';
 import { updateCurrentAccountPartial } from '@/accounts.js';
 import { syncNotificationUnreadState } from '@/notifications/index.js';
+import { syncChatUnreadState } from '@/ui/twitter/messages/index.js';
 import { unisonReload } from '@/utility/unison-reload.js';
 import { isBirthday } from '@/utility/is-birthday.js';
 
@@ -309,8 +310,13 @@ export async function mainBoot(): Promise<void> {
 			});
 		}
 
+		window.document.addEventListener('visibilitychange', /** 恢复前台时即使未启用实时模式，也重新确认聊天未读事实。 */ (): void => {
+			if (window.document.visibilityState === 'visible') void syncChatUnreadState();
+		});
+
 		if (store.s.realtimeMode) {
 			const stream = useStream();
+			stream.on('_connected_', /** 断线重连后重新读取账户未读事实，不从通知事件累加。 */ (): void => { void syncChatUnreadState(); });
 
 			let reloadDialogShowing = false;
 			stream.on('_disconnected_', async () => {
@@ -352,8 +358,10 @@ export async function mainBoot(): Promise<void> {
 				const update: Partial<Misskey.entities.MeDetailed> = { ...account };
 				delete update.hasUnreadNotification;
 				delete update.unreadNotificationsCount;
+				delete update.hasUnreadChatMessages;
 				updateCurrentAccountPartial(update);
 				void syncNotificationUnreadState();
+				void syncChatUnreadState();
 			});
 
 			main.on('readAllNotifications', /** 已读事件仅使账户事实失效，避免与 HTTP 对账重复归零。 */ (): void => {
@@ -364,10 +372,12 @@ export async function mainBoot(): Promise<void> {
 				void syncNotificationUnreadState();
 			});
 
-			main.on('newChatMessage', () => {
-				updateCurrentAccountPartial({ hasUnreadChatMessages: true });
+			main.on('newChatMessage', /** 延迟推送只请求对账，不能把较新的已读状态反写为未读；声音仍只有此处所有。 */ (): void => {
+				void syncChatUnreadState();
 				sound.playMisskeySfx('chatMessage');
 			});
+
+			main.on('chatUpdated', /** 发信、删除和其他设备标读都只使账户事实失效。 */ (): void => { void syncChatUnreadState(); });
 
 			main.on('readAllAnnouncements', () => {
 				updateCurrentAccountPartial({ hasUnreadAnnouncement: false });
