@@ -25,6 +25,11 @@ export { default as TwitterTimelineLoadBoundary } from './components/TwitterTime
 export { default as TwitterRouteLoading } from './components/TwitterRouteLoading.vue';
 /** 路由与右栏仅协调现存 DOM 的轻淡入，不持有页面或业务状态。 */
 export { useTwitterRouteEntry, useTwitterVisibilityEntry } from './composables/use-twitter-route-entry.js';
+/** 系统连接提示只消费启动层派生的临时展示状态。 */
+export { default as TwitterStreamNotice } from './components/TwitterStreamNotice.vue';
+/** 连接与浏览器生命周期的观察集中在 Twitter 启动层。 */
+export { createTwitterStreamNotice } from './bootstrap/index.js';
+export type { TwitterStreamNoticeController } from './bootstrap/index.js';
 export { default as TwitterUserResult } from './UserResult.vue';
 export { default as TwitterSettingsShell } from './SettingsShell.vue';
 /** 本人成就页只替换页面外观，数据和查看计时继续由原页面及组件持有。 */
