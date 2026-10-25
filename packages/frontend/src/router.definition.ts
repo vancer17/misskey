@@ -250,6 +250,8 @@ export const ROUTE_DEF = [{
 	hash: 'initialTab',
 }, {
 	path: '/search',
+	/** 搜索参数只更新既有页面，使输入和标签不因结果切换卸载。 */
+	viewKey: 'search',
 	component: page(() => import('@/pages/search.vue')),
 	query: {
 		q: 'query',

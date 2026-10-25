@@ -40,3 +40,6 @@ export type { TwitterTimelineRefreshResult } from './timeline-refresh.js';
 /** 附件自然尺寸只向临时展示比例派生，不复制文件业务模型。 */
 export { getTwitterMediaAspectRatio } from './media-layout.js';
 export type { TwitterMediaMeasurement } from './media-layout.js';
+
+/** 搜索容器及路由序列化共享的标签标识。 */
+export type { TwitterSearchTab } from './search.js';
