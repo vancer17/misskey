@@ -49,6 +49,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</span>
 		</MkA>
 
+		<MkA
+			v-if="$i != null && $i.policies.chatAvailability !== 'unavailable'"
+			:class="$style.item"
+			:activeClass="$style.active"
+			to="/chat"
+			:aria-label="chatAriaLabel"
+			data-testid="twitter-messages-nav"
+		>
+			<span :class="$style.itemContent">
+				<i :class="$style.itemIcon" class="ti ti-messages ti-fw" aria-hidden="true"></i>
+				<span :class="$style.itemText">{{ i18n.ts.directMessage_short }}</span>
+				<span v-if="$i.hasUnreadChatMessages" :class="$style.chatUnread" aria-hidden="true"></span>
+			</span>
+		</MkA>
+
 		<!-- 频道入口（P-25 可达性补全）：对齐 X Communities 侧栏项（位于 Profile 前）；
 			X 对未加入任何 Community 的用户收纳入口，此处按 Misskey 频道为核心功能常驻显示
 			（已记录偏离，见 port-fidelity-audit CH-10）。 -->
@@ -112,6 +127,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import TwitterAvatar from './components/TwitterAvatar.vue';
 import { preloadTwitterNotificationsPage, preloadTwitterUserPage } from './routing/index.js';
 import { computed } from 'vue';
+import type { ComputedRef } from 'vue';
 import { instance } from '@/instance.js';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
@@ -133,6 +149,10 @@ const notificationCount = computed(() => {
 const notificationAriaLabel = computed(() => notificationCount.value === ''
 	? i18n.ts.notifications
 	: i18n.tsx._twitterUi.notificationsWithCount({ count: notificationCount.value }));
+
+/** 导航只投影账户服务端的未读布尔值，不从有限会话列表伪造未读数量。 */
+const chatAriaLabel: ComputedRef<string> = computed(/** 未读提示提供可访问名称，点状徽标保持纯装饰。 */ (): string => $i?.hasUnreadChatMessages
+	? `${i18n.ts.directMessage_short} (${i18n.ts.unread})` : i18n.ts.directMessage_short);
 
 function openPostForm() {
 	os.post();
@@ -275,6 +295,14 @@ async function openAccountMenu(ev: PointerEvent) {
 	color: var(--MI_THEME-fgOnAccent);
 	font-size: 11px;
 	font-weight: 700;
+}
+
+.chatUnread {
+	flex-shrink: 0;
+	width: var(--twitter-space-2);
+	height: var(--twitter-space-2);
+	border-radius: var(--twitter-radius-pill);
+	background: var(--twitter-accent);
 }
 
 .post {

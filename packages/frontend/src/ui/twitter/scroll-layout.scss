@@ -8,7 +8,7 @@
  * 不作用于匿名入口、独立页面窗口、弹层、反向聊天列表、文本框或媒体裁剪。
  * 视口提供 cqh 高度，出口仍提供 inline-size 宽度查询；nitter 宽度与留白不变。
  */
-[data-twitter-scroll-viewport] [data-twitter-route-outlet] {
+[data-twitter-scroll-viewport]:not([data-twitter-layout='messages']) [data-twitter-route-outlet] {
 	height: auto;
 	min-height: 100%;
 	overflow: visible;
@@ -22,4 +22,13 @@
 		overflow: visible;
 		overscroll-behavior: auto;
 	}
+}
+
+/* 聊天是显式有界工作区，不把普通内容的 auto 高度与 overflow 规则渗入消息面板。 */
+[data-twitter-scroll-viewport][data-twitter-layout='messages'] [data-twitter-route-outlet] {
+	height: 100%;
+	min-height: 0;
+	overflow: hidden;
+	container-type: inline-size;
+	contain: style !important;
 }

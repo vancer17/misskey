@@ -15,6 +15,7 @@ import MkLoading from '@/pages/_loading_.vue';
 import MkError from '@/pages/_error_.vue';
 import PageTimeline from '@/pages/timeline.vue';
 import { loadChannelPage, loadNotificationsPage, loadUserPage } from '@/ui/twitter/routing/index.js';
+import { TWITTER_CHAT_ROUTE_NAMES } from '@/ui/twitter/context/index.js';
 
 export const page = (loader: AsyncComponentLoader) => defineAsyncComponent({
 	loader: loader,
@@ -60,19 +61,23 @@ export const ROUTE_DEF = [{
 	component: page(() => import('@/pages/clip.vue')),
 }, {
 	path: '/chat',
-	component: chatPage(() => import('@/pages/chat/home.vue')),
+	name: TWITTER_CHAT_ROUTE_NAMES.inbox,
+	component: chatPage(/** 聊天入口按既有界面上下文加载唯一页面。 */ (): Promise<typeof import('@/pages/chat/entry.vue')> => import('@/pages/chat/entry.vue')),
 	loginRequired: true,
 }, {
 	path: '/chat/user/:userId',
-	component: chatPage(() => import('@/pages/chat/room.vue')),
+	name: TWITTER_CHAT_ROUTE_NAMES.user,
+	component: chatPage(/** 私聊路由只传入用户标识，由入口选择表现层。 */ (): Promise<typeof import('@/pages/chat/entry.vue')> => import('@/pages/chat/entry.vue')),
 	loginRequired: true,
 }, {
 	path: '/chat/room/:roomId',
-	component: chatPage(() => import('@/pages/chat/room.vue')),
+	name: TWITTER_CHAT_ROUTE_NAMES.room,
+	component: chatPage(/** 群聊路由只传入群标识，不预载另一份会话。 */ (): Promise<typeof import('@/pages/chat/entry.vue')> => import('@/pages/chat/entry.vue')),
 	loginRequired: true,
 }, {
 	path: '/chat/messages/:messageId',
-	component: chatPage(() => import('@/pages/chat/message.vue')),
+	name: TWITTER_CHAT_ROUTE_NAMES.message,
+	component: chatPage(/** 消息深链仍由受授权的聊天页面解析。 */ (): Promise<typeof import('@/pages/chat/entry.vue')> => import('@/pages/chat/entry.vue')),
 	loginRequired: true,
 }, {
 	path: '/instance-info/:host',
