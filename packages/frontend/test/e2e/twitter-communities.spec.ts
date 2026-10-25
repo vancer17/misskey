@@ -5,11 +5,11 @@
 
 /**
  * 文件领域：Twitter 频道入口的真实后端交互与布局回归。
- * 作用：验证关注空态、频道横条、头部搜索、管理弹窗和频道简介标签导航。
+ * 作用：验证关注空态、频道横条、头部搜索边界与焦点、管理弹窗和频道简介标签导航。
  * 数据链：隔离实例真实账号／频道／帖子 → 页面查询所有者 → 浏览器布局和交互；不 Mock 业务响应。
  */
 import { expect, test } from '@playwright/test';
-import type { Locator, Page, PlaywrightTestArgs, Request, Response, Route } from '@playwright/test';
+import type { BrowserContext, Locator, Page, PlaywrightTestArgs, PlaywrightWorkerArgs, Request, Response, Route } from '@playwright/test';
 import type * as Misskey from 'misskey-js';
 import type { AccountWithToken } from '../../src/accounts/index.js';
 import { api, registerUser, resetState } from './shared.js';
@@ -186,6 +186,231 @@ test('头部搜索框留在标题盒内且同参重复搜索真正完成', /** �
 	}
 	await header.getByRole('search').getByRole('button').click();
 	await expect(root.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+});
+
+test('搜索外部点击只收起输入，草稿、真实结果与频道导航均保留', /** 不可聚焦的空白点击和结果点击不能清空查询或吞掉导航事件。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	const channel: Misskey.entities.Channel = await createChannel('Preserved channel search', false);
+	const root: Locator = await open(page);
+	const header: Locator = root.getByTestId('twitter-communities-header');
+	const toggle: Locator = header.getByTestId('twitter-community-search');
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await toggle.click();
+	const input: Locator = header.getByRole('searchbox');
+	await expect(input).toBeFocused();
+	await input.fill(channel.name);
+	const searched: Promise<Response> = page.waitForResponse(/** 结果必须得到真实频道检索接口的成功回执。 */ (response: Response): boolean => response.url().endsWith('/api/channels/search') && response.status() === 200);
+	await input.press('Enter');
+	await searched;
+	const results: Locator = root.getByTestId('twitter-community-search-results');
+	const channelLink: Locator = results.locator(`a[href="/channels/${channel.id}"]`);
+	await expect(channelLink).toBeVisible();
+	await input.fill('Unsubmitted draft');
+	await results.click({ position: { x: 4, y: 300 } });
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(header.getByRole('searchbox')).toHaveCount(0);
+	await expect(channelLink).toBeVisible();
+	await toggle.click();
+	await expect(input).toBeFocused();
+	await expect(input).toHaveValue('Unsubmitted draft');
+	await expect(channelLink).toBeVisible();
+	await channelLink.click();
+	await expect(page).toHaveURL(`${BASE_URL}/channels/${channel.id}`);
+	await expect(page.getByTestId('twitter-channel')).toBeVisible();
+	await page.goBack();
+	await expect(root).toBeVisible();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(header.getByRole('searchbox')).toHaveCount(0);
+	await expect(channelLink).toBeVisible();
+	await toggle.click();
+	await expect(input).toBeFocused();
+	await expect(input).toHaveValue('Unsubmitted draft');
+	await page.getByTestId('twitter-sidebar').locator('a[href="/my/notifications"]').evaluate(/** 直接激活真实导航，跳过外部指针事件以单独覆盖页面停用清理。 */ (element: HTMLAnchorElement): void => { element.click(); });
+	await expect(page).toHaveURL(/\/my\/notifications/);
+	await page.goBack();
+	await expect(root).toBeVisible();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(header.getByRole('searchbox')).toHaveCount(0);
+	await expect(channelLink).toBeVisible();
+});
+
+test('搜索内部焦点巡游保持展开，移出边界或打开菜单立即收起', /** 只按真实焦点边界折叠，清空操作仍交给原有搜索组件。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	const root: Locator = await open(page);
+	const header: Locator = root.getByTestId('twitter-communities-header');
+	const toggle: Locator = header.getByTestId('twitter-community-search');
+	const menu: Locator = header.getByTestId('twitter-community-menu');
+	const back: Locator = header.getByRole('button', { name: 'Back', exact: true });
+	await toggle.click();
+	const input: Locator = header.getByRole('searchbox');
+	await input.fill('Focus boundary draft');
+	const clear: Locator = header.getByRole('search').getByRole('button');
+	await input.press('Tab');
+	await expect(clear).toBeFocused();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+	await clear.press('Tab');
+	await expect(toggle).toBeFocused();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+	await toggle.press('Shift+Tab');
+	await expect(clear).toBeFocused();
+	await clear.press('Shift+Tab');
+	await expect(input).toBeFocused();
+	await input.press('Shift+Tab');
+	await expect(back).toBeFocused();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(header.getByRole('searchbox')).toHaveCount(0);
+	await toggle.click();
+	await expect(input).toHaveValue('Focus boundary draft');
+	await toggle.focus();
+	await toggle.press('Tab');
+	await expect(menu).toBeFocused();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await toggle.click();
+	await expect(input).toBeFocused();
+	await back.focus();
+	await expect(back).toBeFocused();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await toggle.click();
+	const backBox: ElementBox = await box(back);
+	const menuBox: ElementBox = await box(menu);
+	await page.mouse.move(backBox.x + backBox.width / 2, backBox.y + backBox.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(menuBox.x + menuBox.width / 2, menuBox.y + menuBox.height / 2);
+	await page.mouse.up();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(page).toHaveURL(/\/channels(?:\?|$)/);
+	await toggle.click();
+	await menu.click();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(page.getByRole('menuitem').first()).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('menuitem')).toHaveCount(0);
+	await toggle.click();
+	await expect(input).toHaveValue('Focus boundary draft');
+	await clear.click();
+	await expect(input).toHaveValue('');
+	await expect(input).toBeFocused();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+});
+
+test('搜索显式退出清空草稿与结果，组合输入 Escape 不退出且折叠结果仍可返回', /** 关闭、Escape 和返回复用退出语义，输入法组合事件不会误清空查询。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	const channel: Misskey.entities.Channel = await createChannel('Explicit exit search', false);
+	const root: Locator = await open(page, 390);
+	const header: Locator = root.getByTestId('twitter-communities-header');
+	const toggle: Locator = header.getByTestId('twitter-community-search');
+	const back: Locator = header.getByRole('button', { name: 'Back', exact: true });
+	await toggle.click();
+	const input: Locator = header.getByRole('searchbox');
+	await input.fill(channel.name);
+	await input.press('Enter');
+	await expect(root.locator(`a[href="/channels/${channel.id}"]`)).toHaveCount(1);
+	await toggle.click();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(toggle).toBeFocused();
+	await expect(root.getByTestId('twitter-community-search-results')).toHaveCount(0);
+	await expect(root.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+	await toggle.click();
+	await expect(input).toHaveValue('');
+	await input.fill('Input method draft');
+	await input.dispatchEvent('keydown', { key: 'Escape', code: 'Escape', isComposing: true, bubbles: true });
+	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+	await expect(input).toHaveValue('Input method draft');
+	await input.press('Escape');
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(toggle).toBeFocused();
+	await toggle.click();
+	await expect(input).toHaveValue('');
+	await input.fill(channel.name);
+	await input.press('Enter');
+	await expect(root.locator(`a[href="/channels/${channel.id}"]`)).toHaveCount(1);
+	await header.getByTestId('twitter-community-menu').focus();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await back.click();
+	await expect(page).toHaveURL(/\/channels(?:\?|$)/);
+	await expect(root.getByTestId('twitter-community-search-results')).toHaveCount(0);
+	await expect(root.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+	await expect(toggle).toBeFocused();
+	await toggle.click();
+	await expect(input).toHaveValue('');
+	await input.fill('Back without results');
+	await back.click();
+	await expect(page).toHaveURL(/\/channels(?:\?|$)/);
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(toggle).toBeFocused();
+});
+
+test('搜索快速开合服从最终状态，减少动态效果时保持稳定布局与焦点', /** 同步原生点击覆盖过渡期间的状态竞争，系统偏好仅影响表现。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+	const root: Locator = await open(page, 320);
+	const header: Locator = root.getByTestId('twitter-communities-header');
+	const toggle: Locator = header.getByTestId('twitter-community-search');
+	const closedHeader: ElementBox = await box(header);
+	const closedToggle: ElementBox = await box(toggle);
+	const panelId: string | null = await toggle.getAttribute('aria-controls');
+	expect(panelId).toBeTruthy();
+	await toggle.evaluate(/** 三次同步开合只保留最后的展开意图，不能由过期聚焦任务反转状态。 */ (element: HTMLButtonElement): void => {
+		for (let index: number = 0; index < 3; index++) element.click();
+	});
+	const input: Locator = header.getByRole('searchbox');
+	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+	await expect(input).toBeFocused();
+	await expect(input).toBeVisible();
+	const openedHeader: ElementBox = await box(header);
+	const openedToggle: ElementBox = await box(toggle);
+	expect(openedHeader).toEqual(closedHeader);
+	expect(openedToggle).toEqual(closedToggle);
+	await toggle.evaluate(/** 两次同步开合保留展开终态，再单次关闭验证隐藏输入不会抢回焦点。 */ (element: HTMLButtonElement): void => {
+		element.click();
+		element.click();
+		element.click();
+	});
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(toggle).toBeFocused();
+	await expect(header.getByRole('searchbox')).toHaveCount(0);
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await toggle.click();
+	await expect(input).toBeFocused();
+	const panel: Locator = header.locator(`[id="${panelId}"]`);
+	await expect(panel).toBeVisible();
+	const transitionDuration: string = await panel.evaluate(/** 系统减少动态效果必须关闭搜索面板的过渡。 */ (element: HTMLElement): string => getComputedStyle(element).transitionDuration);
+	expect(transitionDuration).toBe('0s');
+	const inputBox: ElementBox = await box(input);
+	expect(inputBox.y).toBeGreaterThanOrEqual(closedHeader.y);
+	expect(inputBox.y + inputBox.height).toBeLessThanOrEqual(closedHeader.y + closedHeader.height);
+	await toggle.click();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(header.getByRole('searchbox')).toHaveCount(0);
+	await expect(toggle).toBeFocused();
+});
+
+test('触屏搜索返回在兼容鼠标事件后正确退出，外部轻触仍保留草稿', /** 真实触屏事件序列覆盖 pointerup 之后才发生的焦点迁移，避免返回误触浏览器历史。 */ async ({ browser }: Pick<PlaywrightWorkerArgs, 'browser'>): Promise<void> => {
+	const context: BrowserContext = await browser.newContext({ hasTouch: true, viewport: { width: 390, height: 1000 }, locale: 'en-US' });
+	try {
+		const touchPage: Page = await context.newPage();
+		touchPage.on('pageerror', /** 独立触屏上下文同样不得隐藏未处理的页面异常。 */ (error: Error): void => { pageErrors.push(error.message); });
+		const root: Locator = await open(touchPage, 390);
+		const header: Locator = root.getByTestId('twitter-communities-header');
+		const toggle: Locator = header.getByTestId('twitter-community-search');
+		const back: Locator = header.getByRole('button', { name: 'Back', exact: true });
+		await toggle.tap();
+		const input: Locator = header.getByRole('searchbox');
+		await expect(input).toBeFocused();
+		await input.fill('Unsubmitted touch search');
+		await back.tap();
+		await expect(touchPage).toHaveURL(/\/channels(?:\?|$)/);
+		await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+		await expect(toggle).toBeFocused();
+		await expect(header.getByRole('searchbox')).toHaveCount(0);
+		await toggle.tap();
+		await expect(input).toBeFocused();
+		await expect(input).toHaveValue('');
+		await input.fill('Preserved touch draft');
+		await root.getByRole('tabpanel').tap({ position: { x: 4, y: 300 } });
+		await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+		await expect(header.getByRole('searchbox')).toHaveCount(0);
+		await toggle.tap();
+		await expect(input).toBeFocused();
+		await expect(input).toHaveValue('Preserved touch draft');
+	} finally {
+		await context.close();
+	}
 });
 
 test('关注请求失败显示局部重试，成功重试后读取真实频道', /** 只注入传输故障，不能把失败解释成零关注或伪造重试结果。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
