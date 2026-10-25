@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
+<!--
+文件领域：用户搜索结果。
+作用：同步完整的关键词及来源条件，复用既有分页器及默认界面的手动搜索。
+数据链：路由条件／临时表单 → 原分页器 → 用户结果；不持有第二份结果或环境探测状态。
+-->
+
 <template>
 <div :class="{ [$style.twitterRoot]: autoSearch }">
 	<div v-if="!autoSearch" class="_gaps">
@@ -42,7 +48,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, markRaw, ref, shallowRef, toRef, watch } from 'vue';
+import { computed, markRaw, ref, shallowRef, watch } from 'vue';
+import type { ComputedRef, Ref } from 'vue';
 import type { Endpoints } from 'misskey-js';
 import * as Misskey from 'misskey-js';
 import MkUserList from '@/components/MkUserList.vue';
@@ -79,24 +86,29 @@ function asDetailedUser(user: Misskey.entities.User): Misskey.entities.UserDetai
 	return user as Misskey.entities.UserDetailed;
 }
 
-const searchQuery = ref(toRef(props, 'query').value);
-const searchOrigin = ref(toRef(props, 'origin').value);
+/** 默认界面的关键词草稿；自动模式由同一批路由条件更新。 */
+const searchQuery: Ref<string> = ref(props.query);
+/** 默认界面的来源草稿，与关键词作为一组同步。 */
+const searchOrigin: Ref<typeof props.origin> = ref(props.origin);
 
-watch(() => props.query, (query) => {
-	if (props.autoSearch) searchQuery.value = query;
+watch(/** 读取同一轮提交的关键词和来源，避免发送中间条件请求。 */ (): readonly [typeof props.query, typeof props.origin] => [props.query, props.origin], /** 一次同步表单投影，后续查询只消费完整条件。 */ ([query, origin]: readonly [typeof props.query, typeof props.origin]): void => {
+	// 仅外部条件提交清空默认界面的旧结果；临时表单编辑仍等待原手动搜索。
+	if (!props.autoSearch) paginator.value = null;
+	searchQuery.value = query;
+	searchOrigin.value = origin;
 }, { immediate: true });
 
-watch(() => props.origin, (origin) => {
-	if (props.autoSearch) searchOrigin.value = origin;
-}, { immediate: true });
+/** 从既有请求 Schema 派生本页使用的只读查询参数。 */
+type SearchParams = Readonly<Pick<Endpoints['users/search']['req'], 'query' | 'origin'>>;
 
-const searchParams = computed(() => {
-	const query = searchQuery.value.trim();
+/** 仅从完整表单投影生成分页器参数，不保留结果业务状态副本。 */
+const searchParams: ComputedRef<SearchParams | null> = computed(/** 映射关键词及实例允许的用户来源。 */ (): SearchParams | null => {
+	const query: string = searchQuery.value.trim();
 	if (query === '') return null;
 
 	return {
 		query,
-		origin: instance.federation === 'none' ? 'local' as const : searchOrigin.value,
+		origin: instance.federation === 'none' ? 'local' : searchOrigin.value,
 	};
 });
 
@@ -183,7 +195,7 @@ async function search() {
 	key.value++;
 }
 
-watch(searchParams, (params, oldParams) => {
+watch(searchParams, /** 每次完整条件只更换一次分页器，首次加载仍由列表挂载负责。 */ (params: SearchParams | null, oldParams: SearchParams | null | undefined): void => {
 	if (!props.autoSearch) return;
 	if (params == null) {
 		paginator.value = null;
