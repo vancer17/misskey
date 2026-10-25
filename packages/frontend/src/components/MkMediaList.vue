@@ -1,6 +1,10 @@
 <!--
 SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
+
+文件领域：Misskey 共享附件图库及其展示布局。
+作用：保留附件分类、敏感揭示和完整灯箱链路，允许宿主传入纯数值样式选择横向展示。
+数据链：原文件集合 → 既有媒体组件；自然尺寸事件只转交展示宿主，不回写文件或改变加载策略。
 -->
 
 <template>
@@ -9,7 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div v-if="count > 0" :class="$style.container">
 		<div
 			ref="gallery"
-		:class="[
+		:class="layout === 'strip' ? $style.strip : [
 			$style.medias,
 			...(prefer.s.showMediaListByGridInWideArea ? [$style.gridInWideArea] : []),
 			{ [$style.twitter]: isTwitterUi },
@@ -19,12 +23,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 					[$style.n12_3]: prefer.s.mediaListWithOneImageAppearance === '2_3',
 				}] : count === 2 ? $style.n2 : count === 3 ? $style.n3 : count === 4 ? $style.n4 : $style.nMany,
 			]"
+			:data-testid="layout === 'strip' ? 'media-strip' : undefined"
+			:tabindex="layout === 'strip' ? 0 : undefined"
+			:role="layout === 'strip' ? 'group' : undefined"
+			:aria-label="layout === 'strip' ? galleryLabel : undefined"
 		>
 			<template v-for="media in medias.previewable">
 				<XAudio
 					v-if="media.type.startsWith('audio')"
 					:key="`audio:${media.id}`"
 					:class="$style.media"
+					:style="mediaStyles?.[media.id]"
+					:data-media-id="media.id"
 					:audio="media"
 					@mediaClick="onMediaClick(media)"
 				/>
@@ -33,7 +43,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:key="`video:${media.id}`"
 					:ref="(comp) => { mediaComponents.set(media.id, comp as InstanceType<typeof XVideo> | null); }"
 					:class="$style.media"
+					:style="mediaStyles?.[media.id]"
+					:data-media-id="media.id"
 					:video="media"
+					v-on="intrinsicSizeListeners(media.id)"
 					@mediaClick="onMediaClick(media)"
 				/>
 				<XImage
@@ -43,8 +56,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:marker="`${markerId}:${media.id}`"
 					:disableImageLink="true"
 					:class="$style.media"
+					:style="mediaStyles?.[media.id]"
+					:data-media-id="media.id"
 					:image="media"
 					:raw="raw"
+					v-on="intrinsicSizeListeners(media.id)"
 					@mediaClick="onMediaClick(media)"
 				/>
 			</template>
@@ -55,6 +71,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, markRaw, onMounted, onUnmounted, useTemplateRef } from 'vue';
+import type { CSSProperties } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { Content } from '@/components/MkLightbox.item.vue';
 import type { MediaComponentExposes } from '@/types/media-component.js';
@@ -68,10 +85,21 @@ import { isPreviewable, getType } from '@/utility/lightbox.js';
 import { genId } from '@/utility/id.js';
 import { useIsTwitterUi } from '@/ui/twitter/context/index.js';
 
-const props = defineProps<{
-	mediaList: Misskey.entities.DriveFile[];
+/** 既有文件输入与可选的纯展示参数；默认仍使用原网格。 */
+type MediaListProps = {
+	mediaList: readonly Misskey.entities.DriveFile[];
 	user?: Misskey.entities.User | null; // DriveFileのuserはnullになることがある。その場合に使用する所有者情報
 	raw?: boolean;
+	layout?: 'grid' | 'strip';
+	mediaStyles?: Readonly<Record<string, CSSProperties>>;
+	galleryLabel?: string;
+};
+
+/** 展示参数不改变附件实体或图库操作路径。 */
+const props: MediaListProps = defineProps<MediaListProps>();
+/** 向宿主报告已允许加载资源的自然尺寸，基础组件不解释业务策略。 */
+const emit: (event: 'intrinsicSize', id: string, width: number, height: number) => void = defineEmits<{
+	(event: 'intrinsicSize', id: string, width: number, height: number): void;
 }>();
 
 const isTwitterUi = useIsTwitterUi();
@@ -97,17 +125,20 @@ const mediaComponents = new Map<string, MediaComponentExposes | null>();
 const count = computed(() => medias.value.previewable.length);
 const markerId = genId();
 
-async function calcAspectRatio() {
+/** 原网格继续使用既有比例偏好；横向展示由宿主逐项提供比例。 */
+async function calcAspectRatio(): Promise<void> {
 	if (!gallery.value) return;
+	if (props.layout === 'strip') return;
 
-	const img = props.mediaList[0];
+	const img: Misskey.entities.DriveFile = props.mediaList[0];
 
 	if (props.mediaList.length !== 1 || !(img.properties.width && img.properties.height)) {
 		gallery.value.style.aspectRatio = '';
 		return;
 	}
 
-	const ratioMax = (ratio: number) => {
+	/** 原单附件网格的最低比例，仅服务原有用户偏好。 */
+	const ratioMax: (ratio: number) => string = (ratio: number): string => {
 		if (img.properties.width == null || img.properties.height == null) return '';
 		return `${Math.max(ratio, img.properties.width / img.properties.height).toString()} / 1`;
 	};
@@ -126,6 +157,19 @@ async function calcAspectRatio() {
 			gallery.value.style.aspectRatio = '';
 			break;
 	}
+}
+
+/** 为当前文件绑定尺寸事件归属，既有点击与揭示仍使用原组件处理。 */
+function intrinsicSizeListeners(id: string): { intrinsicSize: (width: number, height: number) => void } {
+	return {
+		/** 自然尺寸只投递给展示宿主，不修改图库的文件集合。 */
+		intrinsicSize: (width: number, height: number): void => emit('intrinsicSize', id, width, height),
+	};
+}
+
+/** 显式提供滚动节点，宿主无需读取基础组件私有类名或状态。 */
+function getGalleryElement(): HTMLElement | null {
+	return gallery.value;
 }
 
 onMounted(() => {
@@ -188,6 +232,7 @@ async function openGallery(id?: string) {
 
 defineExpose({
 	openGallery,
+	getGalleryElement,
 });
 </script>
 
@@ -292,6 +337,36 @@ defineExpose({
 	overflow: hidden; // clipにするとバグる
 	border-radius: 8px;
 	cursor: zoom-in;
+}
+
+/* 横向展示不挂载 n1..nMany 或宽区网格类，避免原比例和用户网格偏好反向覆盖宿主策略。 */
+.strip {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: flex-start;
+	gap: var(--media-strip-gap, 8px);
+	width: 100%;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scroll-snap-type: x proximity;
+	scroll-behavior: var(--media-strip-scroll-behavior, auto);
+	scrollbar-width: none;
+
+	&::-webkit-scrollbar { display: none; }
+	&:focus-visible {
+		outline: 2px solid var(--media-strip-focus, var(--MI_THEME-accent));
+		outline-offset: -2px;
+	}
+
+	> .media {
+		flex: none;
+		/* 宽度取正文宽度与比例化高度上限中的较小值，高度由同一比例单向派生。 */
+		width: min(100cqw, calc(var(--media-strip-max-height, min(360px, 50svh)) * var(--media-aspect-ratio, 1)));
+		height: auto;
+		aspect-ratio: var(--media-aspect-ratio, 1);
+		border-radius: var(--media-strip-radius, 8px);
+		scroll-snap-align: start;
+	}
 }
 
 @container (min-width: 500px) {
