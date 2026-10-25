@@ -67,8 +67,72 @@ const twitterUiChineseKeys = {
 	scheduleTimeIsInThePast: true,
 } as const satisfies Readonly<Partial<Record<keyof Locale['_twitterUi'], true>>>;
 
-/** fork 明确允许补充的业务区域，搜索与 Twitter 提示只投影白名单内的权威叶子键。 */
-type ForkChineseNamespaces = Pick<Locale, '_avatarDecorationCalibration' | '_channel' | '_twitterMessages'> & {
+/** 混合上游上传区域只补此次迁移的视频压缩提示，不开放其他字段。 */
+const uploaderChineseKeys = {
+	/** 压缩无法安全完成时说明继续使用原视频。 */
+	videoCompressionFallback: true,
+} as const satisfies Readonly<Partial<Record<keyof Locale['_uploader'], true>>>;
+
+/** 混合上游二维码区域只补当前缺少正式译文的展示与扫描提示。 */
+const qrChineseKeys = {
+	/** 个人资料二维码的展示说明。 */
+	showDescription: true,
+	/** 摄像头与图片两种扫描入口的说明。 */
+	scanDescription: true,
+	/** 摄像头启动过程中的权限引导。 */
+	cameraStarting: true,
+	/** 摄像头暂停后的继续操作提示。 */
+	cameraStopped: true,
+	/** 非安全访问地址下的摄像头限制说明。 */
+	cameraInsecure: true,
+	/** 浏览器缺少摄像头能力时的替代入口说明。 */
+	cameraUnavailable: true,
+	/** 摄像头权限未获批准时的恢复提示。 */
+	cameraPermissionDenied: true,
+	/** 未检测到摄像头时的恢复提示。 */
+	cameraNotFound: true,
+	/** 摄像头无法读取时的占用检查提示。 */
+	cameraNotReadable: true,
+	/** 设备约束无法满足时的重新选择提示。 */
+	cameraConstraints: true,
+	/** 未分类的摄像头启动失败提示。 */
+	cameraUnknown: true,
+	/** 无设备名称时的摄像头编号标签。 */
+	cameraNumber: true,
+	/** 闪光灯切换失败但仍可扫描的反馈。 */
+	flashFailed: true,
+	/** 图片二维码识别失败时的恢复提示。 */
+	scanFailed: true,
+	/** 摄像头不可用状态的标题。 */
+	cameraUnavailableTitle: true,
+	/** 摄像头暂停状态的标题。 */
+	cameraPausedTitle: true,
+	/** 摄像头启动状态的标题。 */
+	cameraStartingTitle: true,
+	/** 仅一个摄像头可选时的设备说明。 */
+	cameraSingle: true,
+	/** 摄像头列表读取失败时的恢复提示。 */
+	cameraListUnavailable: true,
+	/** 设备检测进行中的提示。 */
+	cameraDetecting: true,
+	/** 重新检测设备的操作名称。 */
+	refreshCameras: true,
+	/** 重试摄像头的操作名称。 */
+	retryCamera: true,
+	/** 图片识别进行中的提示。 */
+	imageProcessing: true,
+	/** 二维码内容查询进行中的提示。 */
+	resultProcessing: true,
+	/** 二维码结果中没有用户的空态。 */
+	noUsers: true,
+	/** 二维码结果中没有帖子的空态。 */
+	noNotes: true,
+} as const satisfies Readonly<Partial<Record<keyof Locale['_qr'], true>>>;
+
+/** fork 明确允许补充的业务区域，所有字段均从现有日文权威类型派生。 */
+type ForkChineseNamespaces = Pick<Locale, '_avatarDecorationCalibration' | '_channel' | '_twitterMessages' | '_avatarDecorationSettings' | '_avatarDecorationManager'> & {
+	_uploader: Pick<Locale['_uploader'], keyof typeof uploaderChineseKeys>;
+	_qr: Pick<Locale['_qr'], keyof typeof qrChineseKeys>;
 	_twitterSearch: Pick<Locale['_twitterSearch'], keyof typeof twitterSearchChineseKeys>;
 	_twitterUi: Pick<Locale['_twitterUi'], keyof typeof twitterUiChineseKeys>;
 };
@@ -80,6 +144,14 @@ type ForkChineseSupplement = Partial<Pick<Locale, keyof typeof forkChineseRootKe
 
 /** 补充范围保持显式白名单，避免任意业务区域意外绕过原生回退。 */
 const forkChineseNamespaces = {
+	/** 视频压缩失败后使用原文件的既有上传提示。 */
+	_uploader: true,
+	/** 二维码展示、设备访问与扫描状态的既有中文文案。 */
+	_qr: true,
+	/** 头像挂件试戴、保存及权限反馈的既有中文文案。 */
+	_avatarDecorationSettings: true,
+	/** 头像挂件管理、素材上传及目录反馈的既有中文文案。 */
+	_avatarDecorationManager: true,
 	/** 头像挂件素材校准的本地业务文案。 */
 	_avatarDecorationCalibration: true,
 	/** 频道搜索、资料库空态与加载结束文案。 */
@@ -140,6 +212,8 @@ function loadForkChineseSupplement(rawLocales: Locales, moduleUrl: string): Fork
 		const nativeChinese: unknown = rawLocales['zh-CN'][namespace];
 		const sectionSupplement: Record<string, string> = {};
 		for (const [key, value] of Object.entries(section)) {
+			if (namespace === '_uploader' && !Object.hasOwn(uploaderChineseKeys, key)) throw new Error(`Fork zh-CN supplement has unsupported key: ${namespace}.${key}`);
+			if (namespace === '_qr' && !Object.hasOwn(qrChineseKeys, key)) throw new Error(`Fork zh-CN supplement has unsupported key: ${namespace}.${key}`);
 			if (namespace === '_twitterSearch' && !Object.hasOwn(twitterSearchChineseKeys, key)) throw new Error(`Fork zh-CN supplement has unsupported key: ${namespace}.${key}`);
 			if (namespace === '_twitterUi' && !Object.hasOwn(twitterUiChineseKeys, key)) throw new Error(`Fork zh-CN supplement has unsupported key: ${namespace}.${key}`);
 			if (!Object.hasOwn(source, key)) throw new Error(`Fork zh-CN supplement has unknown key: ${namespace}.${key}`);
