@@ -66,7 +66,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					class="_selectable"
 				/>
 				<div v-if="appearNote.files?.length" :class="$style.media" data-twitter-note-interactive>
-					<MkMediaList :mediaList="appearNote.files" :user="appearNote.user"/>
+					<TwitterNoteMedia :mediaList="appearNote.files" :user="appearNote.user"/>
 				</div>
 				<TwitterNoteQuote v-if="appearNote.renoteId" :note="appearNote.renote ?? null"/>
 			</div>
@@ -164,7 +164,7 @@ import { userPage } from '@/filters/user.js';
 import { DI } from '@/di.js';
 import type { Keymap } from '@/utility/hotkey.js';
 import MkCwButton from '@/components/MkCwButton.vue';
-import MkMediaList from '@/components/MkMediaList.vue';
+import TwitterNoteMedia from './components/TwitterNoteMedia.vue';
 import MkPagination from '@/components/MkPagination.vue';
 import TwitterNoteActions from './NoteActions.vue';
 import TwitterNoteHeader from './NoteHeader.vue';
