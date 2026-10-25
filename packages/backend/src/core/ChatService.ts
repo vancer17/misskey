@@ -3,9 +3,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+/** 聊天业务服务：统一授权、消息和群聊生命周期、会话索引与账号级未读同步。 */
+
+import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
 import * as Redis from 'ioredis';
-import { Brackets } from 'typeorm';
+import { Brackets, In } from 'typeorm';
+import type { SelectQueryBuilder, WhereExpressionBuilder } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
 import { QueueService } from '@/core/QueueService.js';
@@ -16,7 +19,7 @@ import { ChatEntityService } from '@/core/entities/ChatEntityService.js';
 import { ApRendererService } from '@/core/activitypub/ApRendererService.js';
 import { PushNotificationService } from '@/core/PushNotificationService.js';
 import { bindThis } from '@/decorators.js';
-import type { ChatApprovalsRepository, ChatMessagesRepository, ChatRoomInvitationsRepository, ChatRoomMembershipsRepository, ChatRoomsRepository, MiChatMessage, MiChatRoom, MiChatRoomMembership, MiDriveFile, MiUser, MutingsRepository, UsersRepository } from '@/models/_.js';
+import type { ChatApprovalsRepository, ChatMessagesRepository, ChatRoomInvitationsRepository, ChatRoomMembershipsRepository, ChatRoomsRepository, MiChatMessage, MiChatRoom, MiChatRoomMembership, MiDriveFile, MiEmoji, MiUser, MutingsRepository, UsersRepository } from '@/models/_.js';
 import { UserBlockingService } from '@/core/UserBlockingService.js';
 import { QueryService } from '@/core/QueryService.js';
 import { RoleService } from '@/core/RoleService.js';
@@ -28,6 +31,9 @@ import { CustomEmojiService } from '@/core/CustomEmojiService.js';
 import { emojiRegex } from '@/misc/emoji-regex.js';
 import { NotificationService } from '@/core/NotificationService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
+
+import { ChatCursorError, ChatPermissionError } from '@/core/chat/domain/index.js';
+import type { ChatContact, ChatContactReason, ChatConversation, ChatConversationPage, ChatConversationPosition, ChatConversationQuery } from '@/core/chat/domain/index.js';
 
 const MAX_ROOM_MEMBERS = 50;
 const MAX_REACTIONS_PER_MESSAGE = 100;
@@ -48,7 +54,25 @@ function normalizeEmojiString(x: string) {
 }
 
 @Injectable()
-export class ChatService {
+export class ChatService implements OnApplicationShutdown {
+	/** 跟踪待发通知任务，避免服务关闭后继续访问已释放的 Redis。 */
+	private readonly notificationTimers: Set<ReturnType<typeof setTimeout>> = new Set<ReturnType<typeof setTimeout>>();
+
+	/** 关闭应用时清理尚未执行的延迟通知。 */
+	public onApplicationShutdown(): void {
+		for (const timer of this.notificationTimers) clearTimeout(timer);
+		this.notificationTimers.clear();
+	}
+
+	/** 将现有延迟推送登记到应用生命周期，不新增声音或推送消费者。 */
+	private scheduleNotification(task: () => Promise<void>): void {
+		const timer: ReturnType<typeof setTimeout> = setTimeout(/** 执行已登记的服务端通知。 */ async (): Promise<void> => {
+			this.notificationTimers.delete(timer);
+			await task();
+		}, 3000);
+		this.notificationTimers.add(timer);
+	}
+
 	constructor(
 		@Inject(DI.config)
 		private config: Config,
@@ -119,71 +143,72 @@ export class ChatService {
 		}
 	}
 
-	/** getChatAvailabilityの糖衣。主にAPI呼び出し時に走らせて、権限的に問題ない場合はそのまま続行する */
+	/** 将账号策略校验用于既有 API 操作，不把权限限制当作内部故障。 */
 	@bindThis
-	public async checkChatAvailability(userId: MiUser['id'], permission: 'read' | 'write') {
-		const policy = await this.getChatAvailability(userId);
+	public async checkChatAvailability(userId: MiUser['id'], permission: 'read' | 'write'): Promise<void> {
+		const policy: { read: boolean; write: boolean } = await this.getChatAvailability(userId);
 		if (policy[permission] === false) {
-			throw new Error('ROLE_PERMISSION_DENIED');
+			throw new ChatPermissionError(policy.read ? 'CHAT_READ_ONLY' : 'CHAT_UNAVAILABLE');
 		}
 	}
 
+	/** 从账号策略、存量授权、关注和拉黑事实派生唯一的双方联系能力。 */
+	@bindThis
+	public async getContactState(fromUserId: MiUser['id'], toUser: MiUser): Promise<ChatContact> {
+		const availability: { read: boolean; write: boolean } = await this.getChatAvailability(fromUserId);
+		let reason: ChatContactReason | null = null;
+		if (fromUserId === toUser.id) reason = 'SELF';
+		else if (toUser.host != null) reason = 'REMOTE_USER';
+		else if (!availability.read) reason = 'CHAT_UNAVAILABLE';
+		else if (!availability.write) reason = 'CHAT_READ_ONLY';
+		else if (!(await this.getChatAvailability(toUser.id)).write) reason = 'RECIPIENT_UNAVAILABLE';
+		else if (await this.userBlockingService.checkBlocked(toUser.id, fromUserId) || await this.userBlockingService.checkBlocked(fromUserId, toUser.id)) reason = 'BLOCKED';
+		else if (!await this.chatApprovalsRepository.existsBy({ userId: toUser.id, otherId: fromUserId })) {
+			let allowed: boolean = true;
+			switch (toUser.chatScope) {
+				case 'none': allowed = false; break;
+				case 'followers': allowed = await this.userFollowingService.isFollowing(fromUserId, toUser.id); break;
+				case 'following': allowed = await this.userFollowingService.isFollowing(toUser.id, fromUserId); break;
+				case 'mutual': allowed = await this.userFollowingService.isMutual(fromUserId, toUser.id); break;
+			}
+			if (!allowed) reason = 'RECIPIENT_SCOPE';
+		}
+		return { canRead: availability.read && fromUserId !== toUser.id && toUser.host == null, canSend: reason == null, reason };
+	}
+
+	/** 私聊变更立即通知双方账号设备；原有声音和推送路径保持独立。 */
+	@bindThis
+	private publishUserConversationUpdated(fromUserId: string, toUserId: string): void {
+		this.globalEventService.publishMainStream(fromUserId, 'chatUpdated', { type: 'user', id: toUserId });
+		this.globalEventService.publishMainStream(toUserId, 'chatUpdated', { type: 'user', id: fromUserId });
+	}
+
+	/** 群聊变更通知当前全部成员，可额外通知刚离开的账号。 */
+	@bindThis
+	private async publishRoomConversationUpdated(roomId: string, additionalUserId?: string): Promise<void> {
+		const room: MiChatRoom | null = await this.chatRoomsRepository.findOneBy({ id: roomId });
+		const memberships: MiChatRoomMembership[] = await this.chatRoomMembershipsRepository.findBy({ roomId });
+		const userIds: Set<string> = new Set<string>();
+		if (room) userIds.add(room.ownerId);
+		if (additionalUserId) userIds.add(additionalUserId);
+		for (const membership of memberships) userIds.add(membership.userId);
+		for (const userId of userIds) this.globalEventService.publishMainStream(userId, 'chatUpdated', { type: 'room', id: roomId });
+	}
+
+	/** 校验双方权限并创建私信，随后维护授权与未读标记。 */
 	@bindThis
 	public async createMessageToUser(fromUser: { id: MiUser['id']; host: MiUser['host']; }, toUser: MiUser, params: {
 		text?: string | null;
 		file?: MiDriveFile | null;
 		uri?: string | null;
 	}): Promise<Packed<'ChatMessageLiteFor1on1'>> {
-		if (fromUser.id === toUser.id) {
-			throw new Error('yourself');
-		}
+		const contact: ChatContact = await this.getContactState(fromUser.id, toUser);
+		if (!contact.canSend) throw new ChatPermissionError(contact.reason!);
+		if (!params.text?.trim() && !params.file) throw new ChatPermissionError('CONTENT_REQUIRED');
 
-		const approvals = await this.chatApprovalsRepository.createQueryBuilder('approval')
-			.where(new Brackets(qb => { // 自分が相手を許可しているか
-				qb.where('approval.userId = :fromUserId', { fromUserId: fromUser.id })
-					.andWhere('approval.otherId = :toUserId', { toUserId: toUser.id });
-			}))
-			.orWhere(new Brackets(qb => { // 相手が自分を許可しているか
-				qb.where('approval.userId = :toUserId', { toUserId: toUser.id })
-					.andWhere('approval.otherId = :fromUserId', { fromUserId: fromUser.id });
-			}))
-			.take(2)
-			.getMany();
+		const iApprovedOther: boolean = await this.chatApprovalsRepository.existsBy({ userId: fromUser.id, otherId: toUser.id });
 
-		const otherApprovedMe = approvals.some(approval => approval.userId === toUser.id);
-		const iApprovedOther = approvals.some(approval => approval.userId === fromUser.id);
-
-		if (!otherApprovedMe) {
-			if (toUser.chatScope === 'none') {
-				throw new Error('recipient is cannot chat (none)');
-			} else if (toUser.chatScope === 'followers') {
-				const isFollower = await this.userFollowingService.isFollowing(fromUser.id, toUser.id);
-				if (!isFollower) {
-					throw new Error('recipient is cannot chat (followers)');
-				}
-			} else if (toUser.chatScope === 'following') {
-				const isFollowing = await this.userFollowingService.isFollowing(toUser.id, fromUser.id);
-				if (!isFollowing) {
-					throw new Error('recipient is cannot chat (following)');
-				}
-			} else if (toUser.chatScope === 'mutual') {
-				const isMutual = await this.userFollowingService.isMutual(fromUser.id, toUser.id);
-				if (!isMutual) {
-					throw new Error('recipient is cannot chat (mutual)');
-				}
-			}
-		}
-
-		if (!(await this.getChatAvailability(toUser.id)).write) {
-			throw new Error('recipient is cannot chat (policy)');
-		}
-
-		const blocked = await this.userBlockingService.checkBlocked(toUser.id, fromUser.id);
-		if (blocked) {
-			throw new Error('blocked');
-		}
-
-		const message = {
+		const message: Pick<MiChatMessage, 'id' | 'fromUserId' | 'toUserId' | 'text' | 'fileId' | 'reads' | 'uri'> = {
 			id: this.idService.gen(),
 			fromUserId: fromUser.id,
 			toUserId: toUser.id,
@@ -193,24 +218,21 @@ export class ChatService {
 			uri: params.uri ?? null,
 		} satisfies Partial<MiChatMessage>;
 
-		const inserted = await this.chatMessagesRepository.insertOne(message);
+		const inserted: MiChatMessage = await this.chatMessagesRepository.insertOne(message);
 
 		// 相手を許可しておく
 		if (!iApprovedOther) {
-			this.chatApprovalsRepository.insertOne({
+			await this.chatApprovalsRepository.createQueryBuilder().insert().values({
 				id: this.idService.gen(),
 				userId: fromUser.id,
 				otherId: toUser.id,
-			});
+			}).orIgnore().execute();
 		}
 
-		const packedMessage = await this.chatEntityService.packMessageLiteFor1on1(inserted);
+		const packedMessage: Packed<'ChatMessageLiteFor1on1'> = await this.chatEntityService.packMessageLiteFor1on1(inserted);
 
 		if (this.userEntityService.isLocalUser(toUser)) {
-			const redisPipeline = this.redisClient.pipeline();
-			redisPipeline.set(`newUserChatMessageExists:${toUser.id}:${fromUser.id}`, message.id);
-			redisPipeline.sadd(`newChatMessagesExists:${toUser.id}`, `user:${fromUser.id}`);
-			redisPipeline.exec();
+			await this.markConversationUnread(toUser.id, 'user', fromUser.id, message.id);
 		}
 
 		if (this.userEntityService.isLocalUser(fromUser)) {
@@ -225,27 +247,31 @@ export class ChatService {
 
 		// 3秒経っても既読にならなかったらイベント発行
 		if (this.userEntityService.isLocalUser(toUser)) {
-			setTimeout(async () => {
-				const marker = await this.redisClient.get(`newUserChatMessageExists:${toUser.id}:${fromUser.id}`);
+			this.scheduleNotification(/** 检查消息仍未读时沿用既有通知路径。 */ async (): Promise<void> => {
+				const marker: string | null = await this.redisClient.get(`newUserChatMessageExists:${toUser.id}:${fromUser.id}`);
 
 				if (marker == null) return; // 既読
 
-				const packedMessageForTo = await this.chatEntityService.packMessageDetailed(inserted, toUser);
+				const packedMessageForTo: Packed<'ChatMessage'> = await this.chatEntityService.packMessageDetailed(inserted, toUser);
 				this.globalEventService.publishMainStream(toUser.id, 'newChatMessage', packedMessageForTo);
 				this.pushNotificationService.pushNotification(toUser.id, 'newChatMessage', packedMessageForTo);
-			}, 3000);
+			});
 		}
 
+		this.publishUserConversationUpdated(fromUser.id, toUser.id);
 		return packedMessage;
 	}
 
+	/** 校验群成员资格后创建消息，并同步所有成员的会话索引。 */
 	@bindThis
 	public async createMessageToRoom(fromUser: { id: MiUser['id']; host: MiUser['host']; }, toRoom: MiChatRoom, params: {
 		text?: string | null;
 		file?: MiDriveFile | null;
 		uri?: string | null;
 	}): Promise<Packed<'ChatMessageLiteForRoom'>> {
-		const memberships = (await this.chatRoomMembershipsRepository.findBy({ roomId: toRoom.id })).map(m => ({
+		if (!(await this.getChatAvailability(fromUser.id)).write) throw new ChatPermissionError('CHAT_READ_ONLY');
+		if (!params.text?.trim() && !params.file) throw new ChatPermissionError('CONTENT_REQUIRED');
+		const memberships: Array<Pick<MiChatRoomMembership, 'userId' | 'isMuted'>> = (await this.chatRoomMembershipsRepository.findBy({ roomId: toRoom.id })).map(/** 从成员记录派生通知接收目标。 */ (m: MiChatRoomMembership): Pick<MiChatRoomMembership, 'userId' | 'isMuted'> => ({
 			userId: m.userId,
 			isMuted: m.isMuted,
 		})).concat({ // ownerはmembershipレコードを作らないため
@@ -253,13 +279,13 @@ export class ChatService {
 			isMuted: false,
 		});
 
-		if (!memberships.some(member => member.userId === fromUser.id)) {
-			throw new Error('you are not a member of the room');
+		if (!memberships.some(/** 发送者必须属于当前群聊。 */ (member: Pick<MiChatRoomMembership, 'userId' | 'isMuted'>): boolean => member.userId === fromUser.id)) {
+			throw new ChatPermissionError('NOT_ROOM_MEMBER');
 		}
 
-		const membershipsOtherThanMe = memberships.filter(member => member.userId !== fromUser.id);
+		const membershipsOtherThanMe: Array<Pick<MiChatRoomMembership, 'userId' | 'isMuted'>> = memberships.filter(/** 排除发送者以免把本人消息标记为未读。 */ (member: Pick<MiChatRoomMembership, 'userId' | 'isMuted'>): boolean => member.userId !== fromUser.id);
 
-		const message = {
+		const message: Pick<MiChatMessage, 'id' | 'fromUserId' | 'toRoomId' | 'text' | 'fileId' | 'reads' | 'uri'> = {
 			id: this.idService.gen(),
 			fromUserId: fromUser.id,
 			toRoomId: toRoom.id,
@@ -269,76 +295,124 @@ export class ChatService {
 			uri: params.uri ?? null,
 		} satisfies Partial<MiChatMessage>;
 
-		const inserted = await this.chatMessagesRepository.insertOne(message);
+		const inserted: MiChatMessage = await this.chatMessagesRepository.insertOne(message);
 
-		const packedMessage = await this.chatEntityService.packMessageLiteForRoom(inserted);
+		const packedMessage: Packed<'ChatMessageLiteForRoom'> = await this.chatEntityService.packMessageLiteForRoom(inserted);
 
 		this.globalEventService.publishChatRoomStream(toRoom.id, 'message', packedMessage);
 
-		const redisPipeline = this.redisClient.pipeline();
 		for (const membership of membershipsOtherThanMe) {
-			if (membership.isMuted) continue;
-
-			redisPipeline.set(`newRoomChatMessageExists:${membership.userId}:${toRoom.id}`, message.id);
-			redisPipeline.sadd(`newChatMessagesExists:${membership.userId}`, `room:${toRoom.id}`);
+			if (!membership.isMuted) await this.markConversationUnread(membership.userId, 'room', toRoom.id, message.id);
 		}
-		redisPipeline.exec();
 
 		// 3秒経っても既読にならなかったらイベント発行
-		setTimeout(async () => {
-			const redisPipeline = this.redisClient.pipeline();
+		this.scheduleNotification(/** 检查消息仍未读时沿用既有通知路径。 */ async (): Promise<void> => {
+			const redisPipeline: Redis.ChainableCommander = this.redisClient.pipeline();
 			for (const membership of membershipsOtherThanMe) {
 				redisPipeline.get(`newRoomChatMessageExists:${membership.userId}:${toRoom.id}`);
 			}
-			const markers = await redisPipeline.exec();
+			const markers: Array<[Error | null, unknown]> | null = await redisPipeline.exec();
 			if (markers == null) throw new Error('redis error');
 
-			if (markers.every(marker => marker[1] == null)) return;
+			if (markers.every(/** 无未读标记时不发送延迟提醒。 */ (marker: [Error | null, unknown]): boolean => marker[1] == null)) return;
 
-			const packedMessageForTo = await this.chatEntityService.packMessageDetailed(inserted);
+			const packedMessageForTo: Packed<'ChatMessage'> = await this.chatEntityService.packMessageDetailed(inserted);
 
-			for (let i = 0; i < membershipsOtherThanMe.length; i++) {
-				const marker = markers[i][1];
+			for (let i: number = 0; i < membershipsOtherThanMe.length; i++) {
+				const marker: unknown = markers[i][1];
 				if (marker == null) continue;
 
 				this.globalEventService.publishMainStream(membershipsOtherThanMe[i].userId, 'newChatMessage', packedMessageForTo);
 				this.pushNotificationService.pushNotification(membershipsOtherThanMe[i].userId, 'newChatMessage', packedMessageForTo);
 			}
-		}, 3000);
+		});
 
+		await this.publishRoomConversationUpdated(toRoom.id);
 		return packedMessage;
 	}
 
+	/** 原子写入最大消息位置，避免并发发送完成顺序让未读标记倒退。 */
 	@bindThis
-	public async readUserChatMessage(
-		readerId: MiUser['id'],
-		senderId: MiUser['id'],
-	): Promise<void> {
-		const redisPipeline = this.redisClient.pipeline();
-		redisPipeline.del(`newUserChatMessageExists:${readerId}:${senderId}`);
-		redisPipeline.srem(`newChatMessagesExists:${readerId}`, `user:${senderId}`);
-		await redisPipeline.exec();
+	private async markConversationUnread(readerId: string, type: 'user' | 'room', targetId: string, messageId: string): Promise<void> {
+		const markerKey: string = type === 'user' ? `newUserChatMessageExists:${readerId}:${targetId}` : `newRoomChatMessageExists:${readerId}:${targetId}`;
+		await this.redisClient.eval(`
+			local read = redis.call('GET', KEYS[3])
+			if read and read >= ARGV[2] then return 0 end
+			local marker = redis.call('GET', KEYS[1])
+			if not marker or marker < ARGV[2] then redis.call('SET', KEYS[1], ARGV[2]) end
+			return redis.call('SADD', KEYS[2], ARGV[1])
+		`, 3, markerKey, `newChatMessagesExists:${readerId}`, `chatReadWatermark:${readerId}:${type}:${targetId}`, `${type}:${targetId}`, messageId);
 	}
 
+	/** 删除最新未读消息后回退至仍未读的上一条消息，保留其他未读事实。 */
 	@bindThis
-	public async readRoomChatMessage(
-		readerId: MiUser['id'],
-		roomId: MiChatRoom['id'],
-	): Promise<void> {
-		const redisPipeline = this.redisClient.pipeline();
-		redisPipeline.del(`newRoomChatMessageExists:${readerId}:${roomId}`);
-		redisPipeline.srem(`newChatMessagesExists:${readerId}`, `room:${roomId}`);
-		await redisPipeline.exec();
+	private async clearDeletedUnreadMarker(readerId: string, type: 'user' | 'room', targetId: string, messageId: string): Promise<void> {
+		const markerKey: string = type === 'user' ? `newUserChatMessageExists:${readerId}:${targetId}` : `newRoomChatMessageExists:${readerId}:${targetId}`;
+		const query: SelectQueryBuilder<MiChatMessage> = this.chatMessagesRepository.createQueryBuilder('message').orderBy('message.id', 'DESC');
+		if (type === 'user') query.where('message.fromUserId = :targetId AND message.toUserId = :readerId', { targetId, readerId });
+		else query.where('message.toRoomId = :targetId AND message.fromUserId != :readerId', { targetId, readerId });
+		const previous: MiChatMessage | null = await query.getOne();
+		await this.redisClient.eval(`
+			if redis.call('GET', KEYS[1]) == ARGV[2] then
+				local read = redis.call('GET', KEYS[3])
+				if ARGV[3] ~= '' and (not read or ARGV[3] > read) then
+					redis.call('SET', KEYS[1], ARGV[3])
+				else
+					redis.call('DEL', KEYS[1])
+					redis.call('SREM', KEYS[2], ARGV[1])
+				end
+			end
+		`, 3, markerKey, `newChatMessagesExists:${readerId}`, `chatReadWatermark:${readerId}:${type}:${targetId}`, `${type}:${targetId}`, messageId, previous?.id ?? '');
 	}
 
+	/** 原子移除已观察范围内的未读标记，保留并发到达的新消息。 */
 	@bindThis
-	public async readAllChatMessages(
-		readerId: MiUser['id'],
-	): Promise<void> {
-		const redisPipeline = this.redisClient.pipeline();
-		// TODO: newUserChatMessageExists とか newRoomChatMessageExists も消したい(けどキーの列挙が必要になって面倒)
-		redisPipeline.del(`newChatMessagesExists:${readerId}`);
-		await redisPipeline.exec();
+	private async readConversation(readerId: string, type: 'user' | 'room', targetId: string, observedId?: string): Promise<void> {
+		const markerKey: string = type === 'user' ? `newUserChatMessageExists:${readerId}:${targetId}` : `newRoomChatMessageExists:${readerId}:${targetId}`;
+		const changed: unknown = await this.redisClient.eval(`
+			local marker = redis.call('GET', KEYS[1])
+			local observed = ARGV[2]
+			if observed == '' then observed = marker or '' end
+			local read = redis.call('GET', KEYS[3])
+			if observed ~= '' and (not read or observed > read) then redis.call('SET', KEYS[3], observed) end
+			if not marker or ARGV[2] == '' or marker <= ARGV[2] then
+				return redis.call('DEL', KEYS[1]) + redis.call('SREM', KEYS[2], ARGV[1])
+			end
+			return 0
+		`, 3, markerKey, `newChatMessagesExists:${readerId}`, `chatReadWatermark:${readerId}:${type}:${targetId}`, `${type}:${targetId}`, observedId ?? '');
+		if (typeof changed === 'number' && changed > 0) this.globalEventService.publishMainStream(readerId, 'chatUpdated', { type, id: targetId });
+	}
+
+	/** 标读私聊；旧调用省略观察位置以保留原生界面的行为。 */
+	@bindThis
+	public async readUserChatMessage(readerId: MiUser['id'], senderId: MiUser['id'], observedId?: string): Promise<void> {
+		await this.readConversation(readerId, 'user', senderId, observedId);
+	}
+
+	/** 标读群聊；新界面传入实际可见消息的位置。 */
+	@bindThis
+	public async readRoomChatMessage(readerId: MiUser['id'], roomId: MiChatRoom['id'], observedId?: string): Promise<void> {
+		await this.readConversation(readerId, 'room', roomId, observedId);
+	}
+
+	/** 在同一 Redis 原子操作中清理全部会话集合和对应标记。 */
+	@bindThis
+	public async readAllChatMessages(readerId: MiUser['id']): Promise<void> {
+		await this.redisClient.eval(`
+			local conversations = redis.call('SMEMBERS', KEYS[1])
+			local prefix = ARGV[2]
+			for _, conversation in ipairs(conversations) do
+				local kind, target = string.match(conversation, '^([^:]+):(.+)$')
+				local markerKey = prefix .. (kind == 'user' and 'newUserChatMessageExists:' or 'newRoomChatMessageExists:') .. ARGV[1] .. ':' .. target
+				local marker = redis.call('GET', markerKey)
+				local watermarkKey = prefix .. 'chatReadWatermark:' .. ARGV[1] .. ':' .. conversation
+				local read = redis.call('GET', watermarkKey)
+				if marker and (not read or marker > read) then redis.call('SET', watermarkKey, marker) end
+				redis.call('DEL', markerKey)
+			end
+			redis.call('DEL', KEYS[1])
+		`, 1, `newChatMessagesExists:${readerId}`, readerId, this.redisClient.options.keyPrefix ?? '');
+		this.globalEventService.publishMainStream(readerId, 'chatUpdated', { type: 'all' });
 	}
 
 	@bindThis
@@ -365,12 +439,13 @@ export class ChatService {
 		}
 	}
 
+	/** 删除消息并使双方设备的会话摘要失效。 */
 	@bindThis
-	public async deleteMessage(message: MiChatMessage) {
+	public async deleteMessage(message: MiChatMessage): Promise<void> {
 		await this.chatMessagesRepository.delete(message.id);
 
 		if (message.toUserId) {
-			const [fromUser, toUser] = await Promise.all([
+			const [fromUser, toUser]: [MiUser, MiUser] = await Promise.all([
 				this.usersRepository.findOneByOrFail({ id: message.fromUserId }),
 				this.usersRepository.findOneByOrFail({ id: message.toUserId }),
 			]);
@@ -378,12 +453,19 @@ export class ChatService {
 			if (this.userEntityService.isLocalUser(fromUser)) this.globalEventService.publishChatUserStream(message.fromUserId, message.toUserId, 'deleted', message.id);
 			if (this.userEntityService.isLocalUser(toUser)) this.globalEventService.publishChatUserStream(message.toUserId, message.fromUserId, 'deleted', message.id);
 
+			await this.clearDeletedUnreadMarker(toUser.id, 'user', fromUser.id, message.id);
+			this.publishUserConversationUpdated(fromUser.id, toUser.id);
 			if (this.userEntityService.isLocalUser(fromUser) && this.userEntityService.isRemoteUser(toUser)) {
 				//const activity = this.apRendererService.addContext(this.apRendererService.renderDelete(this.apRendererService.renderTombstone(`${this.config.url}/notes/${message.id}`), fromUser));
 				//this.queueService.deliver(fromUser, activity, toUser.inbox);
 			}
 		} else if (message.toRoomId) {
 			this.globalEventService.publishChatRoomStream(message.toRoomId, 'deleted', message.id);
+			const room: MiChatRoom | null = await this.findRoomById(message.toRoomId);
+			const members: MiChatRoomMembership[] = await this.chatRoomMembershipsRepository.findBy({ roomId: message.toRoomId });
+			if (room) await this.clearDeletedUnreadMarker(room.ownerId, 'room', room.id, message.id);
+			for (const member of members) await this.clearDeletedUnreadMarker(member.userId, 'room', message.toRoomId, message.id);
+			await this.publishRoomConversationUpdated(message.toRoomId);
 		}
 	}
 
@@ -421,6 +503,80 @@ export class ChatService {
 		const messages = await query.take(limit).getMany();
 
 		return messages;
+	}
+
+	/** 先聚合各会话的最新消息，再按稳定位置分页，空群聊同样可达。 */
+	@bindThis
+	public async listConversations(meId: string, params: ChatConversationQuery): Promise<ChatConversationPage> {
+		let cursor: { sortId: string; key: string } | null = null;
+		if (params.cursor) {
+			try {
+				const decoded: unknown = JSON.parse(Buffer.from(params.cursor, 'base64url').toString('utf8'));
+				if (typeof decoded !== 'object' || decoded == null || !('sortId' in decoded) || !('key' in decoded) || typeof decoded.sortId !== 'string' || !/^[a-zA-Z0-9]+$/.test(decoded.sortId) || typeof decoded.key !== 'string' || !/^(user|room):[a-zA-Z0-9]+$/.test(decoded.key)) throw new ChatCursorError();
+				cursor = { sortId: decoded.sortId, key: decoded.key };
+			} catch {
+				throw new ChatCursorError();
+			}
+		}
+		const positions: ChatConversationPosition[] = await this.chatMessagesRepository.query(`
+			WITH private_latest AS (
+				SELECT CASE WHEN "fromUserId" = $1 THEN "toUserId" ELSE "fromUserId" END AS "targetId", MAX(id) AS "latestId"
+				FROM chat_message WHERE ("fromUserId" = $1 OR "toUserId" = $1) AND "toUserId" IS NOT NULL
+				GROUP BY CASE WHEN "fromUserId" = $1 THEN "toUserId" ELSE "fromUserId" END
+			), visible_rooms AS (
+				SELECT room.id, room.name FROM chat_room room WHERE room."ownerId" = $1
+				OR EXISTS (SELECT 1 FROM chat_room_membership membership WHERE membership."roomId" = room.id AND membership."userId" = $1)
+			), conversations AS (
+				SELECT 'user' AS type, p."targetId", p."latestId", p."latestId" AS "sortId", 'user:' || p."targetId" AS key,
+					LOWER(COALESCE(u.name, '') || ' ' || u.username) AS searchable
+				FROM private_latest p JOIN "user" u ON u.id = p."targetId" WHERE u.host IS NULL
+				UNION ALL
+				SELECT 'room' AS type, room.id AS "targetId", MAX(message.id) AS "latestId", COALESCE(MAX(message.id), room.id) AS "sortId", 'room:' || room.id AS key,
+					LOWER(room.name) AS searchable
+				FROM visible_rooms room LEFT JOIN chat_message message ON message."toRoomId" = room.id GROUP BY room.id, room.name
+			)
+			SELECT type, "targetId", "latestId", "sortId", key FROM conversations
+			WHERE ($2 = 'all' OR type = $2) AND ($3 = '' OR searchable LIKE $3)
+			AND ($4::text IS NULL OR "sortId" < $4 OR ("sortId" = $4 AND key < $5))
+			ORDER BY "sortId" DESC, key DESC LIMIT $6
+		`, [meId, params.kind, params.query?.trim() ? `%${sqlLikeEscape(params.query.trim().toLowerCase())}%` : '', cursor?.sortId ?? null, cursor?.key ?? null, params.limit + 1]);
+		const page: ChatConversationPosition[] = positions.slice(0, params.limit);
+		const userIds: string[] = [];
+		const roomIds: string[] = [];
+		const latestIds: string[] = [];
+		for (const position of page) {
+			if (position.type === 'user') userIds.push(position.targetId);
+			else roomIds.push(position.targetId);
+			if (position.latestId) latestIds.push(position.latestId);
+		}
+		const messages: MiChatMessage[] = latestIds.length === 0 ? [] : await this.chatMessagesRepository.find({
+			where: { id: In(latestIds) },
+			relations: { file: true, fromUser: true, toUser: true, toRoom: { owner: true } },
+		});
+		const packedMessages: Packed<'ChatMessage'>[] = await this.chatEntityService.packMessagesDetailed(messages, { id: meId });
+		const messageMap: Map<string, Packed<'ChatMessage'>> = new Map<string, Packed<'ChatMessage'>>();
+		for (const message of packedMessages) messageMap.set(message.id, message);
+		const users: Packed<'UserLite'>[] = await this.userEntityService.packMany(userIds, { id: meId });
+		const userMap: Map<string, Packed<'UserLite'>> = new Map<string, Packed<'UserLite'>>();
+		for (const user of users) userMap.set(user.id, user);
+		const rooms: Packed<'ChatRoom'>[] = await this.chatEntityService.packRooms(roomIds, { id: meId });
+		const roomMap: Map<string, Packed<'ChatRoom'>> = new Map<string, Packed<'ChatRoom'>>();
+		for (const room of rooms) roomMap.set(room.id, room);
+		const userReadState: Record<string, boolean> = userIds.length === 0 ? {} : await this.getUserReadStateMap(meId, userIds);
+		const roomReadState: Record<string, boolean> = roomIds.length === 0 ? {} : await this.getRoomReadStateMap(meId, roomIds);
+		const items: ChatConversation[] = [];
+		for (const position of page) {
+			const readState: Record<string, boolean> = position.type === 'user' ? userReadState : roomReadState;
+			items.push({
+				key: position.key,
+				target: { type: position.type, id: position.targetId },
+				latestMessage: position.latestId ? messageMap.get(position.latestId) ?? null : null,
+				unread: readState[position.targetId] === false,
+				...(position.type === 'user' ? { user: userMap.get(position.targetId) } : { room: roomMap.get(position.targetId) }),
+			});
+		}
+		const last: ChatConversationPosition | undefined = page.at(-1);
+		return { items, nextCursor: positions.length > params.limit && last ? Buffer.from(JSON.stringify({ sortId: last.sortId, key: last.key })).toString('base64url') : null };
 	}
 
 	@bindThis
@@ -555,20 +711,21 @@ export class ChatService {
 		return card > 0;
 	}
 
+	/** 建立由当前用户拥有的空群聊并立即同步会话列表。 */
 	@bindThis
 	public async createRoom(owner: MiUser, params: Partial<{
 		name: string;
 		description: string;
-	}>) {
-		const room = {
+	}>): Promise<MiChatRoom> {
+		const room: Pick<MiChatRoom, 'id' | 'ownerId'> & Partial<Pick<MiChatRoom, 'name' | 'description'>> = {
 			id: this.idService.gen(),
 			name: params.name,
 			description: params.description,
 			ownerId: owner.id,
 		} satisfies Partial<MiChatRoom>;
 
-		const created = await this.chatRoomsRepository.insertOne(room);
-
+		const created: MiChatRoom = await this.chatRoomsRepository.insertOne(room);
+		await this.publishRoomConversationUpdated(created.id);
 		return created;
 	}
 
@@ -607,16 +764,17 @@ export class ChatService {
 		return false;
 	}
 
+	/** 删除群聊并清理所有成员的未读事实及会话索引。 */
 	@bindThis
-	public async deleteRoom(room: MiChatRoom, deleter?: MiUser) {
-		const memberships = (await this.chatRoomMembershipsRepository.findBy({ roomId: room.id })).map(m => ({
+	public async deleteRoom(room: MiChatRoom, deleter?: MiUser): Promise<void> {
+		const memberships: Array<Pick<MiChatRoomMembership, 'userId'>> = (await this.chatRoomMembershipsRepository.findBy({ roomId: room.id })).map(/** 从成员记录派生通知接收目标。 */ (m: MiChatRoomMembership): Pick<MiChatRoomMembership, 'userId'> => ({
 			userId: m.userId,
 		})).concat({ // ownerはmembershipレコードを作らないため
 			userId: room.ownerId,
 		});
 
 		// 未読フラグ削除
-		const redisPipeline = this.redisClient.pipeline();
+		const redisPipeline: Redis.ChainableCommander = this.redisClient.pipeline();
 		for (const membership of memberships) {
 			redisPipeline.del(`newRoomChatMessageExists:${membership.userId}:${room.id}`);
 			redisPipeline.srem(`newChatMessagesExists:${membership.userId}`, `room:${room.id}`);
@@ -624,9 +782,10 @@ export class ChatService {
 		await redisPipeline.exec();
 
 		await this.chatRoomsRepository.delete(room.id);
+		for (const membership of memberships) this.globalEventService.publishMainStream(membership.userId, 'chatUpdated', { type: 'room', id: room.id });
 
 		if (deleter) {
-			const deleterIsModerator = await this.roleService.isModerator(deleter);
+			const deleterIsModerator: boolean = await this.roleService.isModerator(deleter);
 
 			if (deleterIsModerator) {
 				this.moderationLogService.log(deleter, 'deleteChatRoom', {
@@ -657,42 +816,47 @@ export class ChatService {
 		return membership != null;
 	}
 
+	/** 校验本地目标和成员容量后创建真实群邀请。 */
 	@bindThis
-	public async createRoomInvitation(inviterId: MiUser['id'], roomId: MiChatRoom['id'], inviteeId: MiUser['id']) {
+	public async createRoomInvitation(inviterId: MiUser['id'], roomId: MiChatRoom['id'], inviteeId: MiUser['id']): Promise<MiChatRoomInvitation> {
 		if (inviterId === inviteeId) {
-			throw new Error('yourself');
+			throw new ChatPermissionError('SELF');
 		}
 
-		const room = await this.chatRoomsRepository.findOneByOrFail({ id: roomId, ownerId: inviterId });
+		const room: MiChatRoom = await this.chatRoomsRepository.findOneByOrFail({ id: roomId, ownerId: inviterId });
 
 		if (await this.isRoomMember(room, inviteeId)) {
-			throw new Error('already member');
+			throw new ChatPermissionError('ALREADY_MEMBER');
 		}
 
-		const existingInvitation = await this.chatRoomInvitationsRepository.findOneBy({ roomId, userId: inviteeId });
+		const existingInvitation: MiChatRoomInvitation | null = await this.chatRoomInvitationsRepository.findOneBy({ roomId, userId: inviteeId });
 		if (existingInvitation) {
-			throw new Error('already invited');
+			throw new ChatPermissionError('ALREADY_INVITED');
 		}
 
-		const membershipsCount = await this.chatRoomMembershipsRepository.countBy({ roomId });
+		const membershipsCount: number = await this.chatRoomMembershipsRepository.countBy({ roomId });
 		if (membershipsCount >= MAX_ROOM_MEMBERS) {
-			throw new Error('room is full');
+			throw new ChatPermissionError('ROOM_FULL');
 		}
 
-		// TODO: cehck block
+		const invitee: MiUser | null = await this.usersRepository.findOneBy({ id: inviteeId });
+		if (!invitee) throw new ChatPermissionError('NO_SUCH_USER');
+		if (invitee.host != null) throw new ChatPermissionError('REMOTE_USER');
+		if (await this.userBlockingService.checkBlocked(inviteeId, inviterId) || await this.userBlockingService.checkBlocked(inviterId, inviteeId)) throw new ChatPermissionError('BLOCKED');
 
-		const invitation = {
+		const invitation: Pick<MiChatRoomInvitation, 'id' | 'roomId' | 'userId'> = {
 			id: this.idService.gen(),
 			roomId: room.id,
 			userId: inviteeId,
 		} satisfies Partial<MiChatRoomInvitation>;
 
-		const created = await this.chatRoomInvitationsRepository.insertOne(invitation);
+		const created: MiChatRoomInvitation = await this.chatRoomInvitationsRepository.insertOne(invitation);
 
 		this.notificationService.createNotification(inviteeId, 'chatRoomInvitationReceived', {
 			invitationId: invitation.id,
 		}, inviterId);
 
+		this.globalEventService.publishMainStream(inviteeId, 'chatUpdated', { type: 'room', id: roomId });
 		return created;
 	}
 
@@ -727,16 +891,18 @@ export class ChatService {
 		return invitations;
 	}
 
+	/** 消费已有邀请建立成员关系并同步群会话。 */
 	@bindThis
-	public async joinToRoom(userId: MiUser['id'], roomId: MiChatRoom['id']) {
-		const invitation = await this.chatRoomInvitationsRepository.findOneByOrFail({ roomId, userId });
+	public async joinToRoom(userId: MiUser['id'], roomId: MiChatRoom['id']): Promise<void> {
+		const invitation: MiChatRoomInvitation | null = await this.chatRoomInvitationsRepository.findOneBy({ roomId, userId });
+		if (!invitation) throw new ChatPermissionError('NO_INVITATION');
 
-		const membershipsCount = await this.chatRoomMembershipsRepository.countBy({ roomId });
+		const membershipsCount: number = await this.chatRoomMembershipsRepository.countBy({ roomId });
 		if (membershipsCount >= MAX_ROOM_MEMBERS) {
-			throw new Error('room is full');
+			throw new ChatPermissionError('ROOM_FULL');
 		}
 
-		const membership = {
+		const membership: Pick<MiChatRoomMembership, 'id' | 'roomId' | 'userId'> = {
 			id: this.idService.gen(),
 			roomId: roomId,
 			userId: userId,
@@ -745,45 +911,53 @@ export class ChatService {
 		// TODO: transaction
 		await this.chatRoomMembershipsRepository.insertOne(membership);
 		await this.chatRoomInvitationsRepository.delete(invitation.id);
+		await this.publishRoomConversationUpdated(roomId);
 	}
 
+	/** 保留已忽略的邀请事实并同步接收账号。 */
 	@bindThis
-	public async ignoreRoomInvitation(userId: MiUser['id'], roomId: MiChatRoom['id']) {
-		const invitation = await this.chatRoomInvitationsRepository.findOneByOrFail({ roomId, userId });
+	public async ignoreRoomInvitation(userId: MiUser['id'], roomId: MiChatRoom['id']): Promise<void> {
+		const invitation: MiChatRoomInvitation | null = await this.chatRoomInvitationsRepository.findOneBy({ roomId, userId });
+		if (!invitation) throw new ChatPermissionError('NO_INVITATION');
 		await this.chatRoomInvitationsRepository.update(invitation.id, { ignored: true });
+		this.globalEventService.publishMainStream(userId, 'chatUpdated', { type: 'room', id: roomId });
 	}
 
+	/** 退出群聊并清理本人未读和会话入口。 */
 	@bindThis
-	public async leaveRoom(userId: MiUser['id'], roomId: MiChatRoom['id']) {
-		const membership = await this.chatRoomMembershipsRepository.findOneByOrFail({ roomId, userId });
+	public async leaveRoom(userId: MiUser['id'], roomId: MiChatRoom['id']): Promise<void> {
+		const membership: MiChatRoomMembership | null = await this.chatRoomMembershipsRepository.findOneBy({ roomId, userId });
+		if (!membership) throw new ChatPermissionError('NOT_ROOM_MEMBER');
 		await this.chatRoomMembershipsRepository.delete(membership.id);
 
 		// 未読フラグを消す (「既読にする」というわけでもないのでreadメソッドは使わないでおく)
-		const redisPipeline = this.redisClient.pipeline();
+		const redisPipeline: Redis.ChainableCommander = this.redisClient.pipeline();
 		redisPipeline.del(`newRoomChatMessageExists:${userId}:${roomId}`);
 		redisPipeline.srem(`newChatMessagesExists:${userId}`, `room:${roomId}`);
 		await redisPipeline.exec();
+		await this.publishRoomConversationUpdated(roomId, userId);
 	}
 
+	/** 更新成员静音策略并清理已抑制的未读提示。 */
 	@bindThis
-	public async muteRoom(userId: MiUser['id'], roomId: MiChatRoom['id'], mute: boolean) {
-		const membership = await this.chatRoomMembershipsRepository.findOneByOrFail({ roomId, userId });
+	public async muteRoom(userId: MiUser['id'], roomId: MiChatRoom['id'], mute: boolean): Promise<void> {
+		const membership: MiChatRoomMembership | null = await this.chatRoomMembershipsRepository.findOneBy({ roomId, userId });
+		if (!membership) throw new ChatPermissionError('NOT_ROOM_MEMBER');
 		await this.chatRoomMembershipsRepository.update(membership.id, { isMuted: mute });
+		if (mute) await this.readRoomChatMessage(userId, roomId);
+		await this.publishRoomConversationUpdated(roomId);
 	}
 
+	/** 更新当前群聊描述并通知成员重新读取服务端事实。 */
 	@bindThis
 	public async updateRoom(room: MiChatRoom, params: {
 		name?: string;
 		description?: string;
 	}): Promise<MiChatRoom> {
-		return this.chatRoomsRepository.createQueryBuilder().update()
-			.set(params)
-			.where('id = :id', { id: room.id })
-			.returning('*')
-			.execute()
-			.then((response) => {
-				return response.raw[0];
-			});
+		await this.chatRoomsRepository.update(room.id, params);
+		const updated: MiChatRoom = await this.chatRoomsRepository.findOneByOrFail({ id: room.id });
+		await this.publishRoomConversationUpdated(room.id);
+		return updated;
 	}
 
 	@bindThis
@@ -796,22 +970,24 @@ export class ChatService {
 		return memberships;
 	}
 
+	/** 在权限范围内执行按消息位置分页的全文查询。 */
 	@bindThis
 	public async searchMessages(meId: MiUser['id'], query: string, limit: number, params: {
 		userId?: MiUser['id'] | null;
 		roomId?: MiChatRoom['id'] | null;
-	}) {
-		const q = this.chatMessagesRepository.createQueryBuilder('message');
+		untilId?: MiChatMessage['id'];
+	}): Promise<MiChatMessage[]> {
+		const q: SelectQueryBuilder<MiChatMessage> = this.chatMessagesRepository.createQueryBuilder('message');
 
 		if (params.userId) {
-			q.andWhere(new Brackets(qb => {
+			q.andWhere(new Brackets(/** 将当前账号可见范围组合成单向查询约束。 */ (qb: WhereExpressionBuilder): void => {
 				qb
-					.where(new Brackets(qb => {
+					.where(new Brackets(/** 将当前账号可见范围组合成单向查询约束。 */ (qb: WhereExpressionBuilder): void => {
 						qb
 							.where('message.fromUserId = :meId')
 							.andWhere('message.toUserId = :otherId');
 					}))
-					.orWhere(new Brackets(qb => {
+					.orWhere(new Brackets(/** 将当前账号可见范围组合成单向查询约束。 */ (qb: WhereExpressionBuilder): void => {
 						qb
 							.where('message.fromUserId = :otherId')
 							.andWhere('message.toUserId = :meId');
@@ -822,18 +998,17 @@ export class ChatService {
 		} else if (params.roomId) {
 			q.where('message.toRoomId = :roomId', { roomId: params.roomId });
 		} else {
-			const membershipsQuery = this.chatRoomMembershipsRepository.createQueryBuilder('membership')
+			const membershipsQuery: SelectQueryBuilder<MiChatRoomMembership> = this.chatRoomMembershipsRepository.createQueryBuilder('membership')
 				.select('membership.roomId')
 				.where('membership.userId = :meId', { meId: meId });
 
-			const ownedRoomsQuery = this.chatRoomsRepository.createQueryBuilder('room')
+			const ownedRoomsQuery: SelectQueryBuilder<MiChatRoom> = this.chatRoomsRepository.createQueryBuilder('room')
 				.select('room.id')
 				.where('room.ownerId = :meId', { meId });
 
-			q.andWhere(new Brackets(qb => {
+			q.andWhere(new Brackets(/** 将当前账号可见范围组合成单向查询约束。 */ (qb: WhereExpressionBuilder): void => {
 				qb
-					.where('message.fromUserId = :meId')
-					.orWhere('message.toUserId = :meId')
+					.where('(message.toUserId IS NOT NULL AND (message.fromUserId = :meId OR message.toUserId = :meId))')
 					.orWhere(`message.toRoomId IN (${membershipsQuery.getQuery()})`)
 					.orWhere(`message.toRoomId IN (${ownedRoomsQuery.getQuery()})`);
 			}));
@@ -842,6 +1017,7 @@ export class ChatService {
 			q.setParameters(ownedRoomsQuery.getParameters());
 		}
 
+		if (params.untilId) q.andWhere('message.id < :untilId', { untilId: params.untilId });
 		q.andWhere('LOWER(message.text) LIKE :q', { q: `%${ sqlLikeEscape(query.toLowerCase()) }%` });
 
 		q.leftJoinAndSelect('message.file', 'file');
@@ -850,22 +1026,23 @@ export class ChatService {
 		q.leftJoinAndSelect('message.toRoom', 'toRoom');
 		q.leftJoinAndSelect('toRoom.owner', 'toRoomOwner');
 
-		const messages = await q.orderBy('message.id', 'DESC').take(limit).getMany();
+		const messages: MiChatMessage[] = await q.orderBy('message.id', 'DESC').take(limit).getMany();
 
 		return messages;
 	}
 
+	/** 在参与者权限内添加反应并同步会话设备。 */
 	@bindThis
-	public async react(messageId: MiChatMessage['id'], userId: MiUser['id'], reaction_: string) {
-		let reaction;
+	public async react(messageId: MiChatMessage['id'], userId: MiUser['id'], reaction_: string): Promise<void> {
+		let reaction: string;
 
-		const custom = reaction_.match(isCustomEmojiRegexp);
+		const custom: RegExpMatchArray | null = reaction_.match(isCustomEmojiRegexp);
 
 		if (custom == null) {
 			reaction = normalizeEmojiString(reaction_);
 		} else {
-			const name = custom[1];
-			const emoji = (await this.customEmojiService.localEmojisCache.fetch()).get(name);
+			const name: string = custom[1];
+			const emoji: MiEmoji | undefined = (await this.customEmojiService.localEmojisCache.fetch()).get(name);
 
 			if (emoji == null) {
 				throw new Error('no such emoji');
@@ -874,7 +1051,7 @@ export class ChatService {
 			}
 		}
 
-		const message = await this.chatMessagesRepository.findOneByOrFail({ id: messageId });
+		const message: MiChatMessage = await this.chatMessagesRepository.findOneByOrFail({ id: messageId });
 
 		if (message.fromUserId === userId) {
 			throw new Error('cannot react to own message');
@@ -888,7 +1065,7 @@ export class ChatService {
 			throw new Error('too many reactions');
 		}
 
-		const room = message.toRoomId ? await this.chatRoomsRepository.findOneByOrFail({ id: message.toRoomId }) : null;
+		const room: MiChatRoom | null = message.toRoomId ? await this.chatRoomsRepository.findOneByOrFail({ id: message.toRoomId }) : null;
 
 		if (room) {
 			if (!(await this.isRoomMember(room, userId))) {
@@ -898,7 +1075,7 @@ export class ChatService {
 
 		await this.chatMessagesRepository.createQueryBuilder().update()
 			.set({
-				reactions: () => `array_append("reactions", '${userId}/${reaction}')`,
+				reactions: /** 生成参数来源受限的表情数组更新表达式。 */ (): string => `array_append("reactions", '${userId}/${reaction}')`,
 			})
 			.where('id = :id', { id: message.id })
 			.execute();
@@ -919,30 +1096,33 @@ export class ChatService {
 				reaction,
 			});
 		}
+		if (message.toRoomId) await this.publishRoomConversationUpdated(message.toRoomId);
+		else this.publishUserConversationUpdated(message.fromUserId, message.toUserId!);
 	}
 
+	/** 移除本人的存量反应并同步参与者设备。 */
 	@bindThis
-	public async unreact(messageId: MiChatMessage['id'], userId: MiUser['id'], reaction_: string) {
-		let reaction;
+	public async unreact(messageId: MiChatMessage['id'], userId: MiUser['id'], reaction_: string): Promise<void> {
+		let reaction: string;
 
-		const custom = reaction_.match(isCustomEmojiRegexp);
+		const custom: RegExpMatchArray | null = reaction_.match(isCustomEmojiRegexp);
 
 		if (custom == null) {
 			reaction = normalizeEmojiString(reaction_);
 		} else { // 削除されたカスタム絵文字のリアクションを削除したいかもしれないので絵文字の存在チェックはする必要なし
-			const name = custom[1];
+			const name: string = custom[1];
 			reaction = `:${name}:`;
 		}
 
 		// NOTE: 自分のリアクションを(あれば)削除するだけなので諸々の権限チェックは必要なし
 
-		const message = await this.chatMessagesRepository.findOneByOrFail({ id: messageId });
+		const message: MiChatMessage = await this.chatMessagesRepository.findOneByOrFail({ id: messageId });
 
-		const room = message.toRoomId ? await this.chatRoomsRepository.findOneByOrFail({ id: message.toRoomId }) : null;
+		const room: MiChatRoom | null = message.toRoomId ? await this.chatRoomsRepository.findOneByOrFail({ id: message.toRoomId }) : null;
 
 		await this.chatMessagesRepository.createQueryBuilder().update()
 			.set({
-				reactions: () => `array_remove("reactions", '${userId}/${reaction}')`,
+				reactions: /** 生成参数来源受限的表情数组更新表达式。 */ (): string => `array_remove("reactions", '${userId}/${reaction}')`,
 			})
 			.where('id = :id', { id: message.id })
 			.execute();
@@ -965,6 +1145,8 @@ export class ChatService {
 				reaction,
 			});
 		}
+		if (message.toRoomId) await this.publishRoomConversationUpdated(message.toRoomId);
+		else this.publishUserConversationUpdated(message.fromUserId, message.toUserId!);
 	}
 
 	@bindThis

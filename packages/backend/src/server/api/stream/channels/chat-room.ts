@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/** 聊天会话流适配器：在订阅与事件交付时验证服务端阅读权限。 */
+
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
@@ -11,7 +13,7 @@ import type { JsonObject } from '@/misc/json-value.js';
 import { ChatService } from '@/core/ChatService.js';
 import Channel, { type ChannelRequest } from '../channel.js';
 import { REQUEST } from '@nestjs/core';
-import type { ChatRoomsRepository } from '@/models/_.js';
+import type { ChatRoomsRepository, MiChatRoom } from '@/models/_.js';
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class ChatRoomChannel extends Channel {
@@ -33,14 +35,16 @@ export class ChatRoomChannel extends Channel {
 		super(request);
 	}
 
+	/** 只为具有聊天阅读权限的当前账号建立订阅。 */
 	@bindThis
 	public async init(params: JsonObject): Promise<boolean> {
 		if (typeof params.roomId !== 'string') return false;
 		if (!this.user) return false;
+		if (!(await this.chatService.getChatAvailability(this.user.id)).read) return false;
 
 		this.roomId = params.roomId;
 
-		const room = await this.chatRoomsRepository.findOneBy({
+		const room: MiChatRoom | null = await this.chatRoomsRepository.findOneBy({
 			id: this.roomId,
 		});
 
@@ -52,8 +56,12 @@ export class ChatRoomChannel extends Channel {
 		return true;
 	}
 
+	/** 权限撤销后不继续向已建立的流交付聊天内容。 */
 	@bindThis
-	private async onEvent(data: GlobalEvents['chatRoom']['payload']) {
+	private async onEvent(data: GlobalEvents['chatRoom']['payload']): Promise<void> {
+		if (!this.user || !(await this.chatService.getChatAvailability(this.user.id)).read) return;
+		const room: MiChatRoom | null = await this.chatService.findRoomById(this.roomId);
+		if (!room || !await this.chatService.hasPermissionToViewRoomTimeline(this.user.id, room)) return;
 		this.send(data.type, data.body);
 	}
 
