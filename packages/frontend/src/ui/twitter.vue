@@ -45,7 +45,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<XAnnouncements/>
 						<XStatusBars :class="$style.statusbars"/>
 					</div>
-					<StackingRouterView v-if="isStacked" :class="$style.content">
+					<StackingRouterView v-if="isStacked" :class="$style.content" stableViewPath="/search" data-twitter-route-outlet>
 						<template #fallback><TwitterRouteLoading/></template>
 					</StackingRouterView>
 					<RouterView v-else :class="[$style.content, $style.flowOutlet]" data-twitter-route-outlet>
