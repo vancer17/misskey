@@ -488,14 +488,43 @@ test('独立页面窗口保留自己的滚动边界且不改变主页面位置',
 	expect(await scrollTop(page)).toBe(500);
 });
 
-test('既有叠层偏好不被静默重写且仍可进入退出设置', /** 绝对定位叠层仍是有界容器，不能被普通页面自然高度规则破坏。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>): Promise<void> => {
+test('既有叠层偏好不被静默重写且仍可进入退出设置', /** 绝对定位叠层仍是有界容器，不能被普通页面自然高度规则破坏。 */ async ({ page }: Pick<PlaywrightTestArgs, 'page'>, info: TestInfo): Promise<void> => {
 	await openProfile(page);
 	await setViewPreference(page, 'experimental.stackingRouterView', true);
 	await expect(page.getByTestId('twitter-profile')).toBeVisible();
-	await expect(page.locator('[data-twitter-route-outlet]')).toHaveCount(0);
+	/** 普通出口和存量叠层共用标记；卡片数量、定位及实际滚动边界证明选择了叠层实现。 */
+	const outlet: Locator = page.locator('[data-twitter-route-outlet]');
+	await expect(outlet).toHaveCount(1);
+	await expect(outlet).toHaveCSS('position', 'relative');
+	await expect(outlet.locator(':scope > div')).toHaveCount(1);
+	await expect(viewport(page)).toHaveCSS('overflow-y', 'clip');
+	await expect(viewport(page)).not.toHaveAttribute('data-twitter-layout', 'messages');
 	await page.getByRole('button', { name: 'Edit profile', exact: true }).click();
 	await expect(page.getByTestId('profile-name')).toBeVisible();
+	await expect(outlet.locator(':scope > div')).toHaveCount(2);
+	await expect(outlet.locator(':scope > div').last()).toHaveCSS('position', 'absolute');
+	/** 设置页真正叠在原资料页上，两个卡片仍受同一有界出口约束。 */
+	const stackedGeometry: Readonly<{ viewportHeight: number; outletHeight: number; cards: number; overlayPosition: string }> = await outlet.evaluate(/** 只投影布局证据，不读取账户或认证数据。 */ (element: HTMLElement): { viewportHeight: number; outletHeight: number; cards: number; overlayPosition: string } => {
+		const host: HTMLElement | null = element.closest('[data-twitter-scroll-viewport]');
+		const overlay: Element | null = element.lastElementChild;
+		return { viewportHeight: host?.clientHeight ?? 0, outletHeight: element.clientHeight, cards: element.childElementCount, overlayPosition: overlay ? getComputedStyle(overlay).position : '' };
+	});
+	expect(Math.abs(stackedGeometry.viewportHeight - stackedGeometry.outletHeight)).toBeLessThanOrEqual(1);
 	await page.goBack();
 	await expect(page.getByTestId('twitter-profile')).toBeVisible();
-	expect(await viewport(page).evaluate(/** 叠层兼容边界保持有界，不把背景卡片撑成无限长页面。 */ (node: HTMLElement): string => getComputedStyle(node).overflowY)).toBe('clip');
+	await expect(page.getByTestId('profile-name')).toHaveCount(0);
+	await expect(outlet.locator(':scope > div')).toHaveCount(1);
+	await expect(viewport(page)).toHaveCSS('overflow-y', 'clip');
+	const persistedStacking: boolean = await page.evaluate(/** 回读真实持久化偏好，证明进入、退出设置均未被 Shell 静默改写。 */ (): boolean => {
+		const stored: string | null = localStorage.getItem('preferences');
+		if (!stored) return false;
+		const profile: PreferencesProfile = JSON.parse(stored) as PreferencesProfile;
+		const records: PreferencesProfile['preferences']['experimental.stackingRouterView'] = profile.preferences['experimental.stackingRouterView'];
+		return records.length > 0 && records.every(/** 所有既有作用域均应保留测试设置的布尔值。 */ (record: PreferencesProfile['preferences']['experimental.stackingRouterView'][number]): boolean => record[1] === true);
+	});
+	expect(persistedStacking).toBe(true);
+	/** 保存成功路径的独立证据，列表 reporter 结束后仍可复核真实卡片与偏好结果。 */
+	const evidencePath: string = info.outputPath('stacking-preference-boundary.json');
+	await writeFile(evidencePath, JSON.stringify({ persistedStacking, stackedGeometry, cardsAfterReturn: await outlet.locator(':scope > div').count() }));
+	await info.attach('stacking-preference-boundary', { path: evidencePath, contentType: 'application/json' });
 });

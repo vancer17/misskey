@@ -60,7 +60,7 @@
 | Profile 以外的设置页 | `packages/frontend/src/pages/settings/*` | Phase 2 Compatible。 |
 | Drive | `packages/frontend/src/pages/drive*.vue` | Phase 2 Compatible。 |
 | Admin | `packages/frontend/src/pages/admin/*` | Legacy allowed，不进入用户侧 rollout 验收。 |
-| Chat | `packages/frontend/src/pages/chat/*` | Hide，除非 DM 是明确第一阶段需求。 |
+| Chat | `packages/frontend/src/pages/chat/entry.vue`；`ui/twitter/messages/` | Full，已明确接入本地私信与已有群聊；独立工作区见 [messages.md](./messages.md)，范围列于第二阶段 P-27。 |
 | Channels | `packages/frontend/src/pages/channel*.vue`；`packages/frontend/src/pages/channels.vue` | Hide 或延后，待公司社群模型决策。 |
 | Gallery | `packages/frontend/src/pages/gallery/*` | Hide，除非公司明确需要媒体画廊。 |
 | Pages / Play | `packages/frontend/src/pages/page*`；`packages/frontend/src/pages/flash/*` | Hide。 |
