@@ -39,7 +39,7 @@ A 路由级 / B 启动与全局弹窗链 / C 交互子层弹窗 / D 嵌入式 Mi
 | B1 | MkUserSetupDialog（**用户报告的初始设定弹窗**） | `main-boot.ts:106` | ❌ | ❓产品决策：Compatible 化，或 twitter UI 下不弹 |
 | B2 | MkUpdated（更新提示） | `main-boot.ts:71` | ❌ | Compatible（MkModal/MkDialog 变体可大范围覆盖） |
 | B3 | MkAnnouncementDialog ×2（信息/情绪公告） | `main-boot.ts:113,123` | ❌ | ❓产品决策：公告为运营需求，建议 Compatible |
-| B4 | MkDonation（捐赠） | `main-boot.ts:284` | ❌ | Compatible 或 Hide（公司版可关） |
+| B4 | MkDonation（捐赠） | `boot/main-boot.ts` 的最终根 UI 选择与捐赠触发分支 | ✅ 启动入口已覆盖 | Hide：Twitter UI 不自动创建捐赠弹窗；不写入用户提醒偏好，其他 UI 沿用原触发条件。现行决策见 [ADR-0036](./adr/0036-twitter-donation-prompt-policy.md)。 |
 | B5 | MkSourceCodeAvailablePopup | `main-boot.ts:292` | ❌ | Compatible |
 
 ## C. 交互子层弹窗（主路径交互打开的选择器/窗口）
@@ -91,7 +91,7 @@ A 路由级 / B 启动与全局弹窗链 / C 交互子层弹窗 / D 嵌入式 Mi
 
 | 批次 | 内容 | 架构路径 |
 | --- | --- | --- |
-| 1 | C5-C8 四个选择器/窗口 + B1-B5 全部启动弹窗（决策 1/3：保留并 Compatible 化）+ D4 systemChrome | P-08 三层模式复用（useIsTwitterUi 变体 + overlay.scss） |
+| 1 | C5-C8 四个选择器/窗口 + B1-B3／B5 启动弹窗（保留并 Compatible 化）+ D4 systemChrome；B4 在 Twitter UI 启动入口按 Hide 处理 | P-08 三层模式复用（useIsTwitterUi 变体 + overlay.scss）；B4 由 Bootstrap 阻止创建 |
 | 2 | D3 帖子卡内嵌件六件 | 组件变体 |
 | 3 | D2 发帖内嵌件 | 组件变体 |
 | 4 | A1-A4（=P-11/12/13/15 转正）+ A6 reactions + A9 成就页（P-20 Compatible） | 第二阶段必做主体 |
@@ -108,9 +108,9 @@ A8 的运行复核覆盖个人简介、搜索／关注／粉丝／二维码的�
 
 A9 的运行复核覆盖真实成就申领与通知、点击和键盘进入、直接访问与刷新、返回通知页及滚动恢复；检查成就目录顺序、名称、日期、说明、锁定占位和隐藏成就交互，保留原页三分钟计时与离页清理。视觉复核覆盖桌面、390px、320px和明暗主题，关注主列滚动、safe area、横向溢出、旧面板与网格残留；成就页逐项审阅期望变化，通知页与默认 Misskey 页面作为不变对照。本人成就 Store 在加载失败时保留最后成功列表并提供显式重试；缓存回访与恢复可见后重新确认。同步复核必须在相同裸路径建立缓存，并覆盖实时／非实时模式的当前页解锁、角标对账、传输失败与迟到响应。真实后端结果与截图 diff 由实际验证记录提供，不替代 P-19 正式视觉基线。
 
-## 产品决策记录（2026-10-08 已裁决）
+## 当前产品决策记录
 
 1. **B1 初始设定向导**：twitter UI 场景内**继续弹出**，做 Compatible 化 → 并入批次 1。
 2. **D1 右栏**：**不再保留** Misskey 自配挂件系统，改为 Twitter 式**固定内容**（趋势 / 推荐关注）→ 批次 5 独立功能开发。
-3. **B3/B4 公告与捐赠弹窗**：**保留**，改为 twitter 风格 → 并入批次 1。
+3. **B3 公告弹窗**：**保留**，改为 twitter 风格 → 并入批次 1；**B4 捐赠提示**：Twitter UI 不自动弹出，由 Bootstrap 按最终选择的根 UI 跳过原触发分支，不改变其他 UI 和本地提醒偏好。见 [ADR-0036](./adr/0036-twitter-donation-prompt-policy.md)。
 4. **A5 频道链接**：**保留链接**，Channels 页做 Compatible 化 → 并入批次 4。
