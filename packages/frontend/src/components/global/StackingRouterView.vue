@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 
 文件领域：通用叠层路由出口。
-作用：保留既有叠层、返回和缓存行为，仅允许宿主定制等待展示与页面底色。
+作用：保留既有叠层、返回和缓存行为，允许宿主定制等待展示、页面底色及指定路径的卡片展示身份。
 数据链：路由解析结果 → 叠层页面；加载展示上下文继续传递给后代出口。
 -->
 
@@ -17,7 +17,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:duration="200"
 	tag="div" :class="$style.tabs"
 >
-	<div v-for="(tab, i) in tabs" :key="tab.fullPath" :class="$style.tab" :style="{ '--i': i - 1 }">
+	<div v-for="(tab, i) in tabs" :key="tab.renderKey" :class="$style.tab" :style="{ '--i': i - 1 }">
 		<div v-if="i > 0" :class="$style.tabBg" @click="back()"></div>
 		<div :class="$style.tabFg" @click.stop="back()">
 			<div v-if="i > 0" :class="$style.tabMenu">
@@ -49,17 +49,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { inject, provide, shallowRef, useSlots } from 'vue';
-import type { Slot, Slots } from 'vue';
+import type { Component, ShallowRef, Slot, Slots } from 'vue';
 import { routerViewFallbackKey } from './router-view-fallback.js';
 import type { Router } from '@/router.js';
+import type { PathResolvedResult, RouterEvents } from '@/lib/nirax.js';
 import { prefer } from '@/preferences.js';
 import MkLoadingPage from '@/pages/_loading_.vue';
 import { DI } from '@/di.js';
 import { deepEqual } from '@/utility/deep-equal.js';
 
-const props = defineProps<{
+/** 叠层出口仅接收现有路由依赖和基础展示参数。 */
+type StackingOutletProps = {
 	router?: Router;
-}>();
+	/** 宿主可指定一个路径在当前卡片内更新参数；缺省继续按完整地址创建卡片。 */
+	stableViewPath?: string;
+};
+const props: Readonly<StackingOutletProps> = defineProps<StackingOutletProps>();
 
 /** 叠层根出口的插槽对各卡片共用，仅提供加载视觉。 */
 const slots: Slots = useSlots();
@@ -67,75 +72,91 @@ const slots: Slots = useSlots();
 const routeFallback: Slot | undefined = slots.fallback ?? inject(routerViewFallbackKey, undefined);
 provide(routerViewFallbackKey, routeFallback);
 
-const router = props.router ?? inject(DI.router);
-
-if (router == null) {
-	throw new Error('no router provided');
-}
-
-const currentDepth = inject(DI.routerCurrentDepth, 0);
+const injectedRouter: Router | undefined = props.router ?? inject(DI.router);
+if (injectedRouter == null) throw new Error('no router provided');
+const router: Router = injectedRouter;
+const currentDepth: number = inject(DI.routerCurrentDepth, 0);
 provide(DI.routerCurrentDepth, currentDepth + 1);
 
-const tabs = shallowRef([{
-	fullPath: router.getCurrentFullPath(),
-	routePath: router.current.route.path,
-	component: 'component' in router.current.route ? router.current.route.component : MkLoadingPage,
-	props: router.current.props,
-}]);
+/** 仅保存现有路由解析与展示身份，不持有页面业务事实。 */
+type StackedPage = {
+	renderKey: string | number;
+	fullPath: string;
+	routePath: string;
+	component: Component;
+	props: PathResolvedResult['props'];
+};
+/** 指定路径的新卡片使用递增展示键，避免与历史同路径卡片混用实例。 */
+let stableKey: number = 0;
 
-function mount() {
-	const currentTab = tabs.value[tabs.value.length - 1];
+/** 普通卡片维持完整地址键；宿主指定路径只在同一当前卡片内保留数字键。 */
+function createPage(resolved: PathResolvedResult, fullPath: string): StackedPage {
+	return {
+		renderKey: resolved.route.path === props.stableViewPath ? ++stableKey : fullPath,
+		fullPath,
+		routePath: resolved.route.path,
+		component: 'component' in resolved.route ? resolved.route.component : MkLoadingPage,
+		props: resolved.props,
+	};
+}
+
+const tabs: ShallowRef<StackedPage[]> = shallowRef([createPage(router.current, router.getCurrentFullPath())]);
+
+/** 固定当前卡片时保留其展示身份及既有路由参数。 */
+function mount(): void {
+	const currentTab: StackedPage = tabs.value[tabs.value.length - 1];
 	tabs.value = [currentTab];
 }
 
-function back() {
-	if (tabs.value.length <= 1) return; // transitionの関係でタブが1つの状態でbackが呼ばれることがある
-	const prev = tabs.value[tabs.value.length - 2];
+/** 返回上一层仍由现有路由 replace 恢复地址，不创建额外导航历史。 */
+function back(): void {
+	if (tabs.value.length <= 1) return;
+	const prev: StackedPage = tabs.value[tabs.value.length - 2];
 	tabs.value = [...tabs.value.slice(0, tabs.value.length - 1)];
-	router?.replaceByPath(prev.fullPath);
+	router.replaceByPath(prev.fullPath);
 }
 
-router.useListener('change', ({ resolved }) => {
-	const currentTab = tabs.value[tabs.value.length - 1];
-	const routePath = resolved.route.path;
-	if (resolved == null || 'redirect' in resolved.route) return;
-	if (resolved.route.path === currentTab.routePath && deepEqual(resolved.props, currentTab.props)) return;
-	const fullPath = router.getCurrentFullPath();
-
-	if (tabs.value.some(tab => tab.routePath === routePath && deepEqual(resolved.props, tab.props))) {
-		const newTabs = [] as typeof tabs.value;
-		for (const tab of tabs.value) {
-			newTabs.push(tab);
-
-			if (tab.routePath === routePath && deepEqual(resolved.props, tab.props)) {
-				break;
-			}
+router.useListener('change',
+	/** 宿主指定路径只更新当前卡片；其余导航沿用原有匹配、返回和缓存上限。 */
+	({ resolved }: Parameters<RouterEvents['change']>[0]): void => {
+		if (resolved == null || 'redirect' in resolved.route) return;
+		const currentTab: StackedPage = tabs.value[tabs.value.length - 1];
+		const routePath: string = resolved.route.path;
+		if (routePath === currentTab.routePath && deepEqual(resolved.props, currentTab.props)) return;
+		const fullPath: string = router.getCurrentFullPath();
+		if (routePath === props.stableViewPath && routePath === currentTab.routePath) {
+			tabs.value = [...tabs.value.slice(0, -1), {
+				...currentTab,
+				fullPath,
+				component: resolved.route.component,
+				props: resolved.props,
+			}];
+			return;
 		}
-		tabs.value = newTabs;
-		return;
-	}
+		const previousIndex: number = tabs.value.findIndex(
+			/** 仅精确匹配已有路径与参数；不同参数的历史卡片保持独立。 */
+			(tab: StackedPage): boolean => tab.routePath === routePath && deepEqual(resolved.props, tab.props),
+		);
+		if (previousIndex !== -1) {
+			tabs.value = tabs.value.slice(0, previousIndex + 1);
+			return;
+		}
+		const retainedTabs: StackedPage[] = tabs.value.length >= prefer.s.numberOfPageCache ? tabs.value.slice(1) : tabs.value;
+		tabs.value = [...retainedTabs, createPage(resolved, fullPath)];
+	},
+);
 
-	tabs.value = tabs.value.length >= prefer.s.numberOfPageCache ? [
-		...tabs.value.slice(1),
-		{
-			fullPath: fullPath,
-			routePath,
-			component: resolved.route.component,
-			props: resolved.props,
-		},
-	] : [...tabs.value, {
-		fullPath: fullPath,
-		routePath,
-		component: resolved.route.component,
-		props: resolved.props,
-	}];
-});
-
-router.useListener('replace', ({ fullPath }) => {
-	const currentTab = tabs.value[tabs.value.length - 1];
-	currentTab.fullPath = fullPath;
-	tabs.value = [...tabs.value.slice(0, tabs.value.length - 1), currentTab];
-});
+router.useListener('replace',
+	/** 地址替换仍维持普通页面原有键语义；指定路径的当前实例保留展示键。 */
+	({ fullPath }: Parameters<RouterEvents['replace']>[0]): void => {
+		const currentTab: StackedPage = tabs.value[tabs.value.length - 1];
+		tabs.value = [...tabs.value.slice(0, -1), {
+			...currentTab,
+			fullPath,
+			renderKey: currentTab.routePath === props.stableViewPath ? currentTab.renderKey : fullPath,
+		}];
+	},
+);
 </script>
 
 <style lang="scss" module>
