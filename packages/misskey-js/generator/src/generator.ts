@@ -1,3 +1,8 @@
+/**
+ * 文件领域：Misskey JavaScript SDK 的 OpenAPI 类型与接口文档生成。
+ * 作用：读取后端导出的 api.json，生成 SDK 的请求、响应、实体和客户端 JSDoc 声明。
+ * 数据链：后端 OpenAPI 权威协议 → generator/built/autogen → SDK src/autogen；生成结果不反向定义接口。
+ */
 import assert from 'assert';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import type { OpenAPIV3_1 } from 'openapi-types';
@@ -202,12 +207,13 @@ async function generateEndpoints(
 	await writeFile(endpointOutputPath, endpointOutputLine.join('\n'));
 }
 
+/** 将 OpenAPI 接口说明生成客户端重载文档，统一移除行尾空白以保持再次生成的结果稳定。 */
 async function generateApiClientJSDoc(
 	openApiDocs: OpenAPIV3_1.Document,
 	apiClientFileName: string,
 	endpointsFileName: string,
 	warningsOutputPath: string,
-) {
+): Promise<void> {
 	const endpoints: {
 		operationId: string;
 		path: string;
@@ -215,9 +221,9 @@ async function generateApiClientJSDoc(
 	}[] = [];
 
 	// misskey-jsはPOST固定で送っているので、こちらも決め打ちする。別メソッドに対応することがあればこちらも直す必要あり
-	const paths = openApiDocs.paths ?? {};
-	const postPathItems = Object.keys(paths)
-		.map(it => ({
+	const paths: NonNullable<OpenAPIV3_1.Document['paths']> = openApiDocs.paths ?? {};
+	const postPathItems: (Partial<OpenAPIV3_1.OperationObject> & { _path_: string })[] = Object.keys(paths)
+		.map(/** 从路径表投影现有 POST 操作，保留其权威协议字段。 */ (it: string): Partial<OpenAPIV3_1.OperationObject> & { _path_: string } => ({
 			_path_: it.replace(/^\//, ''),
 			...paths[it]?.post,
 		}))
@@ -225,7 +231,7 @@ async function generateApiClientJSDoc(
 
 	for (const operation of postPathItems) {
 		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-		const operationId = operation.operationId!.replaceAll('get___', '').replaceAll('post___', '');
+		const operationId: string = operation.operationId!.replaceAll('get___', '').replaceAll('post___', '');
 
 		if (operation.description) {
 			endpoints.push({
@@ -244,12 +250,12 @@ async function generateApiClientJSDoc(
 
 	endpointOutputLine.push(`declare module '${toImportPath(apiClientFileName)}' {`);
 	endpointOutputLine.push('  export interface APIClient {');
-	for (let i = 0; i < endpoints.length; i++) {
-		const endpoint = endpoints[i];
+	for (let i: number = 0; i < endpoints.length; i++) {
+		const endpoint: typeof endpoints[number] = endpoints[i];
 
 		endpointOutputLine.push(
 			'    /**',
-			`     * ${endpoint.description.split('\n').join('\n     * ')}`,
+			`     * ${endpoint.description.split('\n').join('\n     * ')}`.replace(/[ \t]+$/gm, ''),
 			'     */',
 			`    request<E extends '${endpoint.path}', P extends Endpoints[E][\'req\']>(`,
 			'      endpoint: E,',
