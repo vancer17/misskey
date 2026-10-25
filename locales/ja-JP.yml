@@ -2323,6 +2323,7 @@ _channel:
   notesCount: "{n}投稿があります"
   nameAndDescription: "名前と説明"
   nameOnly: "名前のみ"
+  searchPlaceholder: "チャンネル名や説明を検索"
   allowRenoteToExternal: "チャンネル外へのリノートと引用リノートを許可する"
 
 _menuDisplay:
