@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * 全局流事件的服务端协议与发布适配器。
+ * 聊天领域通过账号级失效事件通知消费者重新查询权威事实；本模块不复制会话业务状态。
+ */
+
 import { Inject, Injectable } from '@nestjs/common';
 import * as Redis from 'ioredis';
 import * as Reversi from 'misskey-reversi';
@@ -70,6 +75,8 @@ export interface MainEventTypes {
 	unreadNotification: Packed<'Notification'>;
 	unreadAntenna: MiAntenna;
 	newChatMessage: Packed<'ChatMessage'>;
+	/** 会话事实变化的账号级失效通知，不触发声音或推送。 */
+	chatUpdated: { type: 'user' | 'room' | 'all'; id?: string };
 	readAllAnnouncements: undefined;
 	myTokenRegenerated: undefined;
 	signin: {
