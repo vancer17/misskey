@@ -14,7 +14,8 @@ export { useTwitterLayout } from '../composables/use-twitter-layout.js';
 /** 发帖表单只消费工具栏几何，不加载帖子或页面业务模块。 */
 export { useTwitterComposerToolbar } from '../composables/use-composer-toolbar.js';
 export type { TwitterLayoutState } from '../composables/use-twitter-layout.js';
-export { TWITTER_LAYOUT_BREAKPOINTS } from '../domain/layout.js';
+export { TWITTER_LAYOUT_BREAKPOINTS, TWITTER_CHAT_ROUTE_NAMES, resolveTwitterChatLayout, resolveTwitterShellLayout } from '../domain/layout.js';
+export type { TwitterShellLayout } from '../domain/layout.js';
 export { TWITTER_MOTION_DURATIONS } from '../domain/motion.js';
 export { TWITTER_PAGE_STATE_TYPES, TWITTER_PAGE_SKELETON_VARIANTS } from '../domain/page-state.js';
 export type { TwitterPageStateType, TwitterPageSkeletonVariant } from '../domain/page-state.js';
