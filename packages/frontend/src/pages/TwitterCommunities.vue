@@ -7,6 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 文件领域：Twitter 频道入口的页面展示。
 作用：以标题／搜索、主标签、横向频道卡片和帖子流组织内容，管理与收藏使用独立窗口。
 数据链：channels.vue 持有唯一查询并调度请求 → 本组件只读呈现 → 交互事件返回页面所有者。
+搜索展开、外部交互收起与焦点恢复只属于临时 UI 状态，自动收起保留原查询及输入草稿。
 布局依据：X 归档的首页成员社区横条；发现仅呈现全频道帖子，颜色与主列沿用 Nitter Token。
 主标签沿用 Nitter 等分空间关系，指示条随单元伸展并与时间线／搜索页保持相同内缩。
 -->
@@ -16,32 +17,48 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkStickyContainer>
 		<template #header>
 			<header :class="$style.header" data-testid="twitter-communities-header">
-				<button :class="$style.iconButton" class="_button" type="button" :aria-label="i18n.ts.goBack" @click="goBack">
+				<button ref="backButton" :class="$style.iconButton" class="_button" type="button" :aria-label="i18n.ts.goBack" @click="goBack">
 					<i class="ti ti-arrow-left" aria-hidden="true"></i>
 				</button>
-				<TwitterSearchField
-					v-if="searchOpen"
-					v-model="searchDraft"
-					:class="$style.searchField"
-					:autofocus="true"
-					@submit="submitSearch"
-					@clear="clearSearch"
-				/>
-				<h1 v-else :class="$style.title">{{ i18n.ts.channel }}</h1>
-				<button
-					v-if="!searchOpen"
-					:class="$style.iconButton"
-					class="_button"
-					type="button"
-					:aria-label="i18n.ts.search"
-					data-testid="twitter-community-search"
-					@click="openSearch"
+				<div
+					ref="searchGroup"
+					:class="[$style.searchGroup, { [$style.searchOpen]: searchOpen, [$style.animated]: prefer.s.animation }]"
+					@keydown="onSearchKeydown"
 				>
-					<i class="ti ti-search" aria-hidden="true"></i>
-				</button>
-				<button v-else :class="$style.iconButton" class="_button" type="button" :aria-label="i18n.ts.close" @click="exitSearch">
-					<i class="ti ti-x" aria-hidden="true"></i>
-				</button>
+					<div :class="$style.searchSlot">
+						<h1 :class="[$style.title, $style.searchLayer, { [$style.searchLayerVisible]: !searchOpen }]" :aria-hidden="searchOpen">{{ i18n.ts.channel }}</h1>
+						<div
+							:id="searchPanelId"
+							ref="searchPanel"
+							:class="[$style.searchPanel, $style.searchLayer, { [$style.searchLayerVisible]: searchOpen }]"
+							:inert="!searchOpen"
+							:aria-hidden="!searchOpen"
+							data-testid="twitter-community-search-panel"
+						>
+							<TwitterSearchField
+								v-model="searchDraft"
+								:class="$style.searchField"
+								:placeholder="i18n.ts._channel.searchPlaceholder"
+								@submit="submitSearch"
+								@clear="clearSearch"
+							/>
+						</div>
+					</div>
+					<button
+						ref="searchToggle"
+						:class="[$style.iconButton, $style.searchToggle]"
+						class="_button"
+						type="button"
+						:aria-label="searchOpen ? i18n.ts.close : i18n.ts._channel.searchPlaceholder"
+						:aria-expanded="searchOpen"
+						:aria-controls="searchPanelId"
+						data-testid="twitter-community-search"
+						@click="toggleSearch"
+					>
+						<i :class="[$style.searchGlyph, $style.searchIcon]" class="ti ti-search" aria-hidden="true"></i>
+						<i :class="[$style.searchGlyph, $style.closeIcon]" class="ti ti-x" aria-hidden="true"></i>
+					</button>
+				</div>
 				<button
 					:class="$style.iconButton"
 					class="_button"
@@ -114,7 +131,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onDeactivated, shallowReactive, ref, useTemplateRef } from 'vue';
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, shallowReactive, ref, useId, useTemplateRef, watch } from 'vue';
 import type { ComputedRef, ModelRef, Ref, ShallowRef } from 'vue';
 import type { ComponentProps } from 'vue-component-type-helpers';
 import MkChannelPreview from '@/components/MkChannelPreview.vue';
@@ -126,6 +143,7 @@ import { TwitterCommunityLibraryDialog, TwitterCommunityStrip, TwitterPageState,
 import { useTwitterLayout } from '@/ui/twitter/context/index.js';
 import type { TwitterCommunitiesTab, TwitterCommunityLibrary, TwitterCommunityLibraryView } from '@/ui/twitter/index.js';
 import { i18n } from '@/i18n.js';
+import { prefer } from '@/preferences.js';
 import type { Paginator } from '@/utility/paginator.js';
 import * as os from '@/os.js';
 
@@ -164,6 +182,20 @@ const library: ModelRef<TwitterCommunityLibrary | null> = defineModel<TwitterCom
 const searchOpen: Ref<boolean> = ref<boolean>(false);
 /** 尚未提交的查询草稿。 */
 const searchDraft: Ref<string> = ref<string>('');
+/** 输入、清空与切换按钮共用的交互边界，不包含返回、菜单及业务结果。 */
+const searchGroup: Readonly<ShallowRef<HTMLDivElement | null>> = useTemplateRef<HTMLDivElement>('searchGroup');
+/** 固定布局槽内的输入容器，只用于聚焦其原生搜索控件。 */
+const searchPanel: Readonly<ShallowRef<HTMLDivElement | null>> = useTemplateRef<HTMLDivElement>('searchPanel');
+/** 持续挂载的切换按钮承接明确退出后的键盘焦点。 */
+const searchToggle: Readonly<ShallowRef<HTMLButtonElement | null>> = useTemplateRef<HTMLButtonElement>('searchToggle');
+/** 返回控件只参与明确退出意图的指针识别，不扩大普通焦点的搜索边界。 */
+const backButton: Readonly<ShallowRef<HTMLButtonElement | null>> = useTemplateRef<HTMLButtonElement>('backButton');
+/** 各缓存页面实例使用独立的 ARIA 关联标识。 */
+const searchPanelId: string = useId();
+/** 页面活跃性只约束 DOM 交互与延后聚焦，不承担业务查询事实。 */
+let searchPageActive: boolean = true;
+/** 返回按钮的主指针退出意图，保留至兼容鼠标释放，移出或取消时撤销。 */
+let searchBackPointerId: number | null = null;
 /** 布局断点沿用 Shell 的唯一来源。 */
 const { isMobile }: ReturnType<typeof useTwitterLayout> = useTwitterLayout();
 /** 只向现有滚动恢复提供页面根元素。 */
@@ -203,8 +235,76 @@ function selectTab(value: TwitterCommunitiesTab): void { tab.value = value; }
 /** 空关注引导只改变当前页面导航。 */
 function discover(): void { selectTab('explore'); }
 
-/** 打开顶部盒内的频道搜索输入。 */
-function openSearch(): void { searchOpen.value = true; }
+/** 只收起输入表现，保留草稿、搜索结果与页面所有者的原查询。 */
+function collapseSearch(): void { searchOpen.value = false; }
+
+/** 外部点击只收起输入；返回按钮的主指针手势暂保留其明确退出意图。 */
+function onSearchPointerDown(event: PointerEvent): void {
+	if (!searchOpen.value || searchGroup.value == null) return;
+	const path: EventTarget[] = event.composedPath();
+	searchBackPointerId = event.isPrimary && event.button === 0 && backButton.value != null && path.includes(backButton.value) ? event.pointerId : null;
+	if (searchBackPointerId != null || path.includes(searchGroup.value)) return;
+	collapseSearch();
+}
+
+/** 普通外部焦点立即收起，返回手势中的原生聚焦留待该按钮的点击处理。 */
+function onSearchFocusIn(event: FocusEvent): void {
+	if (!searchOpen.value || searchGroup.value == null) return;
+	const path: EventTarget[] = event.composedPath();
+	if (path.includes(searchGroup.value) || (searchBackPointerId != null && backButton.value != null && path.includes(backButton.value))) return;
+	collapseSearch();
+}
+
+/** 返回手势移出或取消时收起；按钮内释放保留意图至兼容鼠标事件完成。 */
+function onSearchPointerEnd(event: PointerEvent): void {
+	if (event.pointerId !== searchBackPointerId) return;
+	if (event.type !== 'pointercancel' && backButton.value != null && event.composedPath().includes(backButton.value)) return;
+	searchBackPointerId = null;
+	collapseSearch();
+}
+
+/** 兼容鼠标释放发生在触屏合成聚焦之后、点击之前，此时撤销手势但保留明确退出入口。 */
+function onSearchMouseUp(event: MouseEvent): void {
+	if (searchBackPointerId == null) return;
+	searchBackPointerId = null;
+	if (backButton.value == null || !event.composedPath().includes(backButton.value)) collapseSearch();
+}
+
+/** 移除当前页面的外部交互监听，缓存停用与卸载共用同一释放入口。 */
+function stopSearchListeners(): void {
+	window.document.removeEventListener('pointerdown', onSearchPointerDown, true);
+	window.document.removeEventListener('pointerup', onSearchPointerEnd, true);
+	window.document.removeEventListener('pointercancel', onSearchPointerEnd, true);
+	window.document.removeEventListener('mouseup', onSearchMouseUp, true);
+	window.document.removeEventListener('focusin', onSearchFocusIn, true);
+	searchBackPointerId = null;
+}
+
+/** 仅在输入展开期间观察外部交互，关闭时立即释放监听。 */
+function updateSearchListeners(open: boolean): void {
+	if (!open || !searchPageActive) { stopSearchListeners(); return; }
+	window.document.addEventListener('pointerdown', onSearchPointerDown, true);
+	window.document.addEventListener('pointerup', onSearchPointerEnd, true);
+	window.document.addEventListener('pointercancel', onSearchPointerEnd, true);
+	window.document.addEventListener('mouseup', onSearchMouseUp, true);
+	window.document.addEventListener('focusin', onSearchFocusIn, true);
+}
+
+watch(searchOpen, updateSearchListeners, { flush: 'sync' });
+
+/** 打开固定槽位中的搜索输入，DOM 更新后仅为仍有效的当前展开意图聚焦。 */
+async function openSearch(): Promise<void> {
+	searchOpen.value = true;
+	await nextTick();
+	if (!searchPageActive || !searchOpen.value || !searchPanel.value?.isConnected) return;
+	searchPanel.value.querySelector<HTMLInputElement>('input[type="search"]')?.focus({ preventScroll: true });
+}
+
+/** 同一个按钮根据当前展开状态表达打开或明确退出意图，不替换交互节点。 */
+function toggleSearch(): void {
+	if (searchOpen.value) void exitSearch();
+	else void openSearch();
+}
 
 /** 空白查询不创建结果分页器。 */
 function submitSearch(query: string): void {
@@ -216,12 +316,40 @@ function submitSearch(query: string): void {
 /** 清空输入后恢复主标签，保留已加载查询的唯一所有者。 */
 function clearSearch(): void { searching.value = false; }
 
-/** 收起搜索时同时移除草稿及结果面板。 */
-function exitSearch(): void { searchDraft.value = ''; searching.value = false; searchOpen.value = false; }
+/** 明确退出时清空草稿及结果模式，DOM 更新后将焦点交回稳定的搜索入口。 */
+async function exitSearch(): Promise<void> {
+	searchDraft.value = '';
+	searching.value = false;
+	collapseSearch();
+	await nextTick();
+	if (searchPageActive && !searchOpen.value && searchToggle.value?.isConnected) searchToggle.value.focus({ preventScroll: true });
+}
+
+/** Escape 只退出当前搜索交互，输入法组合输入期间保留其原有取消语义。 */
+function onSearchKeydown(event: KeyboardEvent): void {
+	if (event.key !== 'Escape' || event.isComposing || (!searchOpen.value && !searching.value)) return;
+	event.preventDefault();
+	event.stopPropagation();
+	void exitSearch();
+}
+
+/** 缓存页面恢复后允许新的展开意图，不主动展开或抢回焦点。 */
+function activateSearch(): void { searchPageActive = true; }
+
+/** 页面停用时收起临时输入并释放监听，草稿与已确认结果仍留在原所有者。 */
+function deactivateSearch(): void {
+	searchPageActive = false;
+	collapseSearch();
+	stopSearchListeners();
+}
+
+onActivated(activateSearch);
+onDeactivated(deactivateSearch);
+onBeforeUnmount(deactivateSearch);
 
 /** 返回优先离开搜索模式，否则使用既有浏览器历史。 */
 function goBack(): void {
-	if (searchOpen.value) exitSearch();
+	if (searchOpen.value || searching.value) void exitSearch();
 	else window.history.back();
 }
 
@@ -355,7 +483,6 @@ onBeforeUnmount(closeLibrary);
 }
 
 .title {
-	flex: 1;
 	min-width: 0;
 	margin: 0;
 	padding-inline: var(--twitter-space-2);
@@ -364,6 +491,83 @@ onBeforeUnmount(closeLibrary);
 	font-weight: 800;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	transform: translateX(calc(-1 * var(--twitter-space-1)));
+}
+
+.searchGroup {
+	--community-search-duration: var(--twitter-duration-fast);
+	display: flex;
+	flex: 1;
+	align-items: center;
+	gap: var(--twitter-space-1);
+	min-width: 0;
+}
+
+.searchSlot {
+	display: grid;
+	flex: 1;
+	align-items: center;
+	min-width: 0;
+}
+
+.searchPanel {
+	display: flex;
+	min-width: 0;
+	transform: translateX(var(--twitter-space-1));
+}
+
+.searchLayer {
+	grid-area: 1 / 1;
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+}
+
+.searchLayerVisible {
+	opacity: 1;
+	transform: translateX(0);
+	visibility: visible;
+	pointer-events: auto;
+}
+
+.searchGlyph { grid-area: 1 / 1; }
+.searchIcon { opacity: 1; transform: rotate(0deg); }
+.closeIcon { opacity: 0; transform: rotate(-45deg); }
+
+.searchOpen {
+	--community-search-duration: var(--twitter-duration-normal);
+
+	.searchIcon { opacity: 0; transform: rotate(45deg); }
+	.closeIcon { opacity: 1; transform: rotate(0deg); }
+}
+
+.animated {
+	.searchLayer {
+		transition:
+			opacity var(--community-search-duration) var(--twitter-ease),
+			transform var(--community-search-duration) var(--twitter-ease),
+			visibility 0s var(--community-search-duration);
+	}
+
+	.searchLayerVisible { transition-delay: 0s; }
+
+	.searchGlyph {
+		transition:
+			opacity var(--community-search-duration) var(--twitter-ease),
+			transform var(--community-search-duration) var(--twitter-ease);
+	}
+
+	.searchToggle {
+		transition: transform var(--twitter-duration-fast) var(--twitter-ease);
+		&:active { transform: scale(0.96); }
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.animated {
+		.searchLayer, .searchGlyph, .searchToggle { transition: none; }
+		.searchToggle:active { transform: none; }
+	}
 }
 
 .searchField { flex: 1; min-width: 0; }
