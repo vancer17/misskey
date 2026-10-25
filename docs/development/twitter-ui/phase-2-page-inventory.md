@@ -33,7 +33,8 @@
 | **P-25** | Channels 页 | `/channels`、`/channels/:id` | `pages/channels.vue`；`pages/channel.vue`；`pages/channel-editor.vue`；`pages/TwitterChannel.vue` | Compatible（入口 Communities IA） | 决策 D4；P-00 ✅ | 帖子卡频道链接（A5）保留；入口采用 Home／Explore 横向频道卡片与聚合流，管理／收藏经独立窗口；头部与“关于”页简介的标签进入 P-15。见 [当前契约](./communities-layout.md) 与 [ADR-0015](./adr/0015-community-strip-layout.md)。 |
 | **P-20** | Compatible 面：设置首页、About、公告、Drive、本人成就 | `/settings`、`/about*`、`/announcements*`、`/drive*`、`/my/achievements` | `pages/settings/*`；`pages/about*.vue`；`pages/announcements.vue`、`announcement.vue`；`pages/drive*.vue`；`pages/achievements.vue`、`achievements/`、`notifications/`、`ui/twitter/components/TwitterAchievementsShell.vue` | Compatible | P-00 ✅ | 复用 Shell/Token/header/按钮，不重做信息架构；含审计 A6（`/notes/:id/reactions` 为 note.vue 的 `initialTab` 标签，作详情页标签复核而非独立页面）和 A9（成就通知）。成就页使用 Twitter 返回头和单列分隔列表；两种界面共用本人成就 Store，真实申领成功与回访重新查询。目录、徽章和文案共源，通知已读后对账账户角标。见 [同步契约](./achievement-notification-sync.md) 与 [ADR-0025](./adr/0025-achievement-notification-sync.md)。 |
 | **P-26** | 匿名入口与业务 Shell 边界 | 未登录 `/`；公开内容的访客头部；登录／注册入口 | `ui/twitter.vue`；`pages/welcome.vue`；`ui/twitter/components/TwitterWelcome.vue`、`TwitterAuthButtons.vue` | Core（认证复用 Compatible） | P-00；ADR-0007 | 独立入口、初始化优先、业务组件不挂载；X 归档仅补充 Nitter 无对应部分，见 `anonymous-entry.md` |
-| **P-19** | 视觉回归 + 验收测试基线 | Playwright 截图基线（页面 × 视口 × 明暗） | 新增测试基建 | 基建 | R-1~R-4、P-11~P-26 全部完成 + 走查复核通过 | **位置后置**：在泄漏清零前建基线会把泄漏固化为期望快照 |
+| **P-27** | 私信与群聊工作区 | `/chat`、`/chat/user/:userId`、`/chat/room/:roomId`、`/chat/messages/:messageId` | `pages/chat/entry.vue`；`ui/twitter/messages/`；主页与导航入口 | Full（本地 Chat） | P-00；ADR-0033 | 独立收件箱／会话，文本与附件、搜索分页、实时未读、反应删除及已有群管理；见 [messages.md](./messages.md)。不提供无后端支持的远程／加密／通话能力。 |
+| **P-19** | 视觉回归 + 验收测试基线 | Playwright 截图基线（页面 × 视口 × 明暗） | 新增测试基建 | 基建 | R-1~R-4、P-11~P-27 全部完成 + 走查复核通过 | **位置后置**：在泄漏清零前建基线会把泄漏固化为期望快照 |
 | **P-22** | 走查矩阵复审 + rollout 评估 | 审计走查矩阵（页面 × 交互 × 视口 × 主题） | — | 出口 | P-19 | 评估结论与默认 UI 切换决策 → ADR-0003 |
 
 ## 不纳入项（维持既有裁决）
@@ -43,7 +44,7 @@
 | P-14 Explore | 不纳入（导航无入口） | 第一阶段清单纳入条件未触发 |
 | P-16 user-tags | 不纳入，待产品确认；Twitter 简介标签统一进入 P-15，不产生该页入口 | [ADR-0023](./adr/0023-description-hashtag-navigation.md)；默认 Misskey 的用户标签语义保持原有实现 |
 | P-17 favorites / P-18 lists | 不纳入（无可见入口） | 同上 |
-| 其余阶段外路由（Chat/Gallery/Pages/Play/Clips/Games/Admin 等） | 沿用第一阶段处置表 | [phase-1-page-inventory.md](./phase-1-page-inventory.md) |
+| 其余阶段外路由（Gallery/Pages/Play/Clips/Games/Admin 等） | 沿用第一阶段处置表 | [phase-1-page-inventory.md](./phase-1-page-inventory.md) |
 
 ## 依赖关系
 
@@ -59,7 +60,8 @@ G0 develop 全量校验
     ├── P-11
     ├── P-23（依赖 R-1；spike → 组件 → Shell 替换）
     ├── P-25 / P-20（Compatible 面）
-    └── P-26 匿名入口与业务 Shell 边界
+    ├── P-26 匿名入口与业务 Shell 边界
+    └── P-27 私信与群聊工作区
 └── R-4 动效与阶梯债务（收尾打磨）
 └── 走查矩阵复核
     └── P-19 视觉回归基线
@@ -73,7 +75,7 @@ G0 develop 全量校验
 1. 每项合并前：`check-shipping` 全 PASS + 对应走查点；
 2. P-19 建立前：[port-fidelity-audit.md](./port-fidelity-audit.md) 的 A/D 类清零、B 类全部成文（第二轴泄漏不固化进基线）；
 3. P-19 建立后：所有后续变更追加视觉回归 diff 为零（或显式说明期望变更）；
-4. 走查矩阵复核范围：页面（时间线/详情/主页/通知/搜索/404/新增页）× 交互（浏览/发帖全工具链/回复/引用/菜单/选择器/举报/设置入口）× 视口（桌面 / ≤500px）× 主题（明/暗）。
+4. 走查矩阵复核范围：页面（时间线/详情/主页/通知/搜索/私信/404/新增页）× 交互（浏览/发帖全工具链/回复/引用/私信收发及群管理/菜单/选择器/举报/设置入口）× 视口（桌面 / ≤500px）× 主题（明/暗）。
 
 ## 与第一阶段的衔接
 
