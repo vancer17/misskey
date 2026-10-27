@@ -1,0 +1,27 @@
+<!--
+  社区本地入口：仅加载最小 Bootstrap，等待宿主与真实会话接入。
+  此模板由专用构建器写入资源路径和已有语言文案，不依赖后端 HTML 注入。
+  SPDX-FileCopyrightText: syuilo and misskey-project
+  SPDX-License-Identifier: AGPL-3.0-only
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+		<meta name="referrer" content="same-origin">
+		<title>Community</title>
+		__COMMUNITY_STYLES__
+	</head>
+	<body>
+		<section data-testid="community-app-bootstrap" data-phase="WAITING_HOST" role="status" aria-live="polite"
+			data-waiting-host-label="__COMMUNITY_LOADING_LABEL__"
+			data-session-required-label="__COMMUNITY_SESSION_LABEL__"
+			data-failed-label="__COMMUNITY_FAILED_LABEL__">
+			<p data-community-boot-message>__COMMUNITY_LOADING_LABEL__</p>
+		</section>
+		<div id="misskey_app"></div>
+		<script type="application/json" id="community-boot-messages">__COMMUNITY_BOOT_MESSAGES__</script>
+		<script type="module" src="__COMMUNITY_BOOTSTRAP__"></script>
+	</body>
+</html>

@@ -1,0 +1,22 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"types": ["node", "vite/client", "vite-plugin-glsl/ext", "vitest/importMeta"]
+	},
+	"include": [
+		"./build-community-app.ts",
+		"./verify-community-app.ts",
+		"./vite.community-app.config.ts",
+		"./vitest.config.community-app.ts",
+		"./lib/vite-shared-config.ts",
+		"./lib/community-app-build/**/*.ts",
+		"./lib/community-app-source/**/*.ts",
+		"./lib/community-app-verification/**/*.ts",
+		"./src/community-app/**/*.ts",
+		"./src/community-app/**/*.vue",
+		"./src/utility/virtual.d.ts",
+		"./@types/**/*.ts",
+		"../../scripts/build-community-app.mts"
+	]
+}

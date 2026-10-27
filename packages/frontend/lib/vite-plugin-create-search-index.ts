@@ -20,7 +20,7 @@ import JSON5 from 'json5';
 import { RolldownMagicString } from 'rolldown';
 import type { TransformResult } from 'rolldown';
 import path from 'node:path'
-import { hash, toBase62 } from '../vite.config';
+import { hash, toBase62 } from './vite-shared-config.js';
 import { minimatch } from 'minimatch';
 import {
 	type AttributeNode,

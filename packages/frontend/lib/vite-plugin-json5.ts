@@ -1,12 +1,13 @@
 /*
+ * 前端构建领域：将既有 JSON5 主题与配置资源转换为打包器可消费的模块。
  * SPDX-FileCopyrightText: syuilo and misskey-project
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
 import JSON5 from 'json5';
-import { Plugin } from 'vite';
+import type { Plugin } from 'vite';
 import { createFilter, dataToEsm } from '@rollup/pluginutils';
-import { RollupJsonOptions } from '@rollup/plugin-json';
+import type { RollupJsonOptions } from '@rollup/plugin-json';
 
 // json5 extends SyntaxError with additional fields (without subclassing)
 // https://github.com/json5/json5/blob/de344f0619bda1465a6e25c76f1c0c3dda8108d9/lib/parse.js#L1111-L1112
