@@ -12,7 +12,9 @@ import { reactive, readonly, shallowRef } from 'vue';
 import type { ShallowRef } from 'vue';
 import type { Channels, Endpoints, IChannelConnection, IStream, entities, api } from 'misskey-js';
 import { useStream } from '@/stream.js';
-import { accountSnapshot, failureFrom, freezeEntity, isCurrentAccount, isUncertainFailure, normalizeMessage, request, syncChatUnreadState } from '../adapters/index.js';
+import { captureAccountOwnership, ownsAccountRequest } from '@/accounts/ownership/index.js';
+import type { AccountRequestOwner } from '@/accounts/ownership/index.js';
+import { accountSnapshot, failureFrom, freezeEntity, isUncertainFailure, normalizeMessage, request, syncChatUnreadState } from '../adapters/index.js';
 import type { ActiveConversation, ChatAttachment, ChatDraft, ChatFailure, ChatMessage, ChatRoom, ChatTarget, Conversation, InboxKind, MessagesState, ReadonlyMessagesState } from '../domain/index.js';
 
 /** 查询批量大小；只用于分页，不改变业务规则。 */
@@ -83,8 +85,8 @@ let conversationConnection: IChannelConnection<Channels['chatUser']> | IChannelC
 let stream: IStream | null = null;
 /** 当前账户只读业务快照用于补齐私聊省略字段。 */
 const actor: ShallowRef<ReturnType<typeof accountSnapshot> | null> = shallowRef(null);
-/** 认证会话令牌固定到当前代次，不随账户快照更新漂移。 */
-let sessionToken: string | null = null;
+/** 请求归属固定到当前代次；业务层不持有或解释任何认证凭据。 */
+let sessionOwner: AccountRequestOwner | null = null;
 /** 只有页面可见且在消息底部附近时允许显式标读。 */
 let readLease: boolean = false;
 /** 最近成功标读的消息避免重复请求。 */
@@ -105,13 +107,13 @@ function targetKey(target: ChatTarget | null): string {
 
 /** 检查请求归属的账户与选择仍然有效。 */
 function isCurrent(account: number, selection?: number): boolean {
-	return account === accountGeneration && mutable.accountId !== null && sessionToken !== null && isCurrentAccount(mutable.accountId, sessionToken) && (selection === undefined || selection === selectionGeneration);
+	return account === accountGeneration && mutable.accountId !== null && sessionOwner !== null && ownsAccountRequest(sessionOwner) && (selection === undefined || selection === selectionGeneration);
 }
 
 /** 类型化、可取消请求包装；选中会话查询随选择变化取消。 */
 async function call<E extends keyof Endpoints, P extends Endpoints[E]['req']>(endpoint: E, params: P, selected: boolean = false): Promise<api.SwitchCaseResponseType<E, P>> {
 	const accountId: string | null = mutable.accountId;
-	if (!accountId || !sessionToken || !isCurrentAccount(accountId, sessionToken)) throw new Error('ACCOUNT_REQUIRED');
+	if (!accountId || !sessionOwner || !ownsAccountRequest(sessionOwner)) throw new Error('ACCOUNT_REQUIRED');
 	const controller: AbortController = new AbortController();
 	controllers.add(controller);
 	if (selected) selectedControllers.add(controller);
@@ -215,7 +217,7 @@ function clear(): void {
 	drafts.clear();
 	commands.clear();
 	actor.value = null;
-	sessionToken = null;
+	sessionOwner = null;
 	Object.assign(mutable, emptyState());
 }
 
@@ -226,13 +228,15 @@ function onPageHide(): void {
 
 /** 激活账户页所有权；返回幂等释放方法，离页不会保留流式业务消费者。 */
 function activate(accountId: string): () => void {
+	const owner: AccountRequestOwner | null = captureAccountOwnership();
+	if (owner?.accountId !== accountId) throw new Error('ACCOUNT_REQUIRED');
 	const snapshot: ReturnType<typeof accountSnapshot> = accountSnapshot(accountId);
-	if (mutable.accountId !== accountId || sessionToken !== snapshot.token) {
+	if (mutable.accountId !== accountId || sessionOwner?.identity !== owner.identity) {
 		clear();
 		mutable.accountId = accountId;
 	}
 	actor.value = snapshot;
-	sessionToken = snapshot.token;
+	sessionOwner = owner;
 	owners++;
 	const generation: number = accountGeneration;
 	if (owners === 1) {
@@ -260,7 +264,7 @@ function activate(accountId: string): () => void {
 /** 从当前账户更新策略快照后重新读取服务端联系能力。 */
 function onAccountUpdated(): void {
 	if (!mutable.accountId) return;
-	if (!sessionToken || !isCurrentAccount(mutable.accountId, sessionToken)) { clear(); return; }
+	if (!sessionOwner || !ownsAccountRequest(sessionOwner)) { clear(); return; }
 	actor.value = accountSnapshot(mutable.accountId);
 	if (mutable.active.target && !mutable.active.canRead) revokeReadView();
 	onInvalidated();

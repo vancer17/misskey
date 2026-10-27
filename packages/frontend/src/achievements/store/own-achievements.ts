@@ -15,9 +15,8 @@ import { fetchOwnAchievements } from '../adapters/query.js';
 import { $i } from '@/i.js';
 import { globalEvents } from '@/events.js';
 import { claimAchievement } from '@/utility/achievements.js';
-import { parseAccountCredentials } from '@/accounts/index.js';
-import type { AccountCredentials } from '@/accounts/index.js';
-import { miLocalStorage } from '@/local-storage.js';
+import { captureAccountOwnership, ownsAccountRequest } from '@/accounts/ownership/index.js';
+import type { AccountRequestOwner } from '@/accounts/ownership/index.js';
 
 /** 模块私有唯一快照；应用只通过公开 computed 和动作访问。 */
 const snapshot: ShallowRef<OwnAchievementsState> = shallowRef<OwnAchievementsState>({ userId: null, status: 'idle', items: null });
@@ -38,18 +37,17 @@ let controller: AbortController | null = null;
 const state: ComputedRef<OwnAchievementsState> = computed(/** 组件读取唯一快照，无复制列表。 */ (): OwnAchievementsState => snapshot.value);
 
 /** 只有当前登录账户仍拥有此快照和请求，才允许提交事实。 */
-function isCurrentAccount(userId: string, token: string): boolean {
-	const saved: AccountCredentials | null = parseAccountCredentials(miLocalStorage.getItem('account'));
-	return $i?.id === userId && $i.token === token && saved?.id === userId && saved.token === token && snapshot.value.userId === userId;
+function isCurrentAccount(owner: AccountRequestOwner): boolean {
+	return ownsAccountRequest(owner) && snapshot.value.userId === owner.accountId;
 }
 
 /** 串行消费最新失效意图；错误停在当前状态，不自动循环重试。 */
 async function flush(): Promise<void> {
 	scheduled = false;
 	if (running || !pending || consumers.size === 0 || $i == null) return;
-	const userId: string = $i.id;
-	const token: string = $i.token;
-	if (!isCurrentAccount(userId, token)) { pending = false; return; }
+	const owner: AccountRequestOwner | null = captureAccountOwnership();
+	if (owner === null || !isCurrentAccount(owner)) { pending = false; return; }
+	const userId: string = owner.accountId;
 	const requestRevision: number = revision;
 	const request: AbortController = new AbortController();
 	pending = false;
@@ -57,12 +55,12 @@ async function flush(): Promise<void> {
 	controller = request;
 	snapshot.value = { ...snapshot.value, status: 'loading' };
 	try {
-		const items: readonly Achievement[] = await fetchOwnAchievements(userId, token, request.signal);
-		if (isCurrentAccount(userId, token) && requestRevision === revision && !request.signal.aborted) {
+		const items: readonly Achievement[] = await fetchOwnAchievements(owner, request.signal);
+		if (isCurrentAccount(owner) && requestRevision === revision && !request.signal.aborted) {
 			snapshot.value = { userId, status: 'ready', items };
 		}
 	} catch (_error: unknown) {
-		if (isCurrentAccount(userId, token) && requestRevision === revision && !request.signal.aborted) {
+		if (isCurrentAccount(owner) && requestRevision === revision && !request.signal.aborted) {
 			snapshot.value = { ...snapshot.value, status: 'error' };
 		}
 	} finally {

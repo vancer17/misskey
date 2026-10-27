@@ -287,8 +287,7 @@ async function verifyMount(browser: Browser, origin: string, mount: string, mani
 			hostOrigin: origin,
 			assetBase: origin + mount,
 			canonicalInstanceUrl: 'https://community.example.invalid',
-			apiBase: 'https://bff.example.invalid/community/v1/api',
-			wsBase: 'wss://bff.example.invalid/community/v1/stream',
+			bffBaseUrl: 'https://bff.example.invalid/community/v1/',
 			language: 'en-US',
 		});
 		assert.equal(await configure(frame, dependencies, true), 'COMMUNITY_INVALID_HOST_WINDOW');
@@ -298,10 +297,10 @@ async function verifyMount(browser: Browser, origin: string, mount: string, mani
 		assert.equal(await configure(frame, { ...dependencies, assetBase: 'https://untrusted.example.invalid/community/' }), 'COMMUNITY_INVALID_ASSET_BASE');
 		assert.equal(await configure(frame, { ...dependencies, assetBase: origin + '/other-community/' }), 'COMMUNITY_INVALID_ASSET_BASE');
 		assert.equal(await configure(frame, { ...dependencies, canonicalInstanceUrl: 'https://community.example.invalid/not-an-origin' }), 'COMMUNITY_INVALID_CANONICAL_ORIGIN');
-		assert.equal(await configure(frame, { ...dependencies, apiBase: 'https://bff.example.invalid/api?token=forbidden' }), 'COMMUNITY_INVALID_DEPENDENCIES');
-		assert.equal(await configure(frame, { ...dependencies, wsBase: 'https://bff.example.invalid/stream' }), 'COMMUNITY_INVALID_DEPENDENCIES');
+		assert.equal(await configure(frame, { ...dependencies, bffBaseUrl: 'https://bff.example.invalid/community/v1/?token=forbidden' }), 'COMMUNITY_INVALID_DEPENDENCIES');
+		assert.equal(await configure(frame, { ...dependencies, bffBaseUrl: 'http://bff.example.invalid/community/v1/' }), 'COMMUNITY_INVALID_DEPENDENCIES');
 		assert.equal(await configure(frame, { ...dependencies, language: 'unsupported-language' }), 'COMMUNITY_UNSUPPORTED_LANGUAGE');
-		assert.deepEqual(await configure(frame, dependencies), { phase: 'SESSION_REQUIRED', instanceId: dependencies.instanceId, errorCode: 'COMMUNITY_BFF_ADAPTER_REQUIRED', language: dependencies.language });
+		assert.deepEqual(await configure(frame, dependencies), { phase: 'SESSION_REQUIRED', instanceId: dependencies.instanceId, errorCode: 'COMMUNITY_HOST_SESSION_REQUIRED', language: dependencies.language });
 		await frame.locator('[data-testid="community-app-bootstrap"][data-phase="SESSION_REQUIRED"]').waitFor();
 		assert.equal(await frame.locator('html').getAttribute('lang'), dependencies.language, '宿主选择的语言实际应用到文档');
 		assert.equal(await frame.locator('[data-community-boot-message]').textContent(), manifest.bootMessages[dependencies.language].sessionRequired, '会话等待文案使用包内选定语言');
@@ -324,9 +323,9 @@ async function verifyMount(browser: Browser, origin: string, mount: string, mani
 			(instanceId: string): void => { (window as VerificationWindow).__MISSKEY_COMMUNITY_BOOTSTRAP__?.dispose(instanceId); },
 			dependencies.instanceId,
 		);
-		assert.deepEqual(await snapshot(frame), { phase: 'FAILED', instanceId: null, errorCode: 'COMMUNITY_INSTANCE_DISPOSED', language: null });
+		assert.deepEqual(await snapshot(frame), { phase: 'DISPOSED', instanceId: null, errorCode: 'COMMUNITY_INSTANCE_DISPOSED', language: null });
 		assert.equal(await configure(frame, dependencies), 'COMMUNITY_INSTANCE_DISPOSED');
-		await frame.locator('[data-testid="community-app-bootstrap"][data-phase="FAILED"]').waitFor();
+		await frame.locator('[data-testid="community-app-bootstrap"][data-phase="DISPOSED"]').waitFor();
 		const applicationFailure: string = await frame.evaluate(
 			/** 直接请求真实生产应用入口也必须被会话 gate 拒绝，不能只保护 HTML 正常路径。 */
 			async (application: string): Promise<string> => {
@@ -339,7 +338,7 @@ async function verifyMount(browser: Browser, origin: string, mount: string, mani
 			},
 			manifest.application[dependencies.language],
 		);
-		assert.equal(applicationFailure, 'COMMUNITY_BFF_ADAPTER_REQUIRED', '独立生产入口不能绕过会话 gate');
+		assert.equal(applicationFailure, 'COMMUNITY_APPLICATION_ADAPTER_REQUIRED', '独立生产入口不能绕过应用初始化 gate');
 		const audit: Omit<StartupAudit, 'readSentinels'> & Readonly<{ sentinels: Readonly<Record<string, string | null>> }> = await frame.evaluate(
 			/** 汇总观测记录，函数本身不跨序列化边界。 */
 			(): Omit<StartupAudit, 'readSentinels'> & Readonly<{ sentinels: Readonly<Record<string, string | null>> }> => {

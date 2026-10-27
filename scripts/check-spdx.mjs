@@ -33,6 +33,9 @@ import { DEFAULT_INTEGRATION_REFS, findClosestMergeBase, gitLines, gitMergeBase,
 
 /** CI の対象ディレクトリ。この配列を CI とローカル検査の両方が使う。 */
 const TARGET_DIRECTORIES = [
+	'packages/community-bff-contract/src',
+	'packages/community-bff-contract/scripts',
+	'packages/community-bff-contract/test',
 	'packages/backend/migration',
 	'packages/backend/src',
 	'packages/backend/test',

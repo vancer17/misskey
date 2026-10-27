@@ -13,9 +13,8 @@ import { $i } from '@/i.js';
 import { globalEvents } from '@/events.js';
 import { ACHIEVEMENT_TYPES } from '@/achievements/domain/index.js';
 import type { Achievement, AchievementName } from '@/achievements/domain/index.js';
-import { parseAccountCredentials } from '@/accounts/index.js';
-import type { AccountCredentials } from '@/accounts/index.js';
-import { miLocalStorage } from '@/local-storage.js';
+import { captureAccountOwnership, ownsAccountRequest } from '@/accounts/ownership/index.js';
+import type { AccountRequestOwner } from '@/accounts/ownership/index.js';
 
 /** 存量消费者继续从原路径读取同一目录；待其统一迁移后删除本重导出。 */
 export { ACHIEVEMENT_TYPES, ACHIEVEMENT_BADGES } from '@/achievements/domain/index.js';
@@ -26,17 +25,11 @@ export const claimedAchievements: AchievementName[] = ($i && $i.achievements) ? 
 /** 原申领节流队列只持有当前排队标识。 */
 const claimingQueue: Set<AchievementName> = new Set<AchievementName>();
 
-/** 已落盘会话与内存账户必须同时拥有请求，换号到重载之间不复用旧凭据。 */
-function ownsClaimSession(credentials: AccountCredentials): boolean {
-	const saved: AccountCredentials | null = parseAccountCredentials(miLocalStorage.getItem('account'));
-	return $i?.id === credentials.id && $i.token === credentials.token && saved?.id === credentials.id && saved.token === credentials.token;
-}
-
 /** 保留原申领条件和排队间隔；返回成功仅代表真实 HTTP 已完成，失败由调用方选择重试。 */
 export async function claimAchievement(type: AchievementName): Promise<boolean> {
 	if ($i == null || $i.movedTo || claimedAchievements.includes(type)) return false;
-	const credentials: AccountCredentials = Object.freeze({ id: $i.id, token: $i.token });
-	if (!ownsClaimSession(credentials)) return false;
+	const owner: AccountRequestOwner | null = captureAccountOwnership();
+	if (owner === null) return false;
 	claimingQueue.add(type);
 	claimedAchievements.push(type);
 	await new Promise<void>(/** 沿用队列长度决定相邻申领的间隔。 */ (resolve: () => void): void => {
@@ -47,10 +40,10 @@ export async function claimAchievement(type: AchievementName): Promise<boolean> 
 	}, 500);
 	let confirmed: boolean = false;
 	try {
-		if (!ownsClaimSession(credentials)) return false;
-		await misskeyApi('i/claim-achievement', { name: type }, credentials.token);
+		if (!ownsAccountRequest(owner)) return false;
+		await misskeyApi('i/claim-achievement', { name: type });
 		confirmed = true;
-		if (ownsClaimSession(credentials)) globalEvents.emit('achievementClaimed', credentials.id);
+		if (ownsAccountRequest(owner)) globalEvents.emit('achievementClaimed', owner.accountId);
 		return true;
 	} catch (_error: unknown) {
 		// 原消费者多为 fire-and-forget；在此观察拒绝，且不把失败发布为成功。

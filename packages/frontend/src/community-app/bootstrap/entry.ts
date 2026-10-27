@@ -33,8 +33,8 @@ function readBootMessages(): Readonly<Record<CommunitySupportedLanguage, Communi
 		const candidate: unknown = source[language];
 		if (typeof candidate !== 'object' || candidate === null) throw new Error('COMMUNITY_INVALID_BOOT_MESSAGES');
 		const labels: Record<string, unknown> = candidate as Record<string, unknown>;
-		if (typeof labels.waitingHost !== 'string' || typeof labels.sessionRequired !== 'string' || typeof labels.failed !== 'string') throw new Error('COMMUNITY_INVALID_BOOT_MESSAGES');
-		result[language] = Object.freeze({ waitingHost: labels.waitingHost, sessionRequired: labels.sessionRequired, failed: labels.failed });
+		if (typeof labels.waitingHost !== 'string' || typeof labels.sessionRequired !== 'string' || typeof labels.sessionEstablished !== 'string' || typeof labels.failed !== 'string') throw new Error('COMMUNITY_INVALID_BOOT_MESSAGES');
+		result[language] = Object.freeze({ waitingHost: labels.waitingHost, sessionRequired: labels.sessionRequired, sessionEstablished: labels.sessionEstablished, failed: labels.failed });
 	}
 	return Object.freeze(result) as Readonly<Record<CommunitySupportedLanguage, CommunityBootMessages>>;
 }
@@ -48,7 +48,7 @@ function renderState(state: CommunityBootSnapshot): void {
 	const language: CommunitySupportedLanguage = state.language ?? 'zh-CN';
 	window.document.documentElement.lang = language;
 	const labels: CommunityBootMessages = bootMessages[language];
-	const label: string = state.phase === 'WAITING_HOST' ? labels.waitingHost : state.phase === 'SESSION_REQUIRED' ? labels.sessionRequired : labels.failed;
+	const label: string = state.phase === 'WAITING_HOST' || state.phase === 'ESTABLISHING_SESSION' ? labels.waitingHost : state.phase === 'SESSION_REQUIRED' ? labels.sessionRequired : state.phase === 'SESSION_ESTABLISHED' ? labels.sessionEstablished : labels.failed;
 	if (message !== null) message.textContent = label;
 }
 

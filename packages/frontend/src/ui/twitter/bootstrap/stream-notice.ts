@@ -16,6 +16,7 @@ import { $i } from '@/i.js';
 import { prefer } from '@/preferences.js';
 import { store } from '@/store.js';
 import { useStream } from '@/stream.js';
+import { getAccountOwnershipIdentity } from '@/accounts/ownership/index.js';
 
 /** 前台持续断线的展示宽限；恢复连接或进入后台时取消，不作为运行时配置。 */
 const RECONNECT_NOTICE_GRACE_MS: number = 3000;
@@ -138,7 +139,7 @@ export function createTwitterStreamNotice(): TwitterStreamNoticeController {
 
 	const stopAccount: WatchStopHandle = watch([
 		/** 只读取现有账户标识，以识别观察者的所有权边界。 */ (): string | null => $i?.id ?? null,
-		/** 令牌变化代表现有登录会话变化，不解析凭证内容。 */ (): string | null => $i?.token ?? null,
+		/** 不透明身份变化代表账户边界变化，凭据续期不参与业务 UI 判断。 */ (): object | null => getAccountOwnershipIdentity(),
 	], onAccountChanged, { flush: 'sync' });
 	const stopRealtime: WatchStopHandle = watch(
 		/** 实时模式只决定是否观察，不创建独立运行模式。 */ (): boolean => store.s.realtimeMode,

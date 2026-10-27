@@ -1,6 +1,10 @@
 <!--
 SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
+
+文件领域：链接媒体播放器基础组件。
+作用：沿用现有预览解析和播放状态，通过公开网络接缝获取播放器信息。
+数据链：URL 或既有预览 → 网络适配 → 播放器展示，不解释社区会话或宿主认证。
 -->
 
 <template>
@@ -32,6 +36,7 @@ import { ref } from 'vue';
 import { versatileLang } from '@@/js/intl-const.js';
 import MkWindow from '@/components/MkWindow.vue';
 import { transformPlayerUrl } from '@/utility/url-preview.js';
+import { requestUrlPreview } from '@/utility/url-preview-request/index.js';
 import type { SummalyResult } from '@misskey-dev/summaly';
 
 const props = defineProps<{
@@ -47,7 +52,8 @@ const iframeLoaded = ref(false);
 const title = ref<string | null>(null);
 const player = ref<SummalyResult['player'] | null>(null);
 
-async function ytFetch() {
+/** 取得预览并更新现有播放器临时状态，认证和请求来源由网络边界决定。 */
+async function ytFetch(): Promise<void> {
 	title.value = null;
 	player.value = null;
 	fetching.value = true;
@@ -56,14 +62,14 @@ async function ytFetch() {
 	let info: SummalyResult;
 
 	if (typeof props.urlOrSummalyResult === 'string') {
-		const requestUrl = new URL(props.urlOrSummalyResult, window.location.href);
+		const requestUrl: URL = new URL(props.urlOrSummalyResult, window.location.href);
 		if (requestUrl.protocol !== 'http:' && requestUrl.protocol !== 'https:') {
 			// Invalid URL
 			fetching.value = false;
 			return;
 		}
 
-		const res = await window.fetch(`/url?url=${encodeURIComponent(requestUrl.href)}&lang=${versatileLang}`);
+		const res: Response = await requestUrlPreview(requestUrl.href, versatileLang);
 		info = await res.json() as SummalyResult;
 	} else {
 		info = props.urlOrSummalyResult;

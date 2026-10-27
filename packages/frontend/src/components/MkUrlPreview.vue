@@ -1,6 +1,10 @@
 <!--
 SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
+
+文件领域：链接预览基础组件。
+作用：展示原有 Summaly 预览和媒体播放器，通过公开网络接缝读取预览响应。
+数据链：输入 URL → 预览请求适配 → 原组件展示状态；认证由传输边界处理。
 -->
 
 <template>
@@ -92,6 +96,7 @@ import * as os from '@/os.js';
 import { deviceKind } from '@/utility/device-kind.js';
 import MkButton from '@/components/MkButton.vue';
 import { transformPlayerUrl } from '@/utility/url-preview.js';
+import { requestUrlPreview } from '@/utility/url-preview-request/index.js';
 import { store } from '@/store.js';
 import { prefer } from '@/preferences.js';
 import { maybeMakeRelative } from '@@/js/url.js';
@@ -137,7 +142,7 @@ onDeactivated(() => {
 	playerEnabled.value = false;
 });
 
-const requestUrl = new URL(props.url, window.location.href);
+const requestUrl: URL = new URL(props.url, window.location.href);
 if (!['http:', 'https:'].includes(requestUrl.protocol)) throw new Error('invalid url');
 
 if (requestUrl.hostname === 'twitter.com' || requestUrl.hostname === 'mobile.twitter.com' || requestUrl.hostname === 'x.com' || requestUrl.hostname === 'mobile.x.com') {
@@ -151,7 +156,7 @@ if (requestUrl.hostname === 'music.youtube.com' && requestUrl.pathname.match('^/
 
 requestUrl.hash = '';
 
-window.fetch(`/url?url=${encodeURIComponent(requestUrl.href)}&lang=${versatileLang}`)
+requestUrlPreview(requestUrl.href, versatileLang)
 	.then(res => {
 		if (!res.ok) {
 			if (_DEV_) {

@@ -1,12 +1,12 @@
 # 社区专用构建与 App 装配交接
 
-本文描述当前 P1 实现。架构决策见 [ADR-0037](./adr/0037-community-app-build-boundary.md)。
+本文描述当前独立构建及 BFF 契约适配实现。构建决策见 [ADR-0037](./adr/0037-community-app-build-boundary.md)，会话边界见 [ADR-0038](./adr/0038-community-bff-contract-and-session-ownership.md)，后端交接见 [BFF 契约](./community-bff-contract.md)。
 
 ## 交付范围
 
 `build:community-app` 从现有 Twitter 根、社区路由及基础组件生成独立静态子制品，不启动 Misskey 后端，不读取 `.config/default.yml`，不依赖服务端生成 HTML。原站点继续使用原有构建命令。
 
-P1 包含真实业务代码图，入口仅执行轻量 Bootstrap。没有真实 BFF 会话时，页面停留在等待宿主或需要会话状态，不挂载 Twitter 业务根，不恢复 Misskey 本地账户，不发起 API／WebSocket 请求，不注册 Service Worker。当前不能据此宣称登录、私信、业务就绪或 App 桥接已联调通过。
+制品包含真实业务代码图，入口先执行轻量 Bootstrap。没有宿主授权能力时，不恢复 Misskey 本地账户、不发起 API／WebSocket 请求、不注册 Service Worker。宿主调用 `start()` 后可建立真实 BFF 会话并安装唯一账户／实例状态，当前仍停在 `COMMUNITY_APPLICATION_ADAPTER_REQUIRED`：尚未实现完整业务初始化、挂载和活动桥接，不能据此宣称登录、私信、业务就绪或 App 桥接已联调通过。
 
 本次未修改宠物 App 的入口、路由、导航或呈现层，也未自动接入其翻转容器。App 仓库已有 P0 本地装配验证与本制品的接口对接仍由 App 开发同事完成。
 
@@ -16,14 +16,16 @@ P1 包含真实业务代码图，入口仅执行轻量 Bootstrap。没有真实 
 
 ```sh
 pnpm build:community-app
+pnpm --filter community-bff-contract typecheck
+pnpm --filter community-bff-contract test
 pnpm --filter frontend typecheck:community-app
 pnpm --filter frontend test:community-app
 pnpm --filter frontend verify:community-app
 ```
 
-根构建命令依次构建 i18n、misskey-js、reversi、bubble-game 和图标子集，再编译前端目标。仅在这些依赖已构建时，才可直接运行 `pnpm --filter frontend build:community-app`。不需要执行后端构建或传入实例凭据。
+根构建命令构建 `community-bff-contract`、i18n、misskey-js、reversi、bubble-game 和图标子集，再编译前端目标。仅在这些依赖已构建时，才可直接运行 `pnpm --filter frontend build:community-app`。不需要执行后端构建或传入实例凭据。仅生成 BFF OpenAPI、JSON Schema 和完整实体校验器可运行 `pnpm build:community-bff-contract`；干净检出后应先生成校验器，再执行相关类型检查和测试。
 
-输出位于 `built/community-app/`，包含 `index.html`、轻量启动模块、按语言生成的真实应用模块、CSS、字体、实际依赖的 Worker 等静态资源，以及 `community-artifact.json`；需要 WASM 时也必须随包交付并通过闭包校验。当前支持 `zh-CN`、`en-US`、`ja-JP`，权威列表位于 Bootstrap 的 `artifact.ts`；语言内容沿用原项目资源。
+输出位于 `built/community-app/`，包含 `index.html`、轻量启动模块、按语言生成的真实应用模块、CSS、字体、实际依赖的 Worker 等静态资源，以及 `community-artifact.json`；需要 WASM 时也必须随包交付并通过闭包校验。当前支持 `zh-CN`、`en-US`、`ja-JP`，唯一制品模型通过 Bootstrap 的 `artifact/index.ts` 纯入口暴露；语言内容沿用原项目资源。构建配置不导入运行时 Bootstrap，以免会话与网络实现进入 Node 配置求值链。
 
 构建会拒绝外置模块、原站点启动入口及其他根 UI、缺失或越界的资源引用。原始 Vite 中间清单与未内联语言模块不会留在最终制品中。资源使用相对路径，支持 `/community/` 和更深的挂载前缀。
 
@@ -33,13 +35,13 @@ pnpm --filter frontend verify:community-app
 
 ## 制品清单
 
-唯一类型定义由 `packages/frontend/src/community-app/bootstrap/index.ts` 公开：
+唯一类型定义由 `packages/frontend/src/community-app/bootstrap/artifact/index.ts` 公开，Bootstrap 顶层同时重导出：
 
 | 字段 | 含义 |
 | --- | --- |
 | `formatVersion` | 当前静态制品协议版本 `1`，不是运行时业务架构开关 |
 | `bootstrap` | 相对制品根目录的轻量启动模块 |
-| `application` | 语言代码到真实应用入口的映射；P1 不执行这些入口 |
+| `application` | 语言代码到真实应用入口的映射；当前应用门槛未解除，不执行挂载 |
 | `styles` | 静态样式路径 |
 | `supportedLanguages`、`bootMessages` | 已随包交付的语言与启动标签 |
 | `sourceRevision`、`sourceDirty` | 构建时 Git 提交及工作树状态，仅用于装配追踪 |
@@ -58,6 +60,8 @@ App 在本地同源子文档加载完成后，通过该子窗口的冻结对象 
 | 方法 | 行为 |
 | --- | --- |
 | `configure(input, source)` | 验证实际父窗口和装配参数，成功配置一次并返回冻结快照 |
+| `start(port, source)` | 捕获宿主授权能力，单飞建立真实 BFF 会话；不挂载业务页面 |
+| `subscribe(listener, source)` | 立即交付当前冻结快照并订阅变化；返回取消订阅函数 |
 | `getState()` | 返回冻结的当前启动状态 |
 | `dispose(instanceId)` | 只允许当前实例释放；释放后必须重新创建子文档才能装配 |
 
@@ -65,12 +69,11 @@ App 在本地同源子文档加载完成后，通过该子窗口的冻结对象 
 
 | 字段 | 约束 |
 | --- | --- |
-| `instanceId` | 非空且不超过 128 字符；对应当前子文档实例 |
+| `instanceId` | 与 BFF Schema 相同的实例标识；对应当前子文档实例 |
 | `hostOrigin` | 与当前本地子文档实际 origin 严格相同，不允许 `null` 或通配符 |
 | `assetBase` | 与当前子文档所在目录的绝对地址完全一致，以 `/` 结尾 |
 | `canonicalInstanceUrl` | 真实社区 HTTPS origin，不附带路径、query、片段或凭据 |
-| `apiBase` | BFF 的 HTTPS API 基地址，不附带 query、片段或凭据 |
-| `wsBase` | BFF 的 WSS 基地址，不附带 query、片段或凭据 |
+| `bffBaseUrl` | 完整 HTTPS 版本目录，须以 `/community/v1/` 结尾；允许部署前缀，不附带 query、片段或凭据 |
 | `language` | 上述三种已交付语言之一 |
 
 调用的 `source` 必须是实际父窗口；直接顶层打开该页面不能配置为已嵌入实例。H5 与 Android 本地 WebView 使用实际本地 origin，不能预先硬编码成生产社区 origin。参数中不传 Me、Misskey token、完整业务实体或环境探测结果。
@@ -78,8 +81,11 @@ App 在本地同源子文档加载完成后，通过该子窗口的冻结对象 
 启动阶段如下：
 
 1. 本地页面加载后为 `WAITING_HOST`，尚无配置与业务副作用。
-2. 合法配置后为 `SESSION_REQUIRED`，错误码为 `COMMUNITY_BFF_ADAPTER_REQUIRED`；这表示 P2 依赖尚未实现，不代表用户已登录或业务已就绪。
-3. 通过父窗口来源校验后，依赖参数校验失败或当前实例释放会进入 `FAILED`。非法依赖参数未锁定实例，可修正后再次配置。错误来源、重复配置与旧实例释放会被拒绝并保留原状态；已经合法配置的实例不能再次配置。
+2. 合法配置后为 `SESSION_REQUIRED`，错误码为 `COMMUNITY_HOST_SESSION_REQUIRED`；配置本身不请求授权码或后端。
+3. `start(port, parentWindow)` 验证并冻结 `getGrant({ instanceId, signal })` 能力，进入 `ESTABLISHING_SESSION`，兑换真实会话并校验完整 SDK 账户／实例模型。
+4. 成功后为 `SESSION_ESTABLISHED`，错误码为 `COMMUNITY_APPLICATION_ADAPTER_REQUIRED`。业务仍未挂载，不能用该状态发送翻转 READY 或活动 ACK。端口可提供 `notifyAuthRequired(code)`，认证失效时供宿主处理；不得在该回调中复活原文档。
+5. 合法来源下的配置错误或普通启动错误进入 `FAILED`。首次会话建立前可重试；已经建立过会话的文档不能换号或在撤销后重新登录，须销毁并以新 `instanceId` 重建。普通离线、权限错误不直接等同退出。
+6. 当前实例 `dispose()` 进入 `DISPOSED`，同步失效请求归属、取消等待、关闭上传／流连接。迟到结果不能安装状态。释放幂等，旧实例释放被拒绝。释放后宿主应销毁子文档。
 
 App 可以观察这些状态展示装配进度，但不能以 iframe `load`、文件可读、API 对象存在或 `SESSION_REQUIRED` 推导社群业务就绪。
 
@@ -89,11 +95,11 @@ App 可以观察这些状态展示装配进度，但不能以 iframe `load`、�
 
 社区路由使用内部导航，物理子文档保持本地路径；仅显式编译允许的社区页面，不复用完整设置、管理和认证路由。未知路径有受控落点。需要账户管理的产品行为留待 P2 明确宿主意图与允许范围。
 
-社区 LocalStorage、IndexedDB、BroadcastChannel 使用专属命名空间，禁止清空整个同源宿主存储。IndexedDB 操作失败直接传播，不额外新增持久化兼容路径。P1 不加载业务入口，因此不会初始化这些业务设施。
+社区 LocalStorage、IndexedDB、BroadcastChannel 使用专属命名空间，禁止清空整个同源宿主存储。IndexedDB 操作失败直接传播，不额外新增持久化兼容路径。当前不挂载业务入口，因此不会初始化这些业务设施。BFF bearer 仅存在于传输私有内存，账户模型不含 token；通知、私信、成就与断线提示通过公开请求归属 API 判断迟到结果，不读取宿主存储或解释凭据。
 
 ## 后续真实对接与验收
 
-P2 必须由 Bootstrap 接收真实 BFF 会话适配器，再装配权威账户状态、API、上传、流连接、到期与退出处理，解除当前明确的会话门槛，并将真实业务生命周期连接到已有翻转协议。不能直接删除门槛或用假 Me、静态 token、Mock ACK 掩盖缺失依赖。
+当前已交付会话契约、宿主授权端口、HTTP／上传／流连接／URL-preview 适配及请求归属。接下来仍须实现独立业务初始化、真实 Twitter 根与初始路由挂载、全部副作用释放，并把实际生命周期接入已有翻转协议；只有这些条件完成后才能解除应用门槛。宿主现有 peer 工厂也须接入配置、会话与业务准备屏障。不能直接删除门槛或用假 Me、静态 token、Mock ACK 掩盖缺失依赖。
 
 业务挂载之后，需以真实 BFF／Misskey 后端验证登录身份、首页、私信收发、前后台重连、会话过期和退出清理，再在 H5 与 Android 真机验证完整翻转、焦点和返回行为。当前静态闭包与无会话 Bootstrap 校验不能替代这些验证。
 

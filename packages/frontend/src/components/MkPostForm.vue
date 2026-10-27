@@ -288,7 +288,7 @@ import { store } from '@/store.js';
 import MkInfo from '@/components/MkInfo.vue';
 import { i18n } from '@/i18n.js';
 import { instance } from '@/instance.js';
-import { ensureSignin, notesCount, incNotesCount } from '@/i.js';
+import { ensureSignin, getNotesCount, incNotesCount } from '@/i.js';
 import { getAccounts, getAccountMenu } from '@/accounts.js';
 import { deepClone } from '@/utility/clone.js';
 import MkRippleEffect from '@/components/MkRippleEffect.vue';
@@ -1285,7 +1285,7 @@ async function post(ev?: PointerEvent): Promise<void> {
 			postAccount.value = null;
 
 			incNotesCount();
-			if (notesCount === 1) {
+			if (getNotesCount() === 1) {
 				claimAchievement('notes1');
 			}
 

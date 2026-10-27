@@ -2,6 +2,7 @@ packages:
   - packages/backend
   - packages/frontend-shared
   - packages/frontend
+  - packages/community-bff-contract
   - packages/frontend-builder
   - packages/frontend-embed
   - packages/i18n

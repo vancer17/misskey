@@ -1,5 +1,11 @@
+/**
+ * 文件领域：Misskey SDK 实时流。
+ * 作用：管理频道池、消息分发与断线重连；可由外部认证边界供应每次连接地址。
+ * 数据链：调用方频道订阅 → WebSocket → 原 Misskey 流事件，不解释外部认证票据。
+ */
 import { EventEmitter } from 'eventemitter3';
-import _ReconnectingWebSocket, { Options } from 'reconnecting-websocket';
+import _ReconnectingWebSocket from 'reconnecting-websocket';
+import type { Options, UrlProvider } from 'reconnecting-websocket';
 import type { BroadcastEvents, Channels } from './streaming.types.js';
 
 // コンストラクタとクラスそのものの定義が上手く解決出来ないため再定義
@@ -51,10 +57,14 @@ export default class Stream extends EventEmitter<StreamEvents> implements IStrea
 	private sharedConnections: SharedConnection[] = [];
 	private nonSharedConnections: NonSharedConnection[] = [];
 	private idCounter = 0;
+	private readonly urlProviderLifetime: AbortController = new AbortController();
 
+	/** 建立原站默认连接或调用方供应的连接地址，重连和频道行为保持一致。 */
 	constructor(origin: string, user: { token: string; } | null, options?: {
 		WebSocket?: Options['WebSocket'];
 		binaryType?: ReconnectingWebSocket['binaryType'];
+		/** 每次连接及重连重新解析地址，供外部认证适配器领取一次性连接票据。 */
+		urlProvider?: UrlProvider;
 	}) {
 		super();
 
@@ -74,16 +84,19 @@ export default class Stream extends EventEmitter<StreamEvents> implements IStrea
 		// eslint-disable-next-line no-param-reassign
 		options = options ?? { };
 
-		const query = urlQuery({
+		const query: string = urlQuery({
 			i: user?.token,
 
 			// To prevent cache of an HTML such as error screen
 			_t: Date.now(),
 		});
 
-		const wsOrigin = origin.replace('http://', 'ws://').replace('https://', 'wss://');
+		const wsOrigin: string = origin.replace('http://', 'ws://').replace('https://', 'wss://');
 
-		this.stream = new ReconnectingWebSocketConstructor(`${wsOrigin}/streaming?${query}`, '', {
+		const provider: UrlProvider | undefined = options.urlProvider;
+		const connectionUrl: UrlProvider = provider === undefined ? `${wsOrigin}/streaming?${query}` :
+			/** 外部票据解析失败必须由 SDK 捕获，避免依赖库锁住连接且产生未处理拒绝。 */ (): Promise<string> => this.resolveConnectionUrl(provider);
+		this.stream = new ReconnectingWebSocketConstructor(connectionUrl, '', {
 			minReconnectionDelay: 1, // https://github.com/pladaria/reconnecting-websocket/issues/91
 			WebSocket: options.WebSocket,
 		});
@@ -93,6 +106,52 @@ export default class Stream extends EventEmitter<StreamEvents> implements IStrea
 		this.stream.addEventListener('open', this.onOpen);
 		this.stream.addEventListener('close', this.onClose);
 		this.stream.addEventListener('message', this.onMessage);
+	}
+
+	/**
+	 * 只为可选外部地址供应器收敛失败及关闭，不复制频道或 WebSocket 重连协议。
+	 * 适配 reconnecting-websocket 4.4.0 未捕获 URL Promise 拒绝的真实行为；
+	 * 依赖原生正确支持可取消供应器及失败恢复后，应重新评估并移除此局部路径。
+	 */
+	private resolveConnectionUrl(provider: UrlProvider): Promise<string> {
+		return new Promise<string>(/** 供应器重试与关闭共享唯一结算句柄。 */ (resolve: (url: string) => void): void => {
+			let retryTimer: ReturnType<typeof setTimeout> | null = null;
+			let retryDelay: number = 1000;
+			let settled: boolean = false;
+			const signal: AbortSignal = this.urlProviderLifetime.signal;
+
+			/** 清理重试与监听，任何迟到票据都不能再次开启连接。 */
+			function finish(url: string): void {
+				if (settled) return;
+				settled = true;
+				if (retryTimer !== null) clearTimeout(retryTimer);
+				signal.removeEventListener('abort', closed);
+				resolve(url);
+			}
+
+			/** 底层 close 已先设置关闭标记，空终值仅释放 Promise，不会创建无票据连接。 */
+			function closed(): void { finish(''); }
+
+			/** 每轮重新取得一次性票据，临时故障只退避重试该解析操作。 */
+			async function attempt(): Promise<void> {
+				if (signal.aborted) { closed(); return; }
+				try {
+					const url: string = typeof provider === 'string' ? provider : await provider();
+					if (signal.aborted) { closed(); return; }
+					const address: URL = new URL(url);
+					if (address.protocol !== 'wss:' && address.protocol !== 'ws:') throw new Error('Invalid stream URL protocol');
+					finish(url);
+				} catch (_error: unknown) {
+					if (signal.aborted) { closed(); return; }
+					retryTimer = setTimeout(/** 失败后重新调用供应器，不复用旧票据或回退匿名地址。 */ (): void => { void attempt(); }, retryDelay);
+					retryDelay = Math.min(retryDelay * 2, 10000);
+				}
+			}
+
+			if (signal.aborted) { closed(); return; }
+			signal.addEventListener('abort', closed, { once: true });
+			void attempt();
+		});
 	}
 
 	private genId(): string {
@@ -221,10 +280,11 @@ export default class Stream extends EventEmitter<StreamEvents> implements IStrea
 	}
 
 	/**
-	 * Close this connection
+	 * 关闭底层连接并同步释放可选地址解析器；关闭后迟到票据不能建立新连接。
 	 */
 	public close(): void {
 		this.stream.close();
+		this.urlProviderLifetime.abort();
 	}
 }
 

@@ -8,7 +8,7 @@
 import path from 'node:path';
 import type { Plugin } from 'vite';
 import type { NormalizedOutputOptions, OutputBundle } from 'rolldown';
-export { COMMUNITY_SUPPORTED_LANGUAGES as COMMUNITY_BUILD_LANGUAGES } from '../../src/community-app/bootstrap/index.js';
+export { COMMUNITY_SUPPORTED_LANGUAGES as COMMUNITY_BUILD_LANGUAGES } from '../../src/community-app/bootstrap/artifact/index.js';
 
 /** 固定社区入口，与原站点入口分别编译。 */
 export const COMMUNITY_BUILD_ENTRIES = {
@@ -30,6 +30,12 @@ export function createCommunityClosedGraphPlugin(frontendRoot: string): Plugin {
 		'src/router.definition.ts',
 		'src/i.ts',
 		'src/accounts.ts',
+		'src/accounts/ownership/index.ts',
+		'src/instance.ts',
+		'src/utility/misskey-api.ts',
+		'src/stream.ts',
+		'src/utility/drive-upload/index.ts',
+		'src/utility/url-preview-request/index.ts',
 		'src/signout.ts',
 		'src/utility/please-login.ts',
 		'src/utility/initialize-sw.ts',
