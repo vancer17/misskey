@@ -14,7 +14,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <nav :class="[$style.root, { [$style.iconOnly]: iconOnly }]" :aria-label="i18n.ts._twitterUi.primaryNavigation">
 	<div :class="$style.top">
 		<MkA :class="$style.logo" to="/" :aria-label="instance.name ?? i18n.ts.timeline">
-			<img :src="instance.iconUrl || '/favicon.ico'" alt="" :class="$style.logoIcon"/>
+			<img :src="instance.iconUrl || defaultIconUrl" alt="" :class="$style.logoIcon"/>
 		</MkA>
 	</div>
 
@@ -128,6 +128,7 @@ import TwitterAvatar from './components/TwitterAvatar.vue';
 import { preloadTwitterNotificationsPage, preloadTwitterUserPage } from './routing/index.js';
 import { computed } from 'vue';
 import type { ComputedRef } from 'vue';
+import { defaultIconUrl } from '@@/js/config.js';
 import { instance } from '@/instance.js';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';

@@ -38,7 +38,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<main ref="mainEl" :class="$style.main" data-testid="twitter-main" @contextmenu.stop="onContextmenu">
 					<header v-if="!$i" :class="$style.guestHeader" data-testid="twitter-guest-header">
 						<MkA to="/?ui=twitter" :aria-label="instanceName">
-							<img :src="instance.iconUrl || '/favicon.ico'" :class="$style.guestLogo" alt=""/>
+							<img :src="instance.iconUrl || defaultIconUrl" :class="$style.guestLogo" alt=""/>
 						</MkA>
 						<TwitterAuthButtons compact/>
 					</header>
@@ -85,7 +85,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { computed, defineAsyncComponent, onBeforeUnmount, provide, ref, useTemplateRef, watch } from 'vue';
 import type { Component, ComputedRef, Ref, ShallowRef } from 'vue';
-import { instanceName } from '@@/js/config.js';
+import { defaultIconUrl, instanceName } from '@@/js/config.js';
 import { isLink } from '@@/js/is-link.js';
 import XCommon from './_common_/common.vue';
 import TwitterMobileBar from './twitter/MobileBar.vue';
