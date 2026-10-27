@@ -107,6 +107,7 @@ function createRuntimeManifest(options: CommunityFinalizeOptions, bootstrap: Man
 		bootMessages[language] = {
 			waitingHost: locale.loading,
 			sessionRequired: locale.signinRequired,
+			sessionEstablished: locale.unavailable,
 			failed: locale.failedToFetchAccountInformation,
 		};
 	}
@@ -201,7 +202,7 @@ function parseArtifact(content: string): CommunityArtifactManifest {
 	for (const language of supportedLanguages) {
 		if (typeof language !== 'string' || !(language in parsed.application)) throw new Error('Missing community language entry.');
 		const messages: unknown = parsed.bootMessages[language];
-		if (!isRecord(messages) || typeof messages.waitingHost !== 'string' || typeof messages.sessionRequired !== 'string' || typeof messages.failed !== 'string') throw new Error('Invalid community bootstrap messages.');
+		if (!isRecord(messages) || typeof messages.waitingHost !== 'string' || typeof messages.sessionRequired !== 'string' || typeof messages.sessionEstablished !== 'string' || typeof messages.failed !== 'string') throw new Error('Invalid community bootstrap messages.');
 	}
 	for (const file of fileRecords) {
 		if (!isRecord(file) || typeof file.path !== 'string' || typeof file.bytes !== 'number' || !Number.isSafeInteger(file.bytes) || file.bytes < 0 || typeof file.sha256 !== 'string' || !/^[a-f\d]{64}$/u.test(file.sha256)) throw new Error('Invalid community artifact file record.');

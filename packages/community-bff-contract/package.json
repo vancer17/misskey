@@ -1,0 +1,23 @@
+{
+	"name": "community-bff-contract",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "AGPL-3.0-only",
+	"exports": "./src/index.ts",
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"generate": "tsx scripts/generate.ts",
+		"build": "tsx scripts/generate.ts",
+		"test": "vitest run --config vitest.config.ts"
+	},
+	"dependencies": {
+		"misskey-js": "workspace:*"
+	},
+	"devDependencies": {
+		"ajv": "8.20.0",
+		"esbuild": "0.28.2",
+		"tsx": "4.23.12",
+		"vitest": "4.1.11"
+	}
+}

@@ -25,6 +25,10 @@ export function ensureSignin() {
 }
 
 export let notesCount = $i == null ? 0 : $i.notesCount;
+/** 从现有独立站账户计数读取展示投影，供共享发帖组件与嵌入适配保持相同调用契约。 */
+export function getNotesCount(): number {
+	return notesCount;
+}
 export function incNotesCount() {
 	notesCount++;
 }

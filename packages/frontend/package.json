@@ -22,6 +22,7 @@
 		"lint": "pnpm typecheck && pnpm eslint"
 	},
 	"dependencies": {
+		"community-bff-contract": "workspace:*",
 		"@analytics/google-analytics": "1.1.0",
 		"@mcaptcha/core-glue": "0.1.0-alpha-5",
 		"@misskey-dev/browser-image-resizer": "2024.1.0",

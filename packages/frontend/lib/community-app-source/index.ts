@@ -23,6 +23,7 @@ const sourcePaths: readonly string[] = [
 	'packages/frontend',
 	'packages/frontend-shared',
 	'packages/frontend-builder',
+	'packages/community-bff-contract',
 	'packages/backend/assets',
 	'packages/i18n',
 	'packages/icons-subsetter',

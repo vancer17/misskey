@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 import { uploadFile, UploadAbortedError } from '@/utility/drive.js';
 import { globalEvents } from '@/events.js';
+import * as os from '@/os.js';
 
 /** 直接从上传方法投影进度回调协议，不另行定义上传接口。 */
 type UploadProgress = NonNullable<NonNullable<Parameters<typeof uploadFile>[1]>['onProgress']>;
@@ -26,7 +27,7 @@ vi.mock('@@/js/config.js', /** 为协议测试提供固定接口位置，send �
 vi.mock('@/os.js', /** 隔离提示组件，测试仅检查上传回执。 */ (): { alert: ReturnType<typeof vi.fn> } => ({ alert: vi.fn() }));
 vi.mock('@/utility/misskey-api.js', /** 未调用的网盘选择辅助依赖不进入本套件。 */ (): { misskeyApi: ReturnType<typeof vi.fn> } => ({ misskeyApi: vi.fn() }));
 vi.mock('@/stream.js', /** 上传传输不依赖网盘 URL 导入的流连接。 */ (): { useStream: ReturnType<typeof vi.fn> } => ({ useStream: vi.fn() }));
-vi.mock('@/i18n.js', /** 保留提示读取接口，不把文案作为网络结果。 */ (): { i18n: { ts: Record<string, string> } } => ({ i18n: { ts: {} } }));
+vi.mock('@/i18n.js', /** 为既有超限提示提供确定文案，不能以代理正文作为提示。 */ (): { i18n: { ts: Record<string, string> } } => ({ i18n: { ts: { failedToUpload: 'upload-failed', cannotUploadBecauseExceedsFileSizeLimit: 'file-too-large' } } }));
 vi.mock('@/preferences.js', /** 不加载本地偏好存储；本套件不调用选择辅助函数。 */ (): { prefer: { s: Record<string, never> } } => ({ prefer: { s: {} } }));
 vi.mock('@/i.js', /** 只提供构造上传请求需要的测试身份参数。 */ (): { $i: { token: string; policies: { maxFileSizeMb: number } } } => ({ $i: { token: 'upload-protocol-test', policies: { maxFileSizeMb: 1 } } }));
 vi.mock('@/instance.js', /** 使用固定大小限制允许测试文件进入传输阶段。 */ (): { instance: { maxFileSize: number } } => ({ instance: { maxFileSize: 1024 } }));
@@ -69,14 +70,28 @@ describe('drive upload transport settlement', /** 只覆盖上传适配器终态
 		expect(globalEvents.emit).not.toHaveBeenCalled();
 	});
 
-	it.each([200, 502])('rejects malformed JSON from HTTP %s', /** 成功或失败状态下的无效协议响应均应结束等待。 */ async (status: number): Promise<void> => {
+	it('rejects malformed JSON from HTTP 200', /** 成功状态仍必须交付有效文件协议，禁止把无效正文伪装为文件。 */ async (): Promise<void> => {
 		const upload: ReturnType<typeof uploadFile> = uploadFile(new File(['frame'], 'frame.png', { type: 'image/png' }));
 		const request: XMLHttpRequest = currentRequest();
-		Object.defineProperty(request, 'status', { value: status });
+		Object.defineProperty(request, 'status', { value: 200 });
 		Object.defineProperty(request, 'responseText', { value: '{invalid' });
 		Object.defineProperty(request, 'response', { value: '{invalid' });
 		request.dispatchEvent(new ProgressEvent('load'));
 		await expect(upload.filePromise).rejects.toBeInstanceOf(SyntaxError);
+		expect(globalEvents.emit).not.toHaveBeenCalled();
+	});
+
+	it.each([413, 502])('preserves HTTP %s from a non-JSON proxy response', /** HTML 代理错误保留状态且不流出正文；413 继续触发既有超限提示。 */ async (status: number): Promise<void> => {
+		const upload: ReturnType<typeof uploadFile> = uploadFile(new File(['frame'], 'frame.png', { type: 'image/png' }));
+		const request: XMLHttpRequest = currentRequest();
+		const proxyHtml: string = '<html><h1>413 Request Entity Too Large</h1><p>private-proxy-details</p></html>';
+		Object.defineProperty(request, 'status', { value: status });
+		Object.defineProperty(request, 'responseText', { value: proxyHtml });
+		Object.defineProperty(request, 'response', { value: proxyHtml });
+		request.dispatchEvent(new ProgressEvent('load'));
+		await expect(upload.filePromise).rejects.toMatchObject({ status, body: null });
+		if (status === 413) expect(os.alert).toHaveBeenCalledWith({ type: 'error', title: 'upload-failed', text: 'file-too-large' });
+		expect(JSON.stringify(vi.mocked(os.alert).mock.calls)).not.toContain('private-proxy-details');
 		expect(globalEvents.emit).not.toHaveBeenCalled();
 	});
 

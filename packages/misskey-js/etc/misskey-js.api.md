@@ -6,11 +6,12 @@
 
 import type { AuthenticationResponseJSON } from '@simplewebauthn/browser';
 import { EventEmitter } from 'eventemitter3';
-import { Options } from 'reconnecting-websocket';
+import type { Options } from 'reconnecting-websocket';
 import type { PublicKeyCredentialCreationOptionsJSON as PublicKeyCredentialCreationOptionsJSON_2 } from '@simplewebauthn/browser';
 import type { PublicKeyCredentialRequestOptionsJSON as PublicKeyCredentialRequestOptionsJSON_2 } from '@simplewebauthn/browser';
 import _ReconnectingWebSocket from 'reconnecting-websocket';
 import type { RegistrationResponseJSON } from '@simplewebauthn/browser';
+import type { UrlProvider } from 'reconnecting-websocket';
 
 // Warning: (ae-forgotten-export) The symbol "components" needs to be exported by the entry point index.d.ts
 //
@@ -553,7 +554,7 @@ type APIError = {
     id: string;
     code: string;
     message: string;
-    kind: 'client' | 'server';
+    kind: 'client' | 'server' | 'permission';
     info: Record<string, any>;
 };
 
@@ -3531,6 +3532,7 @@ export class Stream extends EventEmitter<StreamEvents> implements IStream {
     } | null, options?: {
         WebSocket?: Options['WebSocket'];
         binaryType?: ReconnectingWebSocket['binaryType'];
+        urlProvider?: UrlProvider;
     });
     // (undocumented)
     close(): void;
@@ -3810,7 +3812,7 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 
 // Warnings were encountered during analysis:
 //
-// src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
+// src/streaming.ts:65:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
 // src/streaming.types.ts:228:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
 // src/streaming.types.ts:243:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
 

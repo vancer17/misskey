@@ -1,3 +1,8 @@
+/**
+ * 文件领域：Misskey SDK HTTP 协议。
+ * 作用：声明现行 API 错误与请求类型，保留真实服务端权限错误分类。
+ * 数据链：上游接口响应 → SDK 类型 → 调用方错误展示，不解释外部 BFF 认证。
+ */
 import './autogen/apiClientJSDoc.js';
 
 import { endpointReqTypes } from './autogen/endpoint.js';
@@ -9,11 +14,12 @@ export type {
 
 const MK_API_ERROR = Symbol();
 
+/** 现行 Misskey 业务错误模型，权限分类与服务端真实协议保持一致。 */
 export type APIError = {
 	id: string;
 	code: string;
 	message: string;
-	kind: 'client' | 'server';
+	kind: 'client' | 'server' | 'permission';
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	info: Record<string, any>;
 };

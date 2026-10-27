@@ -11,7 +11,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MockInstance } from 'vitest';
 import type { entities } from 'misskey-js';
-import { failureFrom, freezeEntity, isUncertainFailure, normalizeMessage, request, syncChatUnreadState } from '@/ui/twitter/messages/adapters/index.js';
+import { accountSnapshot, failureFrom, freezeEntity, isUncertainFailure, normalizeMessage, request, syncChatUnreadState } from '@/ui/twitter/messages/adapters/index.js';
 
 /** 认证依赖替身只用于检查协议账户绑定，不创建业务账户。 */
 const auth: { account: { id: string; token: string; hasUnreadChatMessages: boolean } } = vi.hoisted(/** 保证认证替身在适配器加载前安装。 */ (): { account: { id: string; token: string; hasUnreadChatMessages: boolean } } => ({ account: { id: 'alice', token: 'fixture-token', hasUnreadChatMessages: false } }));
@@ -57,6 +57,19 @@ describe('Twitter 私信协议适配器', /** 本组仅检查协议与映射。 
 		const fetchSpy: MockInstance<typeof window.fetch> = vi.spyOn(window, 'fetch');
 		await expect(request('other-account', 'chat/rooms/owned', {}, new AbortController().signal)).rejects.toThrow('ACCOUNT_CHANGED');
 		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+	it('账户变化后拒绝已返回的协议结果', /** 仅校验适配器提交边界，不以 Mock 证明真实换号业务。 */ async (): Promise<void> => {
+		vi.spyOn(window, 'fetch').mockImplementationOnce(/** 在传输边界改变归属输入，模拟结果返回前来源已失效。 */ (): Promise<Response> => {
+			auth.account.id = 'other-account';
+			return Promise.resolve(new Response('[]', { status: 200 }));
+		});
+		await expect(request('alice', 'chat/rooms/owned', {}, new AbortController().signal)).rejects.toThrow('ACCOUNT_CHANGED');
+	});
+	it('只读聊天账户投影不交付原站认证字段', /** 业务 actor 只接受 SDK 账户模型，凭据保留在认证适配器内。 */ (): void => {
+		const snapshot: Readonly<entities.MeDetailed> = accountSnapshot('alice');
+		expect(snapshot.id).toBe('alice');
+		expect('token' in snapshot).toBe(false);
+		expect(Object.isFrozen(snapshot)).toBe(true);
 	});
 	it('补齐私聊省略发送者及接收者反应，不改写消息内容', /** 一对一反应者来自真实的接收者协议规则。 */ (): void => {
 		const message: entities.ChatMessageLite = { id: 'message', createdAt: '2026-10-25T00:00:00Z', fromUserId: 'alice', toUserId: 'bob', text: 'hello', reactions: [{ reaction: '👍' }] };

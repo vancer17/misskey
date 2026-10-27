@@ -15,6 +15,7 @@ import { execa } from 'execa';
 const repositoryRoot: string = path.resolve(import.meta.dirname, '..');
 /** 原前端可达工作区的构建顺序；不调用后端及 Service Worker 构建。 */
 const frontendWorkspaces: readonly string[] = [
+	'community-bff-contract',
 	'i18n',
 	'misskey-js',
 	'misskey-reversi',

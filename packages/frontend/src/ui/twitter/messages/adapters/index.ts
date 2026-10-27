@@ -10,8 +10,8 @@
 import type { Endpoints, entities, api } from 'misskey-js';
 import { $i } from '@/i.js';
 import { updateCurrentAccountPartial } from '@/accounts.js';
-import { parseAccountCredentials } from '@/accounts/index.js';
-import { miLocalStorage } from '@/local-storage.js';
+import { captureAccountOwnership, ownsAccountRequest } from '@/accounts/ownership/index.js';
+import type { AccountRequestOwner } from '@/accounts/ownership/index.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import type { ChatFailure, ChatMessage } from '../domain/index.js';
 
@@ -25,21 +25,21 @@ export function freezeEntity<T>(value: T): Readonly<T> {
 }
 
 /** 读取当前认证账户的只读业务快照，拒绝跨账户请求。 */
-export function accountSnapshot(accountId: string): Readonly<NonNullable<typeof $i>> {
+export function accountSnapshot(accountId: string): Readonly<entities.MeDetailed> {
 	if (!$i || $i.id !== accountId) throw new Error('ACCOUNT_CHANGED');
-	return freezeEntity(JSON.parse(JSON.stringify($i)) as NonNullable<typeof $i>);
+	const account: entities.MeDetailed = JSON.parse(JSON.stringify($i)) as entities.MeDetailed;
+	Reflect.deleteProperty(account, 'token');
+	return freezeEntity(account);
 }
 
-/** 检查只读依赖仍属于同一认证会话，拒绝同账户换令牌后的迟到结果。 */
-export function isCurrentAccount(accountId: string, token: string): boolean {
-	return $i?.id === accountId && $i.token === token;
-}
-
-/** 在固定认证账户下执行类型化 API；传入取消信号并显式绑定该账户令牌。 */
+/** 在固定请求归属下执行类型化 API；凭据由传输适配器负责，归属变化后拒绝迟到结果。 */
 export async function request<E extends keyof Endpoints, P extends Endpoints[E]['req']>(accountId: string, endpoint: E, params: P, signal: AbortSignal): Promise<api.SwitchCaseResponseType<E, P>> {
-	if (!$i || $i.id !== accountId) throw new Error('ACCOUNT_CHANGED');
+	const owner: AccountRequestOwner | null = captureAccountOwnership();
+	if (owner?.accountId !== accountId) throw new Error('ACCOUNT_CHANGED');
 	const data: P & { i?: string | null } = { ...params } as P & { i?: string | null };
-	return await misskeyApi<void, E, P, api.SwitchCaseResponseType<E, P>>(endpoint, data, $i.token, signal);
+	const response: api.SwitchCaseResponseType<E, P> = await misskeyApi<void, E, P, api.SwitchCaseResponseType<E, P>>(endpoint, data, undefined, signal);
+	if (!ownsAccountRequest(owner)) throw new Error('ACCOUNT_CHANGED');
+	return response;
 }
 
 /** 将接口失败转换为只读展示状态；不在客户端重建服务端权限规则。 */
@@ -88,15 +88,12 @@ async function refreshUnread(): Promise<boolean> {
 	try {
 		while (unreadDirty) {
 			unreadDirty = false;
-			const accountId: string | undefined = $i?.id;
-			const token: string | undefined = $i?.token;
-			if (!accountId) return false;
+			const owner: AccountRequestOwner | null = captureAccountOwnership();
+			if (!owner) return false;
 			const controller: AbortController = new AbortController();
-			const account: Endpoints['i']['res'] = await request(accountId, 'i', {}, controller.signal);
-			if (!$i || $i.id !== accountId || $i.token !== token) return false;
+			const account: Endpoints['i']['res'] = await request(owner.accountId, 'i', {}, controller.signal);
+			if (!ownsAccountRequest(owner)) return false;
 			if (unreadDirty) continue;
-			const saved: ReturnType<typeof parseAccountCredentials> = parseAccountCredentials(miLocalStorage.getItem('account'));
-			if (!saved || saved.id !== accountId || saved.token !== token) return false;
 			updateCurrentAccountPartial({ hasUnreadChatMessages: account.hasUnreadChatMessages });
 		}
 		return true;

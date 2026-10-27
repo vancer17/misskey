@@ -12,10 +12,14 @@ import type { entities } from 'misskey-js';
 import { ACHIEVEMENT_TYPES } from '../domain/index.js';
 import type { Achievement } from '../domain/index.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import { ownsAccountRequest } from '@/accounts/ownership/index.js';
+import type { AccountRequestOwner } from '@/accounts/ownership/index.js';
 
-/** 查询当前账户的服务端事实；凭据与取消信号绑定本次请求，不能随账户变化漂移。 */
-export async function fetchOwnAchievements(userId: string, token: string, signal: AbortSignal): Promise<readonly Achievement[]> {
-	const response: entities.UsersAchievementsResponse = await misskeyApi('users/achievements', { userId }, token, signal);
+/** 查询请求所属账户的服务端事实；取消与归属检查拒绝换号后的迟到协议结果。 */
+export async function fetchOwnAchievements(owner: AccountRequestOwner, signal: AbortSignal): Promise<readonly Achievement[]> {
+	if (!ownsAccountRequest(owner)) throw new Error('ACCOUNT_CHANGED');
+	const response: entities.UsersAchievementsResponse = await misskeyApi('users/achievements', { userId: owner.accountId }, undefined, signal);
+	if (!ownsAccountRequest(owner)) throw new Error('ACCOUNT_CHANGED');
 	const achievements: Achievement[] = [];
 	for (const name of ACHIEVEMENT_TYPES) {
 		const found: entities.UsersAchievementsResponse[number] | undefined = response.find(/** 协议条目仅用于匹配目录，不将 API 列表作为展示状态。 */ (item: entities.UsersAchievementsResponse[number]): boolean => item.name === name);

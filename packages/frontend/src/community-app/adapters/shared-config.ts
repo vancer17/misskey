@@ -6,13 +6,15 @@
 /**
  * 文件领域：嵌入社区的共享配置构建接缝。
  * 作用：保留旧展示消费者所需导出，但禁止用本地来源推导远端业务地址。
- * 数据链：真实会话装配前显式终止应用模块求值；P1 Bootstrap 不导入此模块。
+ * 数据链：完整应用生命周期尚未接通时终止业务求值；轻量 Bootstrap 不导入此模块。
  */
-import { requireCommunitySession } from '../bootstrap/index.js';
+import { requireCommunityApplication } from '../bootstrap/index.js';
 import type { CommunityHostDependencies } from '../bootstrap/index.js';
+import { createCommunityBffEndpoints } from 'community-bff-contract';
 import defaultIconAssetUrl from '/static-assets/icons/512.png';
 
-const dependencies: CommunityHostDependencies = requireCommunitySession();
+const dependencies: CommunityHostDependencies = requireCommunityApplication();
+const endpoints: ReturnType<typeof createCommunityBffEndpoints> = createCommunityBffEndpoints(dependencies.bffBaseUrl);
 const instanceAddress: URL = new URL(dependencies.canonicalInstanceUrl);
 
 /** 公开实例主机，只能从显式装配依赖派生。 */
@@ -24,9 +26,9 @@ export const url: string = instanceAddress.origin;
 /** 公开实例端口。 */
 export const port: string = instanceAddress.port;
 /** 明确装配的 BFF HTTP 基础地址。 */
-export const apiUrl: string = dependencies.apiBase;
+export const apiUrl: string = endpoints.apiBase;
 /** 明确装配的 BFF WebSocket 基础地址。 */
-export const wsOrigin: string = dependencies.wsBase;
+export const wsOrigin: string = endpoints.stream;
 /** 语言由 Bootstrap 选择，不读取同源 App 的语言缓存。 */
 export const lang: string = dependencies.language;
 /** 语言显示列表沿用构建器的既有权威常量。 */

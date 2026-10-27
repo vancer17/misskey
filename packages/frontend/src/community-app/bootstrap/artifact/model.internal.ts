@@ -4,7 +4,7 @@
  */
 
 /**
- * 文件领域：社区本地制品 Bootstrap 清单。
+ * 文件领域：社区本地制品 Bootstrap 清单的纯模型。
  * 作用：统一构建器与本地加载器使用的路径、版本和摘要类型；不承载账户或业务策略。
  * 数据链：构建输入 → 不含自摘要的文件清单 → App 装配校验与社区启动。
  */
@@ -33,6 +33,7 @@ export type CommunityArtifactFile = Readonly<{
 export type CommunityBootMessages = Readonly<{
 	waitingHost: string;
 	sessionRequired: string;
+	sessionEstablished: string;
 	failed: string;
 }>;
 

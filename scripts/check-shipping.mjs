@@ -29,6 +29,7 @@ import { DEFAULT_INTEGRATION_REFS, findClosestMergeBase, gitLines, gitMergeBase,
 const PNPM_COMMAND = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 
 const LINT_TARGETS = [
+	{ root: 'packages/community-bff-contract', pattern: /^packages\/community-bff-contract\/(src|scripts|test)\/.*\.ts$/ },
 	{ root: 'packages/backend', pattern: /^packages\/backend\/(src|test-federation)\/.*\.ts$/ },
 	{ root: 'packages/frontend', pattern: /^packages\/frontend\/src\/.*\.(ts|vue)$/ },
 	{ root: 'packages/frontend-embed', pattern: /^packages\/frontend-embed\/src\/.*\.(ts|vue)$/ },

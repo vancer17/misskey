@@ -26,8 +26,7 @@ function dependencies(): CommunityHostDependencies {
 		hostOrigin: 'https://app.example',
 		assetBase: 'https://app.example/nested/community/',
 		canonicalInstanceUrl: 'https://community.example',
-		apiBase: 'https://bff.example/community/v1/api',
-		wsBase: 'wss://bff.example/community/v1/stream',
+		bffBaseUrl: 'https://bff.example/community/v1/',
 		language: 'zh-CN',
 	});
 }
@@ -43,13 +42,13 @@ describe('community app bootstrap boundary', /** 验证本地装配控制协议�
 		expect(Object.isFrozen(api)).toBe(true);
 		expect(Object.isFrozen(api.getState())).toBe(true);
 		expect(api.getState()).toEqual({ phase: 'WAITING_HOST', instanceId: null, errorCode: null, language: null });
-		expect(requireCommunitySession).toThrow('COMMUNITY_BFF_ADAPTER_REQUIRED');
+		expect(requireCommunitySession).toThrow('COMMUNITY_SESSION_REQUIRED');
 	});
 
 	it('accepts only the current parent and remains session-required', /** 合法交接不等于业务或桥接就绪。 */ (): void => {
 		const parentWindow: Window = {} as Window;
 		const api: CommunityBootstrapApi = bootstrap(parentWindow, ownWindow());
-		expect(api.configure(dependencies(), parentWindow)).toEqual({ phase: 'SESSION_REQUIRED', instanceId: 'community-instance-1', errorCode: 'COMMUNITY_BFF_ADAPTER_REQUIRED', language: 'zh-CN' });
+		expect(api.configure(dependencies(), parentWindow)).toEqual({ phase: 'SESSION_REQUIRED', instanceId: 'community-instance-1', errorCode: 'COMMUNITY_HOST_SESSION_REQUIRED', language: 'zh-CN' });
 	});
 
 	it('rejects another window without changing current state', /** 其他窗口不能驱动本实例。 */ (): void => {
@@ -80,7 +79,7 @@ describe('community app bootstrap boundary', /** 验证本地装配控制协议�
 	it('rejects credentials in service addresses', /** URL 不承载秘密或授权查询字段。 */ (): void => {
 		const parentWindow: Window = {} as Window;
 		const api: CommunityBootstrapApi = bootstrap(parentWindow, ownWindow());
-		expect(/** 使用带凭据地址尝试交接。 */ (): unknown => api.configure({ ...dependencies(), apiBase: 'https://secret@bff.example/api' }, parentWindow)).toThrow('COMMUNITY_INVALID_DEPENDENCIES');
+		expect(/** 使用带凭据地址尝试交接。 */ (): unknown => api.configure({ ...dependencies(), bffBaseUrl: 'https://secret@bff.example/community/v1/' }, parentWindow)).toThrow('COMMUNITY_INVALID_DEPENDENCIES');
 	});
 
 	it('does not rebind a configured instance', /** 新旧实例不能共享同一个已绑定边界。 */ (): void => {

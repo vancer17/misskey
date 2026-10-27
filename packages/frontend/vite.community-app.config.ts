@@ -84,8 +84,20 @@ function createCommunityAliases(shared: UserConfig): Alias[] {
 		{ find: /^@\/router\.definition\.js$/u, replacement: `${scope}/routing/definition.ts` },
 		/** 原账户凭据恢复不能进入包内启动路径。 */
 		{ find: /^@\/accounts\.js$/u, replacement: `${scope}/adapters/accounts.ts` },
-		/** 当前账户只由后续真实宿主会话装配。 */
+		/** 当前账户只由经过校验的真实 BFF 会话装配。 */
 		{ find: /^@\/i\.js$/u, replacement: `${scope}/adapters/account-state.ts` },
+		/** 现有领域只消费不透明归属，不读取社区凭据或账户缓存。 */
+		{ find: /^@\/accounts\/ownership\/index\.js$/u, replacement: `${scope}/adapters/ownership/index.ts` },
+		/** 所有 SDK HTTP 调用使用同一 BFF 会话。 */
+		{ find: /^@\/utility\/misskey-api(?:\.js)?$/u, replacement: `${scope}/adapters/bff/api/index.ts` },
+		/** 原频道消费者共享由 BFF 客户端拥有的实时连接。 */
+		{ find: /^@\/stream\.js$/u, replacement: `${scope}/adapters/bff/stream/index.ts` },
+		/** 只替换上传网络阶段，保留原文件选择和业务校验。 */
+		{ find: /^@\/utility\/drive-upload\/index\.js$/u, replacement: `${scope}/adapters/bff/upload.ts` },
+		/** 链接预览不得访问 App 本地根路径。 */
+		{ find: /^@\/utility\/url-preview-request\/index\.js$/u, replacement: `${scope}/adapters/bff/url-preview.ts` },
+		/** 实例策略只使用真实会话安装的权威模型。 */
+		{ find: /^@\/instance\.js$/u, replacement: `${scope}/adapters/instance/index.ts` },
 		/** 登录意图交给宿主，不打开原认证弹窗。 */
 		{ find: /^@\/utility\/please-login\.js$/u, replacement: `${scope}/adapters/authentication.ts` },
 		/** 嵌入退出不得清空同源宿主存储。 */

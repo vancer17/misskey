@@ -9,35 +9,30 @@
  * 请求不绑定页面生命周期；已开始的已读操作在离页后仍完成，失败等待下一次明确意图。
  */
 import type * as Misskey from 'misskey-js';
-import type { AccountCredentials } from '@/accounts/index.js';
-import { parseAccountCredentials } from '@/accounts/index.js';
+import { captureAccountOwnership, ownsAccountRequest } from '@/accounts/ownership/index.js';
+import type { AccountRequestOwner } from '@/accounts/ownership/index.js';
 import { updateCurrentAccountPartial } from '@/accounts.js';
-import { $i } from '@/i.js';
-import { miLocalStorage } from '@/local-storage.js';
 import type { NotificationUnreadState } from '../domain/notification-read.js';
 import { acknowledgeNotifications, requestNotificationsAccount } from '../adapters/notification-read-api.js';
 
 /** 单次合并批次仅保存会话与调度信息，不包含任何通知实体或未读业务事实。 */
 type NotificationReadRequest = {
-	credentials: AccountCredentials;
+	owner: AccountRequestOwner;
 	markAsRead: boolean;
 	generation: number;
 	resolvers: Array<(success: boolean) => void>;
 };
 
+/** 下一轮待确认的账户批次，不保存任何凭据。 */
 let pending: NotificationReadRequest | null = null;
+/** 现有串行调度器的运行状态。 */
 let running: boolean = false;
+/** 每次新意图推进代次，拒绝迟到快照。 */
 let generation: number = 0;
 
-/** 校验当前会话仍拥有请求，防止换号或更新凭据后旧响应写入新账户。 */
-function ownsSession(credentials: AccountCredentials): boolean {
-	const saved: AccountCredentials | null = parseAccountCredentials(miLocalStorage.getItem('account'));
-	return $i?.id === credentials.id && $i.token === credentials.token && saved?.id === credentials.id && saved.token === credentials.token;
-}
-
-/** 校验两个请求使用相同凭据，跨会话批次不共享完成结果。 */
-function sameSession(left: AccountCredentials, right: AccountCredentials): boolean {
-	return left.id === right.id && left.token === right.token;
+/** 校验两个请求使用同一不透明身份，跨会话批次不共享完成结果。 */
+function sameSession(left: AccountRequestOwner, right: AccountRequestOwner): boolean {
+	return left.accountId === right.accountId && left.identity === right.identity;
 }
 
 /** 完成本批调用者；结果只描述确认与对账是否成功，不派生任何未读事实。 */
@@ -50,19 +45,19 @@ async function flush(): Promise<void> {
 	while (pending !== null) {
 		const request: NotificationReadRequest = pending;
 		pending = null;
-		if (!ownsSession(request.credentials)) {
+		if (!ownsAccountRequest(request.owner)) {
 			settle(request, false);
 			continue;
 		}
 		let succeeded: boolean = false;
 		try {
-			if (request.markAsRead) await acknowledgeNotifications(request.credentials);
-			if (!ownsSession(request.credentials)) {
+			if (request.markAsRead) await acknowledgeNotifications(request.owner);
+			if (!ownsAccountRequest(request.owner)) {
 				settle(request, false);
 				continue;
 			}
 			const afterWrite: NotificationReadRequest | null = pending as NotificationReadRequest | null;
-			if (afterWrite !== null && sameSession(request.credentials, afterWrite.credentials)) {
+			if (afterWrite !== null && sameSession(request.owner, afterWrite.owner)) {
 				if (afterWrite.markAsRead) {
 					// 在途写入期间的新读意图需要推进自己的水位，直接交给下一批，避免冗余查询。
 					afterWrite.resolvers.unshift(...request.resolvers);
@@ -73,8 +68,8 @@ async function flush(): Promise<void> {
 				request.resolvers.push(...afterWrite.resolvers);
 				pending = null;
 			}
-			const account: Misskey.entities.MeDetailed = await requestNotificationsAccount(request.credentials);
-			succeeded = ownsSession(request.credentials) && account.id === request.credentials.id;
+			const account: Misskey.entities.MeDetailed = await requestNotificationsAccount(request.owner);
+			succeeded = ownsAccountRequest(request.owner) && account.id === request.owner.accountId;
 			if (succeeded && request.generation === generation) {
 				const unread: NotificationUnreadState = {
 					hasUnreadNotification: account.hasUnreadNotification,
@@ -88,7 +83,7 @@ async function flush(): Promise<void> {
 		}
 		// await 期间事件入口可以写入 pending；显式恢复异步边界之后的联合类型。
 		const next: NotificationReadRequest | null = pending as NotificationReadRequest | null;
-		if (succeeded && next !== null && sameSession(request.credentials, next.credentials)) {
+		if (succeeded && next !== null && sameSession(request.owner, next.owner)) {
 			// 当前查询失效时，调用者等待已经排队的新查询，避免把跳过提交当作完成。
 			next.resolvers.unshift(...request.resolvers);
 		} else {
@@ -100,17 +95,17 @@ async function flush(): Promise<void> {
 
 /** 将动作加入唯一调度队列；同轮意图合并，已读写入优先于本批账户查询。 */
 function enqueue(markAsRead: boolean): Promise<boolean> {
-	if ($i === null) return Promise.resolve(false);
-	const credentials: AccountCredentials = Object.freeze({ id: $i.id, token: $i.token });
+	const owner: AccountRequestOwner | null = captureAccountOwnership();
+	if (owner === null) return Promise.resolve(false);
 	generation++;
 	return new Promise<boolean>(/** 注册本次完成结果，不保留调用组件或页面实体。 */ (resolve: (success: boolean) => void): void => {
-		if (pending !== null && sameSession(pending.credentials, credentials)) {
+		if (pending !== null && sameSession(pending.owner, owner)) {
 			pending.markAsRead ||= markAsRead;
 			pending.generation = generation;
 			pending.resolvers.push(resolve);
 		} else {
 			if (pending !== null) settle(pending, false);
-			pending = { credentials, markAsRead, generation, resolvers: [resolve] };
+			pending = { owner, markAsRead, generation, resolvers: [resolve] };
 		}
 		if (!running) {
 			running = true;
